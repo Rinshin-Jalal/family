@@ -1,0 +1,18 @@
+name = "family-plus-backend"
+main = "src/index.ts"
+compatibility_date = "2025-12-20"
+compatibility_flags = [ "nodejs_compat" ]
+
+[vars]
+# We will set these secrets via 'wrangler secret put'
+# SUPABASE_URL = "https://xyz.supabase.co"
+# SUPABASE_KEY = "ey..."
+# twilio_account_sid = "..."
+# twilio_auth_token = "..."
+
+[[r2_buckets]]
+binding = "AUDIO_BUCKET"
+bucket_name = "family-plus-audio"
+
+[observability]
+enabled = true
