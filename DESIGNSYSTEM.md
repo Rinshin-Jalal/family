@@ -66,12 +66,6 @@ We use an **8pt Grid**.
 
 This is how the same UI component morphs.
 
-### **A. The Navigation Bar**
-*   **Teen:** Minimal. Floating glassmorphism bar at bottom. Icons only (no text).
-*   **Parent:** Standard iOS Tab Bar. Clear text labels + Icons.
-*   **Child:** **Hidden.** Navigation is handled by big on-screen arrows.
-*   **Elder:** **Hidden.** One screen at a time. "Next" and "Back" buttons are huge text labels.
-
 ### **B. The "Record" Button (Primary Action)**
 *   **Teen:** Thin outline circle. "Ghost" button. Fills with Indigo when recording.
 *   **Parent:** Solid Indigo circle. Clean shadow.

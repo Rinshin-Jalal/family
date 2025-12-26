@@ -1,21 +1,37 @@
 import { Hono } from 'hono'
-import { createClient } from '@supabase/supabase-js'
+import { cors } from 'hono/cors'
+import stories from './routes/stories'
+import prompts from './routes/prompts'
+import responses from './routes/responses'
+import profiles from './routes/profiles'
+import reactions from './routes/reactions'
+import ai from './routes/ai'
 
 type Bindings = {
   SUPABASE_URL: string
   SUPABASE_KEY: string
   AUDIO_BUCKET: R2Bucket
-  twilio_account_sid: string
-  twilio_auth_token: string
+  OPENAI_API_KEY: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-const getSupabase = (c: any) => {
-  return createClient(c.env.SUPABASE_URL, c.env.SUPABASE_KEY)
-}
+app.use('*', cors({
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+}))
 
-app.get('/', (c) => c.text('Hello World'))
+app.route('/', stories)
+app.route('/', prompts)
+app.route('/', responses)
+app.route('/', profiles)
+app.route('/', reactions)
+app.route('/', ai)
+
+app.get('/health', (c) => {
+  return c.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
 
 export default {
   fetch: app.fetch,

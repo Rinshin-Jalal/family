@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		0E7D0AE32EFC611A000574EF /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0AE22EFC611A000574EF /* Auth */; };
+		0E7D0AE52EFC611A000574EF /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0AE42EFC611A000574EF /* Functions */; };
+		0E7D0AE72EFC611A000574EF /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0AE62EFC611A000574EF /* PostgREST */; };
+		0E7D0AE92EFC611A000574EF /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0AE82EFC611A000574EF /* Realtime */; };
+		0E7D0AEB2EFC611A000574EF /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0AEA2EFC611A000574EF /* Storage */; };
+		0E7D0AEE2EFC613C000574EF /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0AED2EFC613C000574EF /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		0E7D0AAF2EFC3398000574EF /* familyplus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = familyplus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +32,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0E7D0AE72EFC611A000574EF /* PostgREST in Frameworks */,
+				0E7D0AE52EFC611A000574EF /* Functions in Frameworks */,
+				0E7D0AEE2EFC613C000574EF /* Supabase in Frameworks */,
+				0E7D0AE32EFC611A000574EF /* Auth in Frameworks */,
+				0E7D0AEB2EFC611A000574EF /* Storage in Frameworks */,
+				0E7D0AE92EFC611A000574EF /* Realtime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -33,6 +48,7 @@
 			isa = PBXGroup;
 			children = (
 				0E7D0AB12EFC3398000574EF /* familyplus */,
+				0E7D0AEC2EFC613C000574EF /* Frameworks */,
 				0E7D0AB02EFC3398000574EF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +59,13 @@
 				0E7D0AAF2EFC3398000574EF /* familyplus.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		0E7D0AEC2EFC613C000574EF /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -65,6 +88,12 @@
 			);
 			name = familyplus;
 			packageProductDependencies = (
+				0E7D0AE22EFC611A000574EF /* Auth */,
+				0E7D0AE42EFC611A000574EF /* Functions */,
+				0E7D0AE62EFC611A000574EF /* PostgREST */,
+				0E7D0AE82EFC611A000574EF /* Realtime */,
+				0E7D0AEA2EFC611A000574EF /* Storage */,
+				0E7D0AED2EFC613C000574EF /* Supabase */,
 			);
 			productName = familyplus;
 			productReference = 0E7D0AAF2EFC3398000574EF /* familyplus.app */;
@@ -94,6 +123,9 @@
 			);
 			mainGroup = 0E7D0AA62EFC3398000574EF;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0E7D0AB02EFC3398000574EF /* Products */;
 			projectDirPath = "";
@@ -253,6 +285,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Famly needs microphone access to record your family stories";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -284,6 +317,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Famly needs microphone access to record your family stories";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -328,6 +362,50 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0E7D0AE22EFC611A000574EF /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Auth;
+		};
+		0E7D0AE42EFC611A000574EF /* Functions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Functions;
+		};
+		0E7D0AE62EFC611A000574EF /* PostgREST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
+		};
+		0E7D0AE82EFC611A000574EF /* Realtime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Realtime;
+		};
+		0E7D0AEA2EFC611A000574EF /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		0E7D0AED2EFC613C000574EF /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 0E7D0AA72EFC3398000574EF /* Project object */;
 }

@@ -1,17 +1,20 @@
 //
 //  familyplusApp.swift
-//  familyplus
+//  StoryRide
 //
-//  Created by Rinshin on 20/12/25.
+//  Main app entry point
 //
 
 import SwiftUI
 
 @main
-struct familyplusApp: App {
+struct StoryRideApp: App {
+    @StateObject private var themeManager = ThemeManager()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainNavigationFlow()
+                .environmentObject(themeManager)
         }
     }
 }
