@@ -193,6 +193,9 @@ struct FullStoryDetail: View {
     @Binding var showReactionPicker: Bool
     let currentSegment: StorySegment?
 
+    // MARK: - Audio Player Service
+    @StateObject private var audioPlayer = AudioPlayerService()
+
     // MARK: - Multiplayer Perspectives State
     @State private var responses: [StorySegmentData] = []
     @State private var isLoadingResponses = false
@@ -608,15 +611,10 @@ struct FullStoryDetail: View {
     }
 
     private func playResponse(_ response: StorySegmentData) {
-        guard let audioURL = response.mediaUrl,
-              let url = URL(string: audioURL) else {
-            print("⚠️ Invalid audio URL for response: \(response.id)")
-            return
-        }
-
-        // Play in main bottom player
-        isPlaying = true
-        print("🎵 Playing response: \(response.fullName) - \(response.transcriptionText ?? "")")
+        // Use the AudioPlayerService to play from this response onwards
+        // The service will auto-advance through the chronological list
+        audioPlayer.playFromHere(responses, startId: response.id)
+        print("▶️ Playing from: \(response.fullName) - \(response.transcriptionText ?? "")")
     }
 }
 

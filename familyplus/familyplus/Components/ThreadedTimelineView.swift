@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 // MARK: - Threaded Timeline View
 
@@ -150,6 +151,14 @@ struct ResponseCard: View {
     let onPlay: () -> Void
 
     @State private var isExpanded = false
+    @State private var pulseAnimation = false
+
+    // Shared player state for playing indicator
+    @ObservedObject private var playerState = TimelinePlayerState.shared
+
+    var isCurrentlyPlaying: Bool {
+        playerState.isPlaying(response.id)
+    }
 
     var formattedDuration: String {
         guard let duration = response.durationSeconds else { return "0:00" }
@@ -160,7 +169,7 @@ struct ResponseCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header: Avatar + Name + Time
+            // Header: Avatar + Name + Time + Playing Indicator
             HStack(spacing: 12) {
                 // Avatar
                 Circle()
@@ -182,9 +191,25 @@ struct ResponseCard: View {
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(response.fullName)
-                        .font(.system(size: isThreaded ? 15 : 17, weight: .semibold))
-                        .foregroundColor(theme.textColor)
+                    HStack(spacing: 8) {
+                        Text(response.fullName)
+                            .font(.system(size: isThreaded ? 15 : 17, weight: .semibold))
+                            .foregroundColor(theme.textColor)
+
+                        // Playing indicator (pulsing dot + text)
+                        if isCurrentlyPlaying {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(response.storytellerColor)
+                                    .frame(width: 8, height: 8)
+                                    .opacity(pulseAnimation ? 0.5 : 1)
+
+                                Text("Playing")
+                                    .font(.caption)
+                                    .foregroundColor(response.storytellerColor)
+                            }
+                        }
+                    }
 
                     Text(response.createdAtDate, style: .relative)
                         .font(.caption)
@@ -267,15 +292,42 @@ struct ResponseCard: View {
         }
         .padding(isThreaded ? 12 : 16)
         .background(
-            RoundedRectangle(cornerRadius: isThreaded ? 12 : 16)
-                .fill(theme.cardBackgroundColor)
-                .shadow(
-                    color: .black.opacity(isThreaded ? 0.03 : 0.05),
-                    radius: isThreaded ? 4 : 8,
-                    y: isThreaded ? 2 : 4
-                )
+            ZStack {
+                // Base card background
+                RoundedRectangle(cornerRadius: isThreaded ? 12 : 16)
+                    .fill(theme.cardBackgroundColor)
+
+                // Enhanced highlight when playing
+                if isCurrentlyPlaying {
+                    RoundedRectangle(cornerRadius: isThreaded ? 12 : 16)
+                        .fill(response.storytellerColor.opacity(0.12))
+                        .animation(.easeInOut(duration: 0.3), value: isCurrentlyPlaying)
+                }
+            }
+            .shadow(
+                color: .black.opacity(isCurrentlyPlaying ? 0.12 : (isThreaded ? 0.03 : 0.05)),
+                radius: isCurrentlyPlaying ? 12 : (isThreaded ? 4 : 8),
+                y: isCurrentlyPlaying ? 6 : (isThreaded ? 2 : 4)
+            )
         )
         .padding(.vertical, 6)
+        .onAppear {
+            // Start pulse animation when playing
+            if isCurrentlyPlaying {
+                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+                    pulseAnimation = true
+                }
+            }
+        }
+        .onChange(of: isCurrentlyPlaying) { newValue in
+            if newValue {
+                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+                    pulseAnimation = true
+                }
+            } else {
+                pulseAnimation = false
+            }
+        }
     }
 }
 
@@ -445,6 +497,13 @@ struct CollapsedContent: View {
     let parentResponse: StorySegmentData?
     let onPlay: () -> Void
 
+    @State private var pulseAnimation = false
+    @ObservedObject private var playerState = TimelinePlayerState.shared
+
+    var isCurrentlyPlaying: Bool {
+        playerState.isPlaying(response.id)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Circle()
@@ -461,6 +520,19 @@ struct CollapsedContent: View {
                     Text(response.fullName)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textColor)
+
+                    if isCurrentlyPlaying {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(response.storytellerColor)
+                                .frame(width: 6, height: 6)
+                                .opacity(pulseAnimation ? 0.5 : 1)
+
+                            Text("Playing")
+                                .font(.caption2)
+                                .foregroundColor(response.storytellerColor)
+                        }
+                    }
 
                     if let duration = response.durationSeconds {
                         Text(formatDuration(duration))
@@ -494,6 +566,26 @@ struct CollapsedContent: View {
                 .foregroundColor(theme.secondaryTextColor.opacity(0.5))
         }
         .padding(12)
+        .background(
+            isCurrentlyPlaying ?
+                response.storytellerColor.opacity(0.08) : Color.clear
+        )
+        .onAppear {
+            if isCurrentlyPlaying {
+                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+                    pulseAnimation = true
+                }
+            }
+        }
+        .onChange(of: isCurrentlyPlaying) { newValue in
+            if newValue {
+                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+                    pulseAnimation = true
+                }
+            } else {
+                pulseAnimation = false
+            }
+        }
     }
 
     private func formatDuration(_ duration: Int) -> String {
@@ -513,6 +605,13 @@ struct ExpandedContent: View {
     @Binding var textExpanded: Bool
     let onPlay: () -> Void
     let onReply: () -> Void
+
+    @State private var pulseAnimation = false
+    @ObservedObject private var playerState = TimelinePlayerState.shared
+
+    var isCurrentlyPlaying: Bool {
+        playerState.isPlaying(response.id)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -551,9 +650,25 @@ struct ExpandedContent: View {
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(response.fullName)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(theme.textColor)
+                    HStack(spacing: 8) {
+                        Text(response.fullName)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(theme.textColor)
+
+                        // Playing indicator
+                        if isCurrentlyPlaying {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(response.storytellerColor)
+                                    .frame(width: 8, height: 8)
+                                    .opacity(pulseAnimation ? 0.5 : 1)
+
+                                Text("Playing")
+                                    .font(.caption)
+                                    .foregroundColor(response.storytellerColor)
+                            }
+                        }
+                    }
 
                     Text(response.createdAtDate, style: .relative)
                         .font(.caption)
@@ -618,6 +733,26 @@ struct ExpandedContent: View {
             .padding(.top, 4)
         }
         .padding(16)
+        .background(
+            isCurrentlyPlaying ?
+                response.storytellerColor.opacity(0.08) : Color.clear
+        )
+        .onAppear {
+            if isCurrentlyPlaying {
+                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+                    pulseAnimation = true
+                }
+            }
+        }
+        .onChange(of: isCurrentlyPlaying) { newValue in
+            if newValue {
+                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+                    pulseAnimation = true
+                }
+            } else {
+                pulseAnimation = false
+            }
+        }
     }
 
     private func formatDuration(_ duration: Int) -> String {
