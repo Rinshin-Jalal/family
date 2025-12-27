@@ -194,13 +194,17 @@ struct FullStoryDetail: View {
     let currentSegment: StorySegment?
 
     // MARK: - Audio Player Service
-    @StateObject private var audioPlayer = AudioPlayerService()
+    @ObservedObject private var audioPlayer = AudioPlayerService.shared
 
     // MARK: - Multiplayer Perspectives State
     @State private var responses: [StorySegmentData] = []
     @State private var isLoadingResponses = false
     @State private var showAddPerspective = false
     @State private var replyingTo: StorySegmentData? = nil
+
+    // Memory context panel state
+    @State private var showMemoryContext = false
+    @State private var contextForResponse: StorySegmentData?
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -267,19 +271,69 @@ struct FullStoryDetail: View {
 
                     // Perspectives Section
                     VStack(alignment: .leading, spacing: 24) {
+                        // MARK: - Compact Story Metadata
                         VStack(alignment: .leading, spacing: 16) {
-                            HStack {
-                                Text("Perspectives")
-                                    .font(theme.headlineFont)
-                                    .foregroundColor(theme.textColor)
+                            // Category + Stats in one compact row
+                            HStack(spacing: 12) {
+                                // Category badge
+                                HStack(spacing: 6) {
+                                    Image(systemName: PromptCategory.story.icon)
+                                        .font(.caption)
+                                    Text(PromptCategory.story.rawValue)
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                }
+                                .foregroundColor(PromptCategory.story.color.opacity(0.9))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule()
+                                        .fill(PromptCategory.story.color.opacity(0.12))
+                                )
+
+                                // Voice count
+                                HStack(spacing: 4) {
+                                    Image(systemName: "person.2.fill")
+                                        .font(.caption)
+                                    Text("\(responses.count)")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                }
+                                .foregroundColor(theme.secondaryTextColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(theme.secondaryTextColor.opacity(0.08))
+                                )
+
+                                // Listened count (mock for now)
+                                if !responses.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "headphones")
+                                            .font(.caption)
+                                        Text("\(Int.random(in: 10...99))")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                    }
+                                    .foregroundColor(theme.secondaryTextColor)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule()
+                                            .fill(theme.secondaryTextColor.opacity(0.08))
+                                    )
+                                }
 
                                 Spacer()
-
-                                Text("\(responses.count) voices")
-                                    .font(.caption)
-                                    .foregroundColor(theme.secondaryTextColor)
                             }
                             .padding(.horizontal, 20)
+
+                            // Perspectives header
+                            Text("Perspectives")
+                                .font(theme.headlineFont)
+                                .foregroundColor(theme.textColor)
+                                .padding(.horizontal, 20)
 
                             if isLoadingResponses {
                                 ProgressView()
@@ -299,6 +353,10 @@ struct FullStoryDetail: View {
                                     },
                                     onPlayResponse: { response in
                                         playResponse(response)
+                                    },
+                                    onShowMemoryContext: { response in
+                                        contextForResponse = response
+                                        showMemoryContext = true
                                     }
                                 )
                             }
@@ -410,6 +468,13 @@ struct FullStoryDetail: View {
                 ),
                 replyingTo: replyingTo
             )
+        }
+        .sheet(isPresented: $showMemoryContext) {
+            if let response = contextForResponse {
+                MemoryContextPanel(
+                    context: generateMemoryContext(for: response, allResponses: responses)
+                )
+            }
         }
         .onAppear {
             loadResponses()
@@ -615,6 +680,88 @@ struct FullStoryDetail: View {
         // The service will auto-advance through the chronological list
         audioPlayer.playFromHere(responses, startId: response.id)
         print("▶️ Playing from: \(response.fullName) - \(response.transcriptionText ?? "")")
+    }
+
+    // MARK: - Memory Context Generation
+
+    private func generateMemoryContext(for response: StorySegmentData, allResponses: [StorySegmentData]) -> MemoryContextData {
+        let threadResponses = findAllResponsesInThread(startingFrom: response, allResponses: allResponses)
+
+        // Find unique contributors
+        let contributors = Set(threadResponses.map { $0.fullName })
+            .map { name -> MemoryContextData.Contributor in
+                let response = threadResponses.first { $0.fullName == name }!
+                return MemoryContextData.Contributor(
+                    name: name,
+                    role: PersonaRole(rawValue: response.role) ?? .parent,
+                    avatarColor: response.storytellerColor
+                )
+            }
+            .sorted { $0.name < $1.name }
+
+        // Calculate years spanned
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let dates = threadResponses.compactMap { formatter.date(from: $0.createdAt) }
+        let calendar = Calendar.current
+
+        var startYear = 2020
+        var endYear: Int? = nil
+
+        if let earliestDate = dates.min(), let latestDate = dates.max() {
+            startYear = calendar.component(.year, from: earliestDate)
+            let endYearValue = calendar.component(.year, from: latestDate)
+            endYear = endYearValue != startYear ? endYearValue : nil
+        }
+
+        let yearsSpan = MemoryContextData.YearsSpan(
+            startYear: startYear,
+            endYear: endYear,
+            displayString: endYear == nil ? "\(startYear)" : "\(startYear)-\(endYear!)"
+        )
+
+        // TODO: Replace with real data from backend API
+        let relatedPrompts: [MemoryContextData.RelatedPrompt] = [
+            MemoryContextData.RelatedPrompt(id: "1", title: "What was your favorite holiday tradition?", responseCount: 5),
+            MemoryContextData.RelatedPrompt(id: "2", title: "Tell us about a memorable family trip", responseCount: 3),
+            MemoryContextData.RelatedPrompt(id: "3", title: "What's your earliest childhood memory?", responseCount: 7)
+        ]
+
+        // TODO: Replace with AI-detected emotional tags from backend
+        let emotionalTags: [MemoryContextData.EmotionalTag] = [
+            MemoryContextData.EmotionalTag(emoji: "❤️", name: "Love", count: 12),
+            MemoryContextData.EmotionalTag(emoji: "🎉", name: "Celebration", count: 8),
+            MemoryContextData.EmotionalTag(emoji: "😂", name: "Humor", count: 5),
+            MemoryContextData.EmotionalTag(emoji: "😢", name: "Nostalgia", count: 3)
+        ]
+
+        return MemoryContextData(
+            contributors: contributors,
+            yearsSpanned: yearsSpan,
+            relatedPrompts: relatedPrompts,
+            emotionalTags: emotionalTags
+        )
+    }
+
+    private func findAllResponsesInThread(startingFrom response: StorySegmentData, allResponses: [StorySegmentData]) -> [StorySegmentData] {
+        var threadResponses: [StorySegmentData] = []
+        var toProcess: [StorySegmentData] = [response]
+        var processedIds = Set<String>()
+
+        while !toProcess.isEmpty {
+            let current = toProcess.removeFirst()
+
+            guard !processedIds.contains(current.id) else { continue }
+            processedIds.insert(current.id)
+            threadResponses.append(current)
+
+            // Find all direct replies to this response
+            let replies = allResponses.filter { $0.replyToResponseId == current.id }
+            toProcess.append(contentsOf: replies)
+        }
+
+        return threadResponses
     }
 }
 
@@ -1255,6 +1402,174 @@ struct EmptyPerspectivesView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(40)
+    }
+}
+
+// MARK: - Prompt Memory Header
+
+enum PromptCategory: String, CaseIterable {
+    case voiceMemory = "🎙️ Voice Memory"
+    case story = "📖 Story"
+    case reflection = "💭 Reflection"
+
+    var icon: String {
+        switch self {
+        case .voiceMemory: return "waveform"
+        case .story: return "book.closed"
+        case .reflection: return "sparkles"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .voiceMemory: return .storytellerOrange
+        case .story: return .storytellerBlue
+        case .reflection: return .storytellerPurple
+        }
+    }
+}
+
+struct PromptMemoryHeader: View {
+    let promptText: String
+    let promptCategory: PromptCategory
+    let responses: [StorySegmentData]
+    let theme: PersonaTheme
+
+    // Calculate time span from responses
+    private var yearsSpanned: String? {
+        guard !responses.isEmpty else { return nil }
+
+        let dates = responses.compactMap { response -> Date? in
+            ISO8601DateFormatter().date(from: response.createdAt)
+        }.sorted()
+
+        guard dates.count >= 2,
+              let oldest = dates.first,
+              let newest = dates.last else { return nil }
+
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: oldest, to: newest)
+
+        if let years = components.year, years > 0 {
+            let monthStr = components.month ?? 0
+            return monthStr > 0 ? "\(years)y \(monthStr)m" : "\(years)y"
+        } else if let months = components.month, months > 0 {
+            return "\(months)m"
+        }
+
+        return nil
+    }
+
+    // Get last added date (most recent response)
+    private var lastAddedDate: Date? {
+        guard !responses.isEmpty else { return nil }
+        let dates = responses.compactMap { response -> Date? in
+            ISO8601DateFormatter().date(from: response.createdAt)
+        }.sorted()
+        return dates.last
+    }
+
+    // Format legacy date (e.g., "Recorded in 2019")
+    private var legacyDateString: String? {
+        guard !responses.isEmpty else { return nil }
+
+        let dates = responses.compactMap { response -> Date? in
+            ISO8601DateFormatter().date(from: response.createdAt)
+        }.sorted()
+
+        guard let oldest = dates.first else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy"
+        return "Recorded in \(formatter.string(from: oldest))"
+    }
+
+    // Mock heard count (TODO: Replace with real data from backend)
+    private var heardCount: Int {
+        // Mock: random count between 0 and 100
+        // In production, this would come from analytics backend
+        return Int.random(in: 0...100)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Category badge + time span
+            HStack(spacing: 12) {
+                // Category badge
+                HStack(spacing: 6) {
+                    Image(systemName: promptCategory.icon)
+                        .font(.caption)
+                    Text(promptCategory.rawValue)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(promptCategory.color.opacity(0.9))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(promptCategory.color.opacity(0.12))
+                )
+
+                // Time span badge (subtle emotional flex)
+                if let spanned = yearsSpanned {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.caption2)
+                        Text(spanned)
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                    .foregroundColor(theme.secondaryTextColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(theme.secondaryTextColor.opacity(0.08))
+                    )
+                }
+
+                Spacer()
+            }
+
+            // Prompt text - calm, prominent
+            Text(promptText)
+                .font(.system(size: 22, weight: .medium, design: .rounded))
+                .foregroundColor(theme.textColor)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Legacy signals or empty state
+            if responses.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "speaker.wave.2")
+                        .font(.caption)
+                    Text("Be the first to share this memory")
+                        .font(.caption)
+                        .foregroundColor(theme.secondaryTextColor)
+                }
+            } else {
+                // Legacy signals showing memory engagement
+                LegacySignalsView(
+                    voiceCount: responses.count,
+                    heardCount: heardCount,
+                    lastAdded: lastAddedDate,
+                    theme: theme
+                )
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(theme.cardBackgroundColor)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(
+                            promptCategory.color.opacity(0.2),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+        )
     }
 }
 

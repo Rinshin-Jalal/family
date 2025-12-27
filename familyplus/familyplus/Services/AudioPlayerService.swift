@@ -22,6 +22,10 @@ struct PlaylistItem {
 
 @MainActor
 class AudioPlayerService: ObservableObject {
+    static let shared = AudioPlayerService()
+
+    // Make initializer private to enforce singleton pattern
+    private init() {}
     @Published var isPlaying = false
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
@@ -33,6 +37,10 @@ class AudioPlayerService: ObservableObject {
     @Published var currentIndex: Int = 0
     @Published var isAutoPlaying: Bool = false
 
+    // Memory Resonance: Trigger after listening completes
+    @Published var shouldShowResonance: Bool = false
+    private var hasShownResonanceForCurrentTrack: Bool = false
+
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var currentURL: URL?
@@ -40,6 +48,10 @@ class AudioPlayerService: ObservableObject {
 
     // Shared state for timeline coordination
     private let playerState = TimelinePlayerState.shared
+
+    // Silent listener tracking
+    private let listenerService = SilentListenerService.shared
+    private var lastTrackedTime: TimeInterval = 0
 
     nonisolated deinit {
         // Cleanup synchronously - safe because we're just removing observers and stopping player
@@ -95,7 +107,15 @@ class AudioPlayerService: ObservableObject {
         player.play()
         isPlaying = true
         playerState.isPlaying = true
-        print("▶️ Playback started")
+
+        // Track listen start for silent listener mode
+        if let responseId = currentResponseId {
+            listenerService.trackListenStart(responseId: responseId)
+            lastTrackedTime = currentTime
+            print("▶️ Playback started (tracking for \(responseId))")
+        } else {
+            print("▶️ Playback started")
+        }
     }
 
     /// Pause playback
@@ -199,7 +219,19 @@ class AudioPlayerService: ObservableObject {
             Task { @MainActor in
                 self?.currentTime = time.seconds
                 self?.updateProgress()
+                self?.trackListeningProgress()
             }
+        }
+    }
+
+    private func trackListeningProgress() {
+        guard let responseId = currentResponseId,
+              currentTime > lastTrackedTime else { return }
+
+        // Track progress every second of playback
+        if currentTime - lastTrackedTime >= 1.0 {
+            listenerService.trackListenProgress(responseId: responseId, seconds: currentTime - lastTrackedTime)
+            lastTrackedTime = currentTime
         }
     }
 
@@ -225,12 +257,30 @@ class AudioPlayerService: ObservableObject {
         isPlaying = false
         playerState.isPlaying = false
 
+        // Track listen completion for silent listener mode
+        if let responseId = currentResponseId {
+            let completionRate = duration > 0 ? (currentTime / duration) : 0
+            listenerService.trackListenComplete(responseId: responseId, completionRate: completionRate)
+            print("✅ Playback finished (completion: \(Int(completionRate * 100))%)")
+
+            // Trigger Memory Resonance if mostly listened to (>=70%) and not in autoplay mode
+            if completionRate >= 0.7 && !isAutoPlaying && !hasShownResonanceForCurrentTrack {
+                hasShownResonanceForCurrentTrack = true
+                // Small delay before showing resonance
+                Task {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                    await MainActor.run {
+                        self.shouldShowResonance = true
+                    }
+                }
+            }
+        }
+
         // Auto-advance to next track if enabled
         if isAutoPlaying {
             advanceToNextTrack()
         } else {
             seek(to: 0)
-            print("✅ Playback finished")
         }
     }
 

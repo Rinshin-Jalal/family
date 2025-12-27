@@ -3,7 +3,6 @@
 import OpenAI from 'openai';
 import {
   StorySynthesisResult,
-  StorySegment,
   AIServiceError
 } from './types';
 

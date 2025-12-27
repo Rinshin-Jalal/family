@@ -8,6 +8,38 @@
 import SwiftUI
 import Combine
 
+// MARK: - Waveform Preview Component
+
+struct WaveformPreviewView: View {
+    let color: Color
+    let isPlaying: Bool
+
+    @State private var barHeights: [CGFloat] = []
+
+    init(color: Color, isPlaying: Bool) {
+        self.color = color
+        self.isPlaying = isPlaying
+    }
+
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(0..<20, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(color.opacity(isPlaying ? 1.0 : 0.5))
+                    .frame(width: 2, height: barHeights.isEmpty ? 8 : barHeights[index])
+            }
+        }
+        .frame(height: 12)
+        .onAppear {
+            generateWaveform()
+        }
+    }
+
+    private func generateWaveform() {
+        barHeights = (0..<20).map { _ in CGFloat.random(in: 4...12) }
+    }
+}
+
 // MARK: - Threaded Timeline View
 
 struct ThreadedTimelineView: View {
@@ -22,6 +54,15 @@ struct ThreadedTimelineView: View {
         buildThreadTree(from: responses)
     }
 
+    // Memory context panel state
+    @State private var showMemoryContext = false
+    @State private var contextForResponse: StorySegmentData?
+
+    // Memory resonance state
+    @State private var showResonance = false
+    @State private var resonanceForResponse: StorySegmentData?
+    @ObservedObject private var audioPlayer = AudioPlayerService.shared
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
@@ -30,11 +71,41 @@ struct ThreadedTimelineView: View {
                         node: node,
                         depth: 0,
                         onReply: onReplyToResponse,
-                        onPlay: onPlayResponse
+                        onPlay: onPlayResponse,
+                        onShowMemoryContext: { response in
+                            contextForResponse = response
+                            showMemoryContext = true
+                        }
                     )
                 }
             }
             .padding(.vertical, 16)
+        }
+        .sheet(isPresented: $showMemoryContext) {
+            if let response = contextForResponse {
+                MemoryContextPanel(
+                    context: generateMemoryContext(for: response, allResponses: responses)
+                )
+            }
+        }
+        .sheet(isPresented: $showResonance) {
+            if let response = resonanceForResponse {
+                MemoryResonanceView(
+                    response: response,
+                    onResponseShared: {
+                        // Refresh or post-processing after sharing
+                        showResonance = false
+                        audioPlayer.shouldShowResonance = false
+                    }
+                )
+            }
+        }
+        .onChange(of: audioPlayer.shouldShowResonance) { shouldShow in
+            if shouldShow, let responseId = audioPlayer.currentResponseId,
+               let response = responses.first(where: { $0.id == responseId }) {
+                resonanceForResponse = response
+                showResonance = true
+            }
         }
     }
 
@@ -65,6 +136,73 @@ struct ThreadedTimelineView: View {
         // Sort by creation date (oldest first for chronological story)
         return rootNodes.sorted { $0.response.createdAtDate < $1.response.createdAtDate }
     }
+
+    // Generate memory context data for the panel
+    private func generateMemoryContext(for response: StorySegmentData, allResponses: [StorySegmentData]) -> MemoryContextData {
+        // Find all responses in the same thread
+        let threadResponses = findAllResponsesInThread(startingFrom: response, allResponses: allResponses)
+
+        // Contributors: Get unique contributors
+        let uniqueContributors = Array(Set(threadResponses.map { response in
+            MemoryContextData.Contributor(
+                name: response.fullName,
+                role: PersonaRole(rawValue: response.role) ?? .parent,
+                avatarColor: response.storytellerColor
+            )
+        }))
+
+        // Years spanned: Calculate from response dates
+        let dates = threadResponses.compactMap { ISO8601DateFormatter().date(from: $0.createdAt) }
+        let years = dates.map { Calendar.current.component(.year, from: $0) }
+        let minYear = years.min() ?? Calendar.current.component(.year, from: Date())
+        let maxYear = years.max()
+
+        let yearsSpan = MemoryContextData.YearsSpan(
+            startYear: minYear,
+            endYear: maxYear,
+            displayString: maxYear == nil ? "\(minYear)" : "\(minYear)-\(maxYear!)"
+        )
+
+        // Related prompts (mock for now - would need backend API)
+        let relatedPrompts = [
+            MemoryContextData.RelatedPrompt(id: "1", title: "What was your favorite holiday tradition?", responseCount: 5),
+            MemoryContextData.RelatedPrompt(id: "2", title: "Tell us about a memorable family trip", responseCount: 3)
+        ]
+
+        // Emotional tags (mock for now - would be AI-detected from transcriptions)
+        let emotionalTags = [
+            MemoryContextData.EmotionalTag(emoji: "❤️", name: "Love", count: 12),
+            MemoryContextData.EmotionalTag(emoji: "😂", name: "Humor", count: 5),
+            MemoryContextData.EmotionalTag(emoji: "🎉", name: "Celebration", count: 3)
+        ]
+
+        return MemoryContextData(
+            contributors: uniqueContributors.sorted { $0.name < $1.name },
+            yearsSpanned: yearsSpan,
+            relatedPrompts: relatedPrompts,
+            emotionalTags: emotionalTags
+        )
+    }
+
+    // Helper to find all responses in a thread
+    private func findAllResponsesInThread(startingFrom response: StorySegmentData, allResponses: [StorySegmentData]) -> [StorySegmentData] {
+        var threadResponses: [StorySegmentData] = [response]
+        var processedIds: Set<String> = [response.id]
+
+        // Find all replies to this response
+        func addReplies(to responseId: String) {
+            for resp in allResponses where resp.replyToResponseId == responseId {
+                if !processedIds.contains(resp.id) {
+                    processedIds.insert(resp.id)
+                    threadResponses.append(resp)
+                    addReplies(to: resp.id)
+                }
+            }
+        }
+
+        addReplies(to: response.id)
+        return threadResponses
+    }
 }
 
 // MARK: - Thread Node (Tree Structure)
@@ -90,6 +228,7 @@ struct ThreadNodeView: View {
     let depth: Int // Indentation level
     let onReply: (StorySegmentData) -> Void
     let onPlay: (StorySegmentData) -> Void
+    let onShowMemoryContext: (StorySegmentData) -> Void
 
     private let indentWidth: CGFloat = 32
     private let maxDepth: Int = 3 // Prevent too much nesting
@@ -98,18 +237,58 @@ struct ThreadNodeView: View {
         min(depth, maxDepth)
     }
 
+    // Visual hierarchy based on depth
+    var isRootCard: Bool {
+        effectiveDepth == 0
+    }
+
+    var isDeepReply: Bool {
+        effectiveDepth >= 2
+    }
+
+    var barWidth: CGFloat {
+        if isRootCard { return 4 }      // Thicker for root
+        else if isDeepReply { return 1 } // Very thin for deep
+        else { return 2 }                // Medium for replies
+    }
+
+    var barOpacity: Double {
+        if isRootCard { return 0.4 }      // Warmer/fuller for root
+        else if isDeepReply { return 0.12 } // Softer/faded for deep
+        else { return 0.25 }              // Medium for replies
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // The response card
             HStack(spacing: 0) {
-                // Indentation for threading
+                // Indentation for threading with hierarchy
                 if effectiveDepth > 0 {
                     HStack(spacing: 0) {
                         ForEach(0..<effectiveDepth, id: \.self) { level in
-                            Rectangle()
-                                .fill(node.response.storytellerColor.opacity(0.2))
-                                .frame(width: 2)
-                                .padding(.leading, level == 0 ? 8 : indentWidth - 2)
+                            // Use different styles for different depths
+                            if level >= effectiveDepth - 1 && isDeepReply {
+                                // Deep thread: very soft, dotted effect
+                                RoundedRectangle(cornerRadius: 0.5)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                node.response.storytellerColor.opacity(barOpacity),
+                                                node.response.storytellerColor.opacity(barOpacity * 0.5),
+                                                node.response.storytellerColor.opacity(barOpacity)
+                                            ],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                                    .frame(width: barWidth)
+                                    .padding(.leading, level == 0 ? 8 : indentWidth - barWidth)
+                            } else {
+                                Rectangle()
+                                    .fill(node.response.storytellerColor.opacity(barOpacity))
+                                    .frame(width: barWidth)
+                                    .padding(.leading, level == 0 ? 8 : indentWidth - barWidth)
+                            }
                         }
                     }
                 }
@@ -118,8 +297,10 @@ struct ThreadNodeView: View {
                 ResponseCard(
                     response: node.response,
                     isThreaded: effectiveDepth > 0,
+                    isDeepReply: isDeepReply,
                     onReply: { onReply(node.response) },
-                    onPlay: { onPlay(node.response) }
+                    onPlay: { onPlay(node.response) },
+                    onShowMemoryContext: { onShowMemoryContext(node.response) }
                 )
                 .padding(.leading, effectiveDepth > 0 ? 16 : 0)
             }
@@ -132,7 +313,8 @@ struct ThreadNodeView: View {
                         node: childNode,
                         depth: depth + 1,
                         onReply: onReply,
-                        onPlay: onPlay
+                        onPlay: onPlay,
+                        onShowMemoryContext: onShowMemoryContext
                     )
                 }
             }
@@ -147,8 +329,10 @@ struct ResponseCard: View {
 
     let response: StorySegmentData
     let isThreaded: Bool
+    let isDeepReply: Bool
     let onReply: () -> Void
     let onPlay: () -> Void
+    let onShowMemoryContext: () -> Void
 
     @State private var isExpanded = false
     @State private var pulseAnimation = false
@@ -158,6 +342,49 @@ struct ResponseCard: View {
 
     var isCurrentlyPlaying: Bool {
         playerState.isPlaying(response.id)
+    }
+
+    // Visual hierarchy adjustments
+    var cardPadding: CGFloat {
+        isDeepReply ? 10 : (isThreaded ? 12 : 16)
+    }
+
+    var cardRadius: CGFloat {
+        isDeepReply ? 10 : (isThreaded ? 12 : 16)
+    }
+
+    var shadowOpacity: Double {
+        if isCurrentlyPlaying { return 0.12 }
+        return isDeepReply ? 0.02 : (isThreaded ? 0.03 : 0.05)
+    }
+
+    var shadowRadius: CGFloat {
+        if isCurrentlyPlaying { return 12 }
+        return isDeepReply ? 3 : (isThreaded ? 4 : 8)
+    }
+
+    // Avatar sizing based on hierarchy
+    var avatarSize: CGFloat {
+        isDeepReply ? 28 : (isThreaded ? 36 : 44)
+    }
+
+    var avatarFontSize: CGFloat {
+        isDeepReply ? 13 : (isThreaded ? 16 : 18)
+    }
+
+    var nameFontSize: CGFloat {
+        isDeepReply ? 14 : (isThreaded ? 15 : 17)
+    }
+
+    // Legacy timestamp formatting (e.g., "Recorded in 2019")
+    var legacyTimestamp: String {
+        guard let date = ISO8601DateFormatter().date(from: response.createdAt) else {
+            return "Recently"
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy"
+        return "Recorded in \(formatter.string(from: date))"
     }
 
     var formattedDuration: String {
@@ -183,17 +410,17 @@ struct ResponseCard: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: isThreaded ? 36 : 44, height: isThreaded ? 36 : 44)
+                    .frame(width: avatarSize, height: avatarSize)
                     .overlay(
                         Text(String(response.fullName.prefix(1)))
-                            .font(.system(size: isThreaded ? 16 : 18, weight: .bold))
+                            .font(.system(size: avatarFontSize, weight: .bold))
                             .foregroundColor(.white)
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text(response.fullName)
-                            .font(.system(size: isThreaded ? 15 : 17, weight: .semibold))
+                            .font(.system(size: nameFontSize, weight: .semibold))
                             .foregroundColor(theme.textColor)
 
                         // Playing indicator (pulsing dot + text)
@@ -211,7 +438,7 @@ struct ResponseCard: View {
                         }
                     }
 
-                    Text(response.createdAtDate, style: .relative)
+                    Text(legacyTimestamp)
                         .font(.caption)
                         .foregroundColor(theme.secondaryTextColor)
                 }
@@ -276,6 +503,9 @@ struct ResponseCard: View {
 
                 // More options
                 Menu {
+                    Button(action: onShowMemoryContext) {
+                        Label("Memory Context", systemImage: "info.circle")
+                    }
                     Button(action: {}) {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
@@ -289,25 +519,32 @@ struct ResponseCard: View {
                 }
             }
             .padding(.top, 4)
+
+            // Silent Listener indicator (shows personal listening stats)
+            SilentListenerIndicator(
+                listenCount: SilentListenerService.shared.listenCount(for: response.id),
+                totalListenTime: SilentListenerService.shared.totalListenTime(for: response.id),
+                theme: theme
+            )
         }
-        .padding(isThreaded ? 12 : 16)
+        .padding(cardPadding)
         .background(
             ZStack {
                 // Base card background
-                RoundedRectangle(cornerRadius: isThreaded ? 12 : 16)
+                RoundedRectangle(cornerRadius: cardRadius)
                     .fill(theme.cardBackgroundColor)
 
                 // Enhanced highlight when playing
                 if isCurrentlyPlaying {
-                    RoundedRectangle(cornerRadius: isThreaded ? 12 : 16)
+                    RoundedRectangle(cornerRadius: cardRadius)
                         .fill(response.storytellerColor.opacity(0.12))
                         .animation(.easeInOut(duration: 0.3), value: isCurrentlyPlaying)
                 }
             }
             .shadow(
-                color: .black.opacity(isCurrentlyPlaying ? 0.12 : (isThreaded ? 0.03 : 0.05)),
-                radius: isCurrentlyPlaying ? 12 : (isThreaded ? 4 : 8),
-                y: isCurrentlyPlaying ? 6 : (isThreaded ? 2 : 4)
+                color: .black.opacity(shadowOpacity),
+                radius: shadowRadius,
+                y: isCurrentlyPlaying ? 6 : (isDeepReply ? 1 : (isThreaded ? 2 : 4))
             )
         )
         .padding(.vertical, 6)
@@ -339,6 +576,7 @@ struct ChronologicalThreadedTimelineView: View {
     let responses: [StorySegmentData]
     let onReplyToResponse: (StorySegmentData) -> Void
     let onPlayResponse: (StorySegmentData) -> Void
+    let onShowMemoryContext: (StorySegmentData) -> Void
 
     // Sort chronologically
     private var sortedResponses: [StorySegmentData] {
@@ -353,7 +591,8 @@ struct ChronologicalThreadedTimelineView: View {
                         response: response,
                         allResponses: responses,
                         onReply: onReplyToResponse,
-                        onPlay: onPlayResponse
+                        onPlay: onPlayResponse,
+                        onShowMemoryContext: onShowMemoryContext
                     )
                 }
             }
@@ -369,6 +608,7 @@ struct ChronologicalResponseCard: View {
     let allResponses: [StorySegmentData]
     let onReply: (StorySegmentData) -> Void
     let onPlay: (StorySegmentData) -> Void
+    let onShowMemoryContext: (StorySegmentData) -> Void
 
     @State private var isExpanded = false
     @State private var animationProgress: CGFloat = 0
@@ -387,6 +627,27 @@ struct ChronologicalResponseCard: View {
         return depth
     }
 
+    // Visual hierarchy based on depth
+    var isRootCard: Bool {
+        threadDepth == 0
+    }
+
+    var isDeepReply: Bool {
+        threadDepth >= 2
+    }
+
+    var barWidth: CGFloat {
+        if isRootCard { return 4 }
+        else if isDeepReply { return 1 }
+        else { return 2 }
+    }
+
+    var barOpacity: Double {
+        if isRootCard { return 0.4 }
+        else if isDeepReply { return 0.12 }
+        else { return 0.25 }
+    }
+
     // Find parent response for context label
     private var parentResponse: StorySegmentData? {
         guard let parentId = response.replyToResponseId else { return nil }
@@ -403,14 +664,33 @@ struct ChronologicalResponseCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
-                // Threading indicators (strengthened colored bars)
+                // Threading indicators with hierarchy-based styling
                 if effectiveDepth > 0 {
                     HStack(spacing: 0) {
                         ForEach(0..<effectiveDepth, id: \.self) { level in
-                            Rectangle()
-                                .fill(response.storytellerColor.opacity(0.4))
-                                .frame(width: 3)
-                                .padding(.leading, level == 0 ? 8 : indentWidth - 3)
+                            // Use different styles for different depths
+                            if level >= effectiveDepth - 1 && isDeepReply {
+                                // Deep thread: very soft, gradient effect
+                                RoundedRectangle(cornerRadius: 0.5)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                response.storytellerColor.opacity(barOpacity),
+                                                response.storytellerColor.opacity(barOpacity * 0.5),
+                                                response.storytellerColor.opacity(barOpacity)
+                                            ],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                                    .frame(width: barWidth)
+                                    .padding(.leading, level == 0 ? 8 : indentWidth - barWidth)
+                            } else {
+                                Rectangle()
+                                    .fill(response.storytellerColor.opacity(barOpacity))
+                                    .frame(width: barWidth)
+                                    .padding(.leading, level == 0 ? 8 : indentWidth - barWidth)
+                            }
                         }
                     }
                 }
@@ -422,7 +702,8 @@ struct ChronologicalResponseCard: View {
                             parentResponse: parentResponse,
                             textExpanded: $textExpanded,
                             onPlay: { onPlay(response) },
-                            onReply: { onReply(response) }
+                            onReply: { onReply(response) },
+                            onShowMemoryContext: onShowMemoryContext
                         )
                     } else {
                         CollapsedContent(
@@ -502,6 +783,17 @@ struct CollapsedContent: View {
 
     var isCurrentlyPlaying: Bool {
         playerState.isPlaying(response.id)
+    }
+
+    // Legacy timestamp formatting
+    var legacyTimestamp: String {
+        guard let date = ISO8601DateFormatter().date(from: response.createdAt) else {
+            return "Recently"
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy"
+        return "Recorded in \(formatter.string(from: date))"
     }
 
     var body: some View {
@@ -605,12 +897,24 @@ struct ExpandedContent: View {
     @Binding var textExpanded: Bool
     let onPlay: () -> Void
     let onReply: () -> Void
+    let onShowMemoryContext: (StorySegmentData) -> Void
 
     @State private var pulseAnimation = false
     @ObservedObject private var playerState = TimelinePlayerState.shared
 
     var isCurrentlyPlaying: Bool {
         playerState.isPlaying(response.id)
+    }
+
+    // Legacy timestamp formatting
+    var legacyTimestamp: String {
+        guard let date = ISO8601DateFormatter().date(from: response.createdAt) else {
+            return "Recently"
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy"
+        return "Recorded in \(formatter.string(from: date))"
     }
 
     var body: some View {
@@ -670,7 +974,7 @@ struct ExpandedContent: View {
                         }
                     }
 
-                    Text(response.createdAtDate, style: .relative)
+                    Text(legacyTimestamp)
                         .font(.caption)
                         .foregroundColor(theme.secondaryTextColor)
                 }
@@ -729,6 +1033,13 @@ struct ExpandedContent: View {
                 }
 
                 Spacer()
+
+                // Memory Context button
+                Button(action: { onShowMemoryContext(response) }) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.secondaryTextColor.opacity(0.6))
+                }
             }
             .padding(.top, 4)
         }

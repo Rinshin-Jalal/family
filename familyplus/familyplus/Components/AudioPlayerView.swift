@@ -10,7 +10,7 @@ import SwiftUI
 // MARK: - Audio Player View
 
 struct AudioPlayerView: View {
-    @StateObject private var player = AudioPlayerService()
+    @ObservedObject private var player = AudioPlayerService.shared
     @Environment(\.theme) var theme
 
     let audioURL: String // Remote URL from Supabase Storage
@@ -136,7 +136,7 @@ struct AudioPlayerView: View {
 // MARK: - Compact Audio Player (for lists)
 
 struct CompactAudioPlayerView: View {
-    @StateObject private var player = AudioPlayerService()
+    @ObservedObject private var player = AudioPlayerService.shared
     @Environment(\.theme) var theme
 
     let audioURL: String

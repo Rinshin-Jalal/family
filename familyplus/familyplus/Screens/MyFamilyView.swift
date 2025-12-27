@@ -15,9 +15,24 @@ struct MyFamilyView: View {
     @State private var selectedMember: FamilyMember?
     @State private var showInviteSheet = false
     @State private var showAddElderSheet = false
+    @State private var showGovernance = false
+    @State private var showElderPreferences = false
+    @State private var selectedElderForPreferences: FamilyMember?
 
     // TODO: Replace with actual user ownership status from API
     @State private var isOwner: Bool = true
+
+    // TODO: Replace with actual family data from API
+    @State private var familyData = FamilyData(
+        id: "family-123",
+        name: "The Rodriguez Family",
+        memberCount: 4,
+        storyCount: 42,
+        ownerId: "user-1",
+        createdAt: Date(),
+        hasSensitiveTopics: true,
+        allowsConflictingPerspectives: true
+    )
 
     var body: some View {
         Group {
@@ -28,7 +43,9 @@ struct MyFamilyView: View {
                     selectedMember: $selectedMember,
                     showInviteSheet: $showInviteSheet,
                     showAddElderSheet: $showAddElderSheet,
-                    isOwner: isOwner
+                    showGovernance: $showGovernance,
+                    isOwner: isOwner,
+                    familyData: familyData
                 )
             case .parent:
                 ParentMyFamily(
@@ -36,7 +53,10 @@ struct MyFamilyView: View {
                     selectedMember: $selectedMember,
                     showInviteSheet: $showInviteSheet,
                     showAddElderSheet: $showAddElderSheet,
-                    isOwner: isOwner
+                    showGovernance: $showGovernance,
+                    selectedElderForPreferences: $selectedElderForPreferences,
+                    isOwner: isOwner,
+                    familyData: familyData
                 )
             case .child:
                 ChildMyFamily(
@@ -58,6 +78,12 @@ struct MyFamilyView: View {
         }
         .sheet(isPresented: $showAddElderSheet) {
             AddElderSheet()
+        }
+        .sheet(isPresented: $showGovernance) {
+            GovernanceSheet(familyData: familyData)
+        }
+        .sheet(item: $selectedElderForPreferences) { elder in
+            ElderPreferencesView(elderName: elder.name)
         }
         .onAppear {
             loadFamilyMembers()
@@ -325,6 +351,7 @@ struct MemberDetailSheet: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
     @State private var showRemoveAlert = false
+    @State private var showElderPreferences = false
 
     var body: some View {
         NavigationStack {
@@ -388,6 +415,16 @@ struct MemberDetailSheet: View {
                     VStack(spacing: 12) {
                         if member.role == .elder {
                             // Elder-specific actions
+                            Button(action: { showElderPreferences = true }) {
+                                Label("Preferences & Schedule", systemImage: "gearshape.fill")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 54)
+                                    .background(theme.accentColor)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                            }
+
                             Button(action: {}) {
                                 Label("Call Now", systemImage: "phone.fill")
                                     .font(.headline)
@@ -461,6 +498,9 @@ struct MemberDetailSheet: View {
                 }
             } message: {
                 Text("Are you sure you want to remove \(member.name) from your family? Their stories will remain in the archive.")
+            }
+            .sheet(isPresented: $showElderPreferences) {
+                ElderPreferencesView(elderName: member.name)
             }
         }
     }
@@ -610,7 +650,9 @@ struct TeenMyFamily: View {
     @Binding var selectedMember: FamilyMember?
     @Binding var showInviteSheet: Bool
     @Binding var showAddElderSheet: Bool
+    @Binding var showGovernance: Bool
     let isOwner: Bool // Can add members if owner
+    let familyData: FamilyData
     @Environment(\.theme) var theme
 
     var body: some View {
@@ -641,6 +683,41 @@ struct TeenMyFamily: View {
                 case .loaded(let members):
                     ScrollView {
                         VStack(spacing: 16) {
+                            // Family Header Card
+                            FamilyHeaderCard(family: familyData)
+
+                            // Governance quick access (owner only)
+                            if isOwner {
+                                Button(action: { showGovernance = true }) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "shield.checkered")
+                                            .font(.title3)
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Family Governance")
+                                                .font(.headline)
+
+                                            Text("Permissions & safety")
+                                                .font(.caption)
+                                                .foregroundColor(theme.secondaryTextColor)
+                                        }
+
+                                        Spacer()
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(theme.secondaryTextColor)
+                                    }
+                                    .foregroundColor(theme.accentColor)
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(theme.accentColor.opacity(0.1))
+                                    )
+                                }
+                            }
+
+                            // Member cards
                             ForEach(members) { member in
                                 TeenFamilyMemberCard(member: member)
                                     .onTapGesture { selectedMember = member }
@@ -663,7 +740,7 @@ struct TeenMyFamily: View {
                 }
             }
             .background(theme.backgroundColor.ignoresSafeArea())
-            .navigationTitle("My Family")
+            .navigationTitle(familyData.name)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 if isOwner {
@@ -815,7 +892,10 @@ struct ParentMyFamily: View {
     @Binding var selectedMember: FamilyMember?
     @Binding var showInviteSheet: Bool
     @Binding var showAddElderSheet: Bool
+    @Binding var showGovernance: Bool
+    @Binding var selectedElderForPreferences: FamilyMember?
     let isOwner: Bool // Can add members if owner
+    let familyData: FamilyData
     @Environment(\.theme) var theme
 
     let columns = [
@@ -861,28 +941,44 @@ struct ParentMyFamily: View {
                 case .loaded(let members):
                     ScrollView {
                         VStack(spacing: 24) {
-                            // Family stats summary
-                            HStack(spacing: 20) {
-                                StatCard(
-                                    icon: "person.2.fill",
-                                    value: "\(members.count)",
-                                    label: "Members",
-                                    color: .blue
-                                )
+                            // Family Header Card
+                            FamilyHeaderCard(family: familyData)
 
-                                StatCard(
-                                    icon: "book.fill",
-                                    value: "\(members.reduce(0) { $0 + $1.storyCount })",
-                                    label: "Stories",
-                                    color: .green
-                                )
+                            // Governance quick access (owner only)
+                            if isOwner {
+                                Button(action: { showGovernance = true }) {
+                                    HStack {
+                                        Image(systemName: "shield.checkered")
+                                            .font(.title3)
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Family Governance")
+                                                .font(.headline)
+
+                                            Text("Permissions, privacy & safety settings")
+                                                .font(.caption)
+                                                .foregroundColor(theme.secondaryTextColor)
+                                        }
+
+                                        Spacer()
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(theme.secondaryTextColor)
+                                    }
+                                    .foregroundColor(theme.accentColor)
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(theme.accentColor.opacity(0.1))
+                                    )
+                                }
                             }
-                            .padding(.horizontal, theme.screenPadding)
 
                             // Members grid
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(members) { member in
-                                    ParentFamilyMemberCard(member: member)
+                                    ParentGridMemberCard(member: member)
                                         .onTapGesture { selectedMember = member }
                                 }
 
@@ -894,8 +990,8 @@ struct ParentMyFamily: View {
                                     )
                                 }
                             }
-                            .padding(.horizontal, theme.screenPadding)
                         }
+                        .padding(.horizontal, theme.screenPadding)
                         .padding(.vertical, theme.screenPadding)
                     }
 
@@ -904,7 +1000,7 @@ struct ParentMyFamily: View {
                 }
             }
             .background(theme.backgroundColor.ignoresSafeArea())
-            .navigationTitle("Family")
+            .navigationTitle(familyData.name)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 if isOwner {
@@ -997,6 +1093,85 @@ struct AddMemberCard: View {
         .onTapGesture {
             onInvite()
         }
+    }
+}
+
+// MARK: - Parent Grid Member Card (for 2-column grid)
+
+struct ParentGridMemberCard: View {
+    let member: FamilyMember
+    @Environment(\.theme) var theme
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Avatar
+            ZStack {
+                Circle()
+                    .fill(member.roleColor.opacity(0.2))
+                    .frame(width: 80, height: 80)
+
+                Text(member.avatarEmoji)
+                    .font(.system(size: 48))
+            }
+
+            // Name
+            Text(member.name)
+                .font(.headline)
+                .foregroundColor(theme.textColor)
+                .lineLimit(1)
+
+            // Role badge
+            Text(member.role.displayName)
+                .font(.caption)
+                .foregroundColor(member.roleColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(member.roleColor.opacity(0.15))
+                )
+
+            // Stats
+            HStack(spacing: 12) {
+                VStack(spacing: 2) {
+                    Text("\(member.storyCount)")
+                        .font(.subheadline.bold())
+                        .foregroundColor(theme.textColor)
+
+                    Text("Stories")
+                        .font(.caption2)
+                        .foregroundColor(theme.secondaryTextColor)
+                }
+
+                VStack(spacing: 2) {
+                    Text("\(member.weeksStreak)")
+                        .font(.subheadline.bold())
+                        .foregroundColor(.orange)
+
+                    Text("Weeks")
+                        .font(.caption2)
+                        .foregroundColor(theme.secondaryTextColor)
+                }
+            }
+
+            // Status
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(member.statusColor)
+                    .frame(width: 6, height: 6)
+
+                Text(member.statusText)
+                    .font(.caption2)
+                    .foregroundColor(theme.secondaryTextColor)
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.cardBackgroundColor)
+        )
     }
 }
 

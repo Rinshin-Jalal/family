@@ -32,6 +32,53 @@ struct Story: Identifiable {
     }
 }
 
+// MARK: - Sample Stories
+
+extension Story {
+    static let sampleStories: [Story] = [
+        Story(
+            title: "The Summer Road Trip of '68",
+            storyteller: "Grandma Rose",
+            imageURL: nil,
+            voiceCount: 3,
+            timestamp: Date().addingTimeInterval(-3600),
+            storytellerRole: .elder
+        ),
+        Story(
+            title: "My First Day at School",
+            storyteller: "Dad",
+            imageURL: nil,
+            voiceCount: 2,
+            timestamp: Date().addingTimeInterval(-7200),
+            storytellerRole: .parent
+        ),
+        Story(
+            title: "The Best Birthday Ever",
+            storyteller: "Mia",
+            imageURL: nil,
+            voiceCount: 1,
+            timestamp: Date().addingTimeInterval(-10800),
+            storytellerRole: .child
+        ),
+        Story(
+            title: "When I Met Your Grandfather",
+            storyteller: "Grandma Rose",
+            imageURL: nil,
+            voiceCount: 4,
+            timestamp: Date().addingTimeInterval(-14400),
+            storytellerRole: .elder
+        ),
+        Story(
+            title: "My Favorite Toy",
+            storyteller: "Leo",
+            imageURL: nil,
+            voiceCount: 1,
+            timestamp: Date().addingTimeInterval(-18000),
+            storytellerRole: .teen
+        )
+    ]
+}
+
 // MARK: - Story Card
 
 struct StoryCard: View {
