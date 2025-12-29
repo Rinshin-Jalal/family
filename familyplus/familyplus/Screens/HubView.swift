@@ -9,6 +9,23 @@ import SwiftUI
 
 // MARK: - Dashboard Data Models
 
+struct DailyPrompt: Identifiable, Codable {
+    let id: String
+    let question: String
+    let category: PromptCategory
+    let icon: String
+    let validUntil: Date
+    let responseCount: Int?  // How many family members answered
+
+    enum PromptCategory: String, Codable {
+        case memory = "Memory"
+        case tradition = "Tradition"
+        case milestone = "Milestone"
+        case wisdom = "Wisdom"
+        case fun = "Fun"
+    }
+}
+
 struct RecentActivity: Identifiable {
     let id = UUID()
     let type: ActivityType
@@ -51,6 +68,8 @@ struct HubView: View {
     @State private var loadingState: LoadingState<DashboardData> = .loading
     @State private var showCaptureSheet = false
     @State private var currentProfile: UserProfile = UserProfile(name: "Leo", role: .teen, avatarEmoji: "🎸")
+    @State private var dailyPrompt: DailyPrompt?
+    @State private var selectedPromptForCapture: PromptData?
     @State private var profiles: [UserProfile] = [
         UserProfile(name: "Leo", role: .teen, avatarEmoji: "🎸"),
         UserProfile(name: "Mom", role: .parent, avatarEmoji: "👩"),
@@ -64,28 +83,42 @@ struct HubView: View {
                 // Unified Teen/Parent dashboard - same UX, different theme colors
                 UnifiedTeenParentDashboard(
                     loadingState: loadingState,
-                    onShowCapture: { showCaptureSheet = true },
+                    onShowCapture: { prompt in
+                        selectedPromptForCapture = prompt
+                        showCaptureSheet = true
+                    },
                     currentProfile: $currentProfile,
-                    profiles: profiles
+                    profiles: profiles,
+                    dailyPrompt: dailyPrompt
                 )
             case .child:
                 ChildDashboard(
                     loadingState: loadingState,
-                    onShowCapture: { showCaptureSheet = true }
+                    onShowCapture: { _ in
+                        selectedPromptForCapture = nil
+                        showCaptureSheet = true
+                    }
                 )
             case .elder:
                 ElderDashboard(
                     loadingState: loadingState,
-                    onShowCapture: { showCaptureSheet = true }
+                    onShowCapture: { _ in
+                        selectedPromptForCapture = nil
+                        showCaptureSheet = true
+                    }
                 )
             }
         }
         .animation(theme.animation, value: theme.role)
         .sheet(isPresented: $showCaptureSheet) {
-            CaptureMemorySheet()
+            CaptureMemorySheet(initialPrompt: selectedPromptForCapture)
+                .onDisappear {
+                    selectedPromptForCapture = nil
+                }
         }
         .onAppear {
             loadDashboard()
+            loadDailyPrompt()
         }
     }
 
@@ -96,6 +129,19 @@ struct HubView: View {
             let data = DashboardData.mock
             loadingState = .loaded(data)
         }
+    }
+
+    private func loadDailyPrompt() {
+        // TODO: Replace with actual API call
+        // GET /api/prompts/daily
+        dailyPrompt = DailyPrompt(
+            id: UUID().uuidString,
+            question: "What memory would you like to capture today?",
+            category: .memory,
+            icon: "lightbulb.fill",
+            validUntil: Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date(),
+            responseCount: nil
+        )
     }
 }
 
@@ -186,9 +232,10 @@ struct DashboardData {
 
 struct UnifiedTeenParentDashboard: View {
     let loadingState: LoadingState<DashboardData>
-    let onShowCapture: () -> Void
+    let onShowCapture: (PromptData?) -> Void
     @Binding var currentProfile: UserProfile
     let profiles: [UserProfile]
+    let dailyPrompt: DailyPrompt?
     @Environment(\.theme) var theme
 
     var body: some View {
@@ -198,9 +245,9 @@ struct UnifiedTeenParentDashboard: View {
                 case .loading:
                     DashboardSkeleton()
                 case .empty:
-                    UnifiedEmptyState(onCreateStory: onShowCapture)
+                    UnifiedEmptyState(onCreateStory: { onShowCapture(nil) })
                 case .loaded(let data):
-                    UnifiedDashboardContent(data: data, onShowCapture: onShowCapture)
+                    UnifiedDashboardContent(data: data, onShowCapture: onShowCapture, dailyPrompt: dailyPrompt)
                 case .error(let message):
                     ErrorStateView(message: message, onRetry: {})
                 }
@@ -212,68 +259,74 @@ struct UnifiedTeenParentDashboard: View {
     }
 }
 
+
 struct UnifiedDashboardContent: View {
     let data: DashboardData
-    let onShowCapture: () -> Void
+    let onShowCapture: (PromptData?) -> Void
+    let dailyPrompt: DailyPrompt?
     @Environment(\.theme) var theme
 
     var body: some View {
         ZStack {
-            // MARK: - Modern Liquid Glass Background
-            // Layer 1: Base with subtle mesh gradient feel
+            // MARK: - StoryDetailView-Style Background
+            // Layer 1: Base
             theme.backgroundColor.ignoresSafeArea()
 
-            // Layer 2: Subtle animated color wash
-            GeometryReader { geometry in
-                ZStack {
-                    // Top gradient wash
-                    RoundedRectangle(cornerRadius: 300)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    theme.accentColor.opacity(0.08),
-                                    theme.accentColor.opacity(0.02),
-                                    Color.clear
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: geometry.size.width * 1.5, height: geometry.size.height * 0.6)
-                        .offset(x: -geometry.size.width * 0.25, y: -geometry.size.height * 0.3)
-                        .blur(radius: 60)
-
-                    // Bottom complementary wash
-                    RoundedRectangle(cornerRadius: 250)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    complementaryColor.opacity(0.06),
-                                    Color.clear
-                                ],
-                                startPoint: .bottomTrailing,
-                                endPoint: .topLeading
-                            )
-                        )
-                        .frame(width: geometry.size.width * 1.3, height: geometry.size.height * 0.5)
-                        .offset(x: geometry.size.width * 0.2, y: geometry.size.height * 0.4)
-                        .blur(radius: 80)
-                }
-            }
+            // Layer 2: Hero-style diagonal gradient (StoryDetailView pattern)
+            LinearGradient(
+                colors: [
+                    theme.accentColor.opacity(theme.role == .teen ? 0.25 : 0.50),
+                    complementaryColor.opacity(theme.role == .teen ? 0.35 : 0.65),
+                    theme.backgroundColor.opacity(0.70),
+                    theme.backgroundColor
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
             .ignoresSafeArea()
 
-            // Layer 3: Subtle noise texture for depth
-            RoundedRectangle(cornerRadius: 0)
-                .fill(Color.clear)
-                .background(
-                    Material.ultraThinMaterial,
-                    in: RoundedRectangle(cornerRadius: 0)
-                )
-                .opacity(0.15)
-                .ignoresSafeArea()
+            // Layer 3: Text visibility gradient (StoryDetailView pattern)
+            LinearGradient(
+                colors: [.clear, theme.backgroundColor.opacity(0.90)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 200)
+            .ignoresSafeArea(edges: .top)
 
+            // Layer 4: Sticky gradient overlay (StoryDetailView pattern)
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [
+                        theme.accentColor.opacity(theme.role == .teen ? 0.15 : 0.35),
+                        complementaryColor.opacity(theme.role == .teen ? 0.08 : 0.20),
+                        .clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 120)
+                .ignoresSafeArea(edges: .top)
+                Spacer()
+            }
+
+            // Layer 5: Content
             ScrollView {
                 VStack(spacing: 24) {
+                    // MARK: - Daily Prompt Card
+                    if let prompt = dailyPrompt {
+                        PromptHeroCard(prompt: prompt, onTap: {
+                            let promptData = PromptData(
+                                id: prompt.id,
+                                text: prompt.question,
+                                category: prompt.category.rawValue.lowercased(),
+                                isCustom: false,
+                                createdAt: ISO8601DateFormatter().string(from: Date())
+                            )
+                            onShowCapture(promptData)
+                        })
+                    }
+
                     // MARK: - Hero Section: What's New
                     HeroSection(activities: data.recentActivities)
 
@@ -293,7 +346,7 @@ struct UnifiedDashboardContent: View {
         }
         .overlay(alignment: .bottom) {
             CaptureMemoryButton(
-                action: onShowCapture,
+                action: { onShowCapture(nil) },
                 hasUnlistenedContent: !data.unheardVoices.isEmpty || data.recentActivities.contains(where: { !$0.hasListened })
             )
         }
@@ -301,14 +354,19 @@ struct UnifiedDashboardContent: View {
 
     private var complementaryColor: Color {
         switch theme.role {
-        case .teen:
-            return Color.storytellerPurple
-        case .parent:
-            return Color.storytellerBlue
-        case .child:
-            return Color.storytellerGreen
-        case .elder:
-            return Color.storytellerOrange
+        case .teen: return Color(red: 0.4, green: 0.7, blue: 1.0) // Sky blue
+        case .parent: return Color.storytellerBlue
+        case .child: return Color.storytellerGreen
+        case .elder: return Color.storytellerOrange
+        }
+    }
+
+    private var tertiaryColor: Color {
+        switch theme.role {
+        case .teen: return Color.storytellerBlue
+        case .parent: return Color.storytellerOrange
+        case .child: return Color.storytellerOrange
+        case .elder: return Color.storytellerBlue
         }
     }
 }
@@ -351,7 +409,7 @@ struct UnifiedEmptyState: View {
 
 struct ChildDashboard: View {
     let loadingState: LoadingState<DashboardData>
-    let onShowCapture: () -> Void
+    let onShowCapture: (PromptData?) -> Void
     @Environment(\.theme) var theme
 
     var body: some View {
@@ -361,7 +419,7 @@ struct ChildDashboard: View {
                 ChildCardSkeleton()
 
             case .empty:
-                ChildEmptyState(onRecordStory: onShowCapture)
+                ChildEmptyState(onRecordStory: { onShowCapture(nil) })
 
             case .loaded(let data):
                 ChildDashboardContent(data: data, onShowCapture: onShowCapture)
@@ -372,7 +430,7 @@ struct ChildDashboard: View {
         }
         .background(theme.backgroundColor.ignoresSafeArea())
         .safeAreaInset(edge: .top, alignment: .trailing) {
-            Button(action: onShowCapture) {
+            Button(action: { onShowCapture(nil) }) {
                 ZStack {
                     Circle()
                         .fill(theme.accentColor)
@@ -392,59 +450,52 @@ struct ChildDashboard: View {
 
 struct ChildDashboardContent: View {
     let data: DashboardData
-    let onShowCapture: () -> Void
+    let onShowCapture: (PromptData?) -> Void
     @Environment(\.theme) var theme
 
     var body: some View {
         ZStack {
-            // MARK: - Modern Playful Background
+            // MARK: - StoryDetailView-Style Background (Vibrant for Kids)
             theme.backgroundColor.ignoresSafeArea()
 
-            // Layered gradient washes - vibrant but subtle
-            GeometryReader { geometry in
-                ZStack {
-                    // Colorful top wash
-                    RoundedRectangle(cornerRadius: 200)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.storytellerGreen.opacity(0.12),
-                                    Color.storytellerPurple.opacity(0.08),
-                                    Color.clear
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: geometry.size.width * 1.4, height: geometry.size.height * 0.7)
-                        .offset(x: -geometry.size.width * 0.2, y: -geometry.size.height * 0.35)
-                        .blur(radius: 50)
-
-                    // Warm bottom accent
-                    RoundedRectangle(cornerRadius: 180)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.storytellerOrange.opacity(0.1),
-                                    Color.clear
-                                ],
-                                startPoint: .bottomTrailing,
-                                endPoint: .topLeading
-                            )
-                        )
-                        .frame(width: geometry.size.width, height: geometry.size.height * 0.4)
-                        .offset(y: geometry.size.height * 0.3)
-                        .blur(radius: 70)
-                }
-            }
+            // Layer 1: Vibrant multi-color gradient (StoryDetailView style)
+            LinearGradient(
+                colors: [
+                    Color.storytellerGreen.opacity(0.40),
+                    Color.storytellerPurple.opacity(0.55),
+                    Color.storytellerOrange.opacity(0.35),
+                    theme.backgroundColor.opacity(0.70),
+                    theme.backgroundColor
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
             .ignoresSafeArea()
 
-            // Subtle grain overlay
-            RoundedRectangle(cornerRadius: 0)
-                .fill(Color.clear)
-                .background(Material.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 0))
-                .opacity(0.15)
-                .ignoresSafeArea()
+            // Layer 2: Text visibility gradient
+            LinearGradient(
+                colors: [.clear, theme.backgroundColor.opacity(0.90)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 200)
+            .ignoresSafeArea(edges: .top)
+
+            // Layer 3: Playful sticky gradient
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [
+                        Color.storytellerGreen.opacity(0.30),
+                        Color.yellow.opacity(0.15),
+                        .clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 120)
+                .ignoresSafeArea(edges: .top)
+                Spacer()
+            }
 
             VStack(spacing: 32) {
                 Spacer()
@@ -467,7 +518,7 @@ struct ChildDashboardContent: View {
 
 struct ElderDashboard: View {
     let loadingState: LoadingState<DashboardData>
-    let onShowCapture: () -> Void
+    let onShowCapture: (PromptData?) -> Void
     @Environment(\.theme) var theme
 
     var body: some View {
@@ -477,7 +528,7 @@ struct ElderDashboard: View {
                 ElderSkeleton()
 
             case .empty:
-                ElderEmptyState(onCallMe: onShowCapture)
+                ElderEmptyState(onCallMe: { onShowCapture(nil) })
 
             case .loaded(let data):
                 ElderDashboardContent(data: data, onShowCapture: onShowCapture)
@@ -492,58 +543,51 @@ struct ElderDashboard: View {
 
 struct ElderDashboardContent: View {
     let data: DashboardData
-    let onShowCapture: () -> Void
+    let onShowCapture: (PromptData?) -> Void
     @Environment(\.theme) var theme
 
     var body: some View {
         ZStack {
-            // MARK: - Modern Calm Background for Elders
+            // MARK: - StoryDetailView-Style Background (Calm for Elders)
             theme.backgroundColor.ignoresSafeArea()
 
-            // Subtle, calming gradient washes
-            GeometryReader { geometry in
-                ZStack {
-                    // Gentle top warmth
-                    RoundedRectangle(cornerRadius: 250)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.storytellerOrange.opacity(0.08),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: geometry.size.width * 1.2, height: geometry.size.height * 0.5)
-                        .offset(y: -geometry.size.height * 0.25)
-                        .blur(radius: 80)
-
-                    // Soft blue accent at bottom
-                    RoundedRectangle(cornerRadius: 300)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.storytellerBlue.opacity(0.05),
-                                    Color.clear
-                                ],
-                                startPoint: .bottom,
-                                endPoint: .top
-                            )
-                        )
-                        .frame(width: geometry.size.width * 1.5, height: geometry.size.height * 0.4)
-                        .offset(y: geometry.size.height * 0.3)
-                        .blur(radius: 100)
-                }
-            }
+            // Layer 1: Warm, calming gradient (StoryDetailView style)
+            LinearGradient(
+                colors: [
+                    Color.storytellerOrange.opacity(0.30),
+                    Color.storytellerBlue.opacity(0.40),
+                    theme.backgroundColor.opacity(0.75),
+                    theme.backgroundColor
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
             .ignoresSafeArea()
 
-            // Very subtle texture
-            RoundedRectangle(cornerRadius: 0)
-                .fill(Color.clear)
-                .background(Material.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 0))
-                .opacity(0.08)
-                .ignoresSafeArea()
+            // Layer 2: Text visibility gradient
+            LinearGradient(
+                colors: [.clear, theme.backgroundColor.opacity(0.92)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 200)
+            .ignoresSafeArea(edges: .top)
+
+            // Layer 3: Gentle sticky gradient
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [
+                        Color.storytellerOrange.opacity(0.20),
+                        Color.storytellerBlue.opacity(0.10),
+                        .clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 120)
+                .ignoresSafeArea(edges: .top)
+                Spacer()
+            }
 
             VStack(spacing: 40) {
                 Spacer()
@@ -559,7 +603,7 @@ struct ElderDashboardContent: View {
                 Spacer()
 
                 // MARK: - Giant Record Button
-                Button(action: onShowCapture) {
+                Button(action: { onShowCapture(nil) }) {
                     HStack(spacing: 16) {
                         Image(systemName: "waveform.circle.fill")
                             .font(.system(size: 32))
@@ -570,7 +614,7 @@ struct ElderDashboardContent: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 90)
-                    .glassEffect(.clear.tint(theme.accentColor), in: RoundedRectangle(cornerRadius: 24))
+                    .glassEffect(.clear.tint(theme.accentColor).interactive(), in: RoundedRectangle(cornerRadius: 24))
                 }
                 .padding(.horizontal, theme.screenPadding)
                 .padding(.bottom, 60)
@@ -667,6 +711,7 @@ struct ActivityCard: View {
         }
         .padding(14)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
     }
 
     private var activityIcon: String {
@@ -795,7 +840,8 @@ struct ActiveStoryCard: View {
             .padding(12)
         }
         .frame(width: 160)
-        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.clear.interactive(), in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
     }
 }
 
@@ -905,6 +951,7 @@ struct UnheardVoiceCard: View {
         }
         .padding(14)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
     }
 
     private var storytellerColor: Color {
@@ -919,6 +966,41 @@ struct UnheardVoiceCard: View {
     private var durationText: String {
         let minutes = Int(voice.duration / 60)
         return "\(minutes) min"
+    }
+}
+
+// MARK: - Prompt Hero Card
+
+struct PromptHeroCard: View {
+    let prompt: DailyPrompt
+    let onTap: () -> Void
+    @Environment(\.theme) var theme
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 16) {
+                // Prompt question
+                Text(prompt.question)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity,minHeight: 200)
+            
+            .glassEffect(.regular.tint(.accentColor), in: RoundedRectangle(cornerRadius: 20))
+            .shadow(color: theme.accentColor.opacity(0.3), radius: 20, y: 12)
+        }
+    }
+
+    private var complementaryColor: Color {
+        switch theme.role {
+        case .teen: return Color(red: 0.4, green: 0.7, blue: 1.0)
+        case .parent: return Color.storytellerBlue
+        case .child: return Color.storytellerGreen
+        case .elder: return Color.storytellerOrange
+        }
     }
 }
 
@@ -1027,6 +1109,7 @@ struct ChildUnheardCard: View {
         }
         .padding(24)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24))
+        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
     }
 
     private var storytellerColor: Color {

@@ -80,7 +80,7 @@ struct TeenTheme: PersonaTheme {
     let cardBackgroundColor = Color.darkGrey
 
     // Typography - Trendy, tight spacing
-    let headlineFont = Font.custom("SF Pro Display", size: 28).weight(.bold)
+    let headlineFont = Font.custom("SF Pro Display", size: 16).weight(.bold)
     let bodyFont = Font.system(size: 17, weight: .regular, design: .default)
     let storyFont = Font.custom("New York", size: 20).italic()
 
@@ -113,7 +113,7 @@ struct ParentTheme: PersonaTheme {
     let cardBackgroundColor = Color.surfaceGrey
 
     // Typography - Clear, trustworthy
-    let headlineFont = Font.system(size: 24, weight: .semibold, design: .default)
+    let headlineFont = Font.system(size: 16, weight: .semibold, design: .default)
     let bodyFont = Font.system(size: 17, weight: .regular, design: .default)
     let storyFont = Font.custom("New York", size: 20)
 
