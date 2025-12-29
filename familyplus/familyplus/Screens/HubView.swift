@@ -60,15 +60,9 @@ struct HubView: View {
     var body: some View {
         Group {
             switch theme.role {
-            case .teen:
-                TeenDashboard(
-                    loadingState: loadingState,
-                    onShowCapture: { showCaptureSheet = true },
-                    currentProfile: $currentProfile,
-                    profiles: profiles
-                )
-            case .parent:
-                ParentDashboard(
+            case .teen, .parent:
+                // Unified Teen/Parent dashboard - same UX, different theme colors
+                UnifiedTeenParentDashboard(
                     loadingState: loadingState,
                     onShowCapture: { showCaptureSheet = true },
                     currentProfile: $currentProfile,
@@ -188,9 +182,9 @@ struct DashboardData {
     )
 }
 
-// MARK: - Teen Dashboard
+// MARK: - Unified Teen/Parent Dashboard
 
-struct TeenDashboard: View {
+struct UnifiedTeenParentDashboard: View {
     let loadingState: LoadingState<DashboardData>
     let onShowCapture: () -> Void
     @Binding var currentProfile: UserProfile
@@ -203,13 +197,10 @@ struct TeenDashboard: View {
                 switch loadingState {
                 case .loading:
                     DashboardSkeleton()
-
                 case .empty:
-                    TeenEmptyState(onCreateStory: onShowCapture)
-
+                    UnifiedEmptyState(onCreateStory: onShowCapture)
                 case .loaded(let data):
-                    TeenDashboardContent(data: data, onShowCapture: onShowCapture)
-
+                    UnifiedDashboardContent(data: data, onShowCapture: onShowCapture)
                 case .error(let message):
                     ErrorStateView(message: message, onRetry: {})
                 }
@@ -221,29 +212,84 @@ struct TeenDashboard: View {
     }
 }
 
-struct TeenDashboardContent: View {
+struct UnifiedDashboardContent: View {
     let data: DashboardData
     let onShowCapture: () -> Void
     @Environment(\.theme) var theme
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // MARK: - Hero Section: What's New
-                HeroSection(activities: data.recentActivities.prefix(2).map { $0 })
+        ZStack {
+            // MARK: - Modern Liquid Glass Background
+            // Layer 1: Base with subtle mesh gradient feel
+            theme.backgroundColor.ignoresSafeArea()
 
-                // MARK: - Active Stories (Horizontal Scroll)
-                ActiveStoriesSection(stories: data.activeStories)
+            // Layer 2: Subtle animated color wash
+            GeometryReader { geometry in
+                ZStack {
+                    // Top gradient wash
+                    RoundedRectangle(cornerRadius: 300)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    theme.accentColor.opacity(0.08),
+                                    theme.accentColor.opacity(0.02),
+                                    Color.clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * 1.5, height: geometry.size.height * 0.6)
+                        .offset(x: -geometry.size.width * 0.25, y: -geometry.size.height * 0.3)
+                        .blur(radius: 60)
 
-                // MARK: - Unheard Voices
-                if !data.unheardVoices.isEmpty {
-                    UnheardVoicesSection(voices: data.unheardVoices)
+                    // Bottom complementary wash
+                    RoundedRectangle(cornerRadius: 250)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    complementaryColor.opacity(0.06),
+                                    Color.clear
+                                ],
+                                startPoint: .bottomTrailing,
+                                endPoint: .topLeading
+                            )
+                        )
+                        .frame(width: geometry.size.width * 1.3, height: geometry.size.height * 0.5)
+                        .offset(x: geometry.size.width * 0.2, y: geometry.size.height * 0.4)
+                        .blur(radius: 80)
                 }
-
-                // MARK: - Floating Action Button
-                Color.clear.frame(height: 100)
             }
-            .padding(theme.screenPadding)
+            .ignoresSafeArea()
+
+            // Layer 3: Subtle noise texture for depth
+            RoundedRectangle(cornerRadius: 0)
+                .fill(Color.clear)
+                .background(
+                    Material.ultraThinMaterial,
+                    in: RoundedRectangle(cornerRadius: 0)
+                )
+                .opacity(0.15)
+                .ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: 24) {
+                    // MARK: - Hero Section: What's New
+                    HeroSection(activities: data.recentActivities)
+
+                    // MARK: - Active Stories (Grid Layout)
+                    ActiveStoriesGridSection(stories: data.activeStories)
+
+                    // MARK: - Unheard Voices
+                    if !data.unheardVoices.isEmpty {
+                        UnheardVoicesSection(voices: data.unheardVoices)
+                    }
+
+                    // MARK: - Bottom padding for FAB
+                    Color.clear.frame(height: 100)
+                }
+                .padding(theme.screenPadding)
+            }
         }
         .overlay(alignment: .bottom) {
             CaptureMemoryButton(
@@ -252,71 +298,52 @@ struct TeenDashboardContent: View {
             )
         }
     }
-}
 
-// MARK: - Parent Dashboard
-
-struct ParentDashboard: View {
-    let loadingState: LoadingState<DashboardData>
-    let onShowCapture: () -> Void
-    @Binding var currentProfile: UserProfile
-    let profiles: [UserProfile]
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                switch loadingState {
-                case .loading:
-                    DashboardSkeleton()
-
-                case .empty:
-                    ParentEmptyState(onCreateStory: onShowCapture, onInviteFamily: {})
-
-                case .loaded(let data):
-                    ParentDashboardContent(data: data, onShowCapture: onShowCapture)
-
-                case .error(let message):
-                    ErrorStateView(message: message, onRetry: {})
-                }
-            }
-            .background(theme.backgroundColor.ignoresSafeArea())
-            .navigationTitle("Home")
-            .navigationBarTitleDisplayMode(.inline)
+    private var complementaryColor: Color {
+        switch theme.role {
+        case .teen:
+            return Color.storytellerPurple
+        case .parent:
+            return Color.storytellerBlue
+        case .child:
+            return Color.storytellerGreen
+        case .elder:
+            return Color.storytellerOrange
         }
     }
 }
 
-struct ParentDashboardContent: View {
-    let data: DashboardData
-    let onShowCapture: () -> Void
+// MARK: - Unified Empty State
+
+struct UnifiedEmptyState: View {
+    let onCreateStory: () -> Void
     @Environment(\.theme) var theme
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // MARK: - Hero Section: What's New (Primary Story)
-                HeroSection(activities: data.recentActivities)
-
-                // MARK: - Active Stories (Grid for Parents)
-                ActiveStoriesGrid(stories: data.activeStories)
-
-                // MARK: - Unheard Voices (Cards for Parents)
-                if !data.unheardVoices.isEmpty {
-                    UnheardVoicesSection(voices: data.unheardVoices)
-                }
-
-                // MARK: - Bottom padding for FAB
-                Color.clear.frame(height: 100)
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "waveform.circle.fill")
+                .font(.system(size: 64))
+                .foregroundColor(theme.accentColor.opacity(0.6))
+            VStack(spacing: 12) {
+                Text("No Stories Yet")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(theme.textColor)
+                Text("Start capturing your family memories")
+                    .font(.system(size: 16))
+                    .foregroundColor(theme.secondaryTextColor)
             }
-            .padding(theme.screenPadding)
+            Button(action: onCreateStory) {
+                Text("Record Your First Story")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(theme.accentColor))
+            }
+            Spacer()
         }
-        .overlay(alignment: .bottom) {
-            CaptureMemoryButton(
-                action: onShowCapture,
-                hasUnlistenedContent: !data.unheardVoices.isEmpty || data.recentActivities.contains(where: { !$0.hasListened })
-            )
-        }
+        .padding(theme.screenPadding)
     }
 }
 
@@ -369,18 +396,69 @@ struct ChildDashboardContent: View {
     @Environment(\.theme) var theme
 
     var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
+        ZStack {
+            // MARK: - Modern Playful Background
+            theme.backgroundColor.ignoresSafeArea()
 
-            // MARK: - Hero: "What's New" (Giant, playful)
-            ChildHeroSection(activities: data.recentActivities)
+            // Layered gradient washes - vibrant but subtle
+            GeometryReader { geometry in
+                ZStack {
+                    // Colorful top wash
+                    RoundedRectangle(cornerRadius: 200)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.storytellerGreen.opacity(0.12),
+                                    Color.storytellerPurple.opacity(0.08),
+                                    Color.clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * 1.4, height: geometry.size.height * 0.7)
+                        .offset(x: -geometry.size.width * 0.2, y: -geometry.size.height * 0.35)
+                        .blur(radius: 50)
 
-            // MARK: - Unheard Voices (Giant cards for kids)
-            if !data.unheardVoices.isEmpty {
-                ChildUnheardSection(voices: data.unheardVoices)
+                    // Warm bottom accent
+                    RoundedRectangle(cornerRadius: 180)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.storytellerOrange.opacity(0.1),
+                                    Color.clear
+                                ],
+                                startPoint: .bottomTrailing,
+                                endPoint: .topLeading
+                            )
+                        )
+                        .frame(width: geometry.size.width, height: geometry.size.height * 0.4)
+                        .offset(y: geometry.size.height * 0.3)
+                        .blur(radius: 70)
+                }
             }
+            .ignoresSafeArea()
 
-            Spacer()
+            // Subtle grain overlay
+            RoundedRectangle(cornerRadius: 0)
+                .fill(Color.clear)
+                .background(Material.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 0))
+                .opacity(0.15)
+                .ignoresSafeArea()
+
+            VStack(spacing: 32) {
+                Spacer()
+
+                // MARK: - Hero: "What's New" (Giant, playful)
+                ChildHeroSection(activities: data.recentActivities)
+
+                // MARK: - Unheard Voices (Giant cards for kids)
+                if !data.unheardVoices.isEmpty {
+                    ChildUnheardSection(voices: data.unheardVoices)
+                }
+
+                Spacer()
+            }
         }
     }
 }
@@ -418,39 +496,85 @@ struct ElderDashboardContent: View {
     @Environment(\.theme) var theme
 
     var body: some View {
-        VStack(spacing: 40) {
-            Spacer()
+        ZStack {
+            // MARK: - Modern Calm Background for Elders
+            theme.backgroundColor.ignoresSafeArea()
 
-            // MARK: - Hero: What's New (Very large, clear)
-            ElderHeroSection(activities: data.recentActivities.prefix(1).map { $0 })
+            // Subtle, calming gradient washes
+            GeometryReader { geometry in
+                ZStack {
+                    // Gentle top warmth
+                    RoundedRectangle(cornerRadius: 250)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.storytellerOrange.opacity(0.08),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: geometry.size.width * 1.2, height: geometry.size.height * 0.5)
+                        .offset(y: -geometry.size.height * 0.25)
+                        .blur(radius: 80)
 
-            // MARK: - Upcoming Call (Primary action)
-            if let upcoming = data.recentActivities.first(where: { $0.type == .upcomingCall }) {
-                ElderUpcomingCallSection(activity: upcoming)
-            }
-
-            Spacer()
-
-            // MARK: - Giant Record Button
-            Button(action: onShowCapture) {
-                HStack(spacing: 16) {
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 32))
-
-                    Text("Record a Memory")
-                        .font(.system(size: 22, weight: .bold))
+                    // Soft blue accent at bottom
+                    RoundedRectangle(cornerRadius: 300)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.storytellerBlue.opacity(0.05),
+                                    Color.clear
+                                ],
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
+                        )
+                        .frame(width: geometry.size.width * 1.5, height: geometry.size.height * 0.4)
+                        .offset(y: geometry.size.height * 0.3)
+                        .blur(radius: 100)
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 90)
-                .background(
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(theme.accentColor)
-                )
-                .shadow(color: theme.accentColor.opacity(0.3), radius: 15)
             }
-            .padding(.horizontal, theme.screenPadding)
-            .padding(.bottom, 60)
+            .ignoresSafeArea()
+
+            // Very subtle texture
+            RoundedRectangle(cornerRadius: 0)
+                .fill(Color.clear)
+                .background(Material.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 0))
+                .opacity(0.08)
+                .ignoresSafeArea()
+
+            VStack(spacing: 40) {
+                Spacer()
+
+                // MARK: - Hero: What's New (Very large, clear)
+                ElderHeroSection(activities: data.recentActivities.prefix(1).map { $0 })
+
+                // MARK: - Upcoming Call (Primary action)
+                if let upcoming = data.recentActivities.first(where: { $0.type == .upcomingCall }) {
+                    ElderUpcomingCallSection(activity: upcoming)
+                }
+
+                Spacer()
+
+                // MARK: - Giant Record Button
+                Button(action: onShowCapture) {
+                    HStack(spacing: 16) {
+                        Image(systemName: "waveform.circle.fill")
+                            .font(.system(size: 32))
+
+                        Text("Record a Memory")
+                            .font(.system(size: 22, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 90)
+                    .glassEffect(.clear.tint(theme.accentColor), in: RoundedRectangle(cornerRadius: 24))
+                }
+                .padding(.horizontal, theme.screenPadding)
+                .padding(.bottom, 60)
+            }
         }
     }
 }
@@ -542,10 +666,7 @@ struct ActivityCard: View {
                 .foregroundColor(theme.secondaryTextColor.opacity(0.4))
         }
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.cardBackgroundColor)
-        )
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var activityIcon: String {
@@ -634,6 +755,13 @@ struct ActiveStoryCard: View {
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
+                ).clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 12,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 12
+                    )
                 )
                 .frame(height: 50)
                 .overlay(alignment: .bottomLeading) {
@@ -648,10 +776,7 @@ struct ActiveStoryCard: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(Color.black.opacity(0.3))
-                        )
+                        .glassEffect()
                         .padding(8)
                     }
                 }
@@ -670,23 +795,20 @@ struct ActiveStoryCard: View {
             .padding(12)
         }
         .frame(width: 160)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.cardBackgroundColor)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
-// MARK: - Active Stories Grid (Parent)
+// MARK: - Active Stories Grid Section
 
-struct ActiveStoriesGrid: View {
+struct ActiveStoriesGridSection: View {
     let stories: [ActiveStory]
     @Environment(\.theme) var theme
 
+    // Adaptive grid that adjusts columns based on screen width
     let columns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10)
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
     ]
 
     var body: some View {
@@ -695,75 +817,15 @@ struct ActiveStoriesGrid: View {
                 .font(theme.headlineFont)
                 .foregroundColor(theme.textColor)
 
-            LazyVGrid(columns: columns, spacing: 10) {
+            LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(stories, id: \.story.id) { activeStory in
                     NavigationLink(destination: StoryDetailView(story: activeStory.story)) {
-                        ParentActiveStoryCard(story: activeStory, theme: theme)
+                        ActiveStoryCard(story: activeStory, theme: theme)
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
-    }
-}
-
-struct ParentActiveStoryCard: View {
-    let story: ActiveStory
-    let theme: PersonaTheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Gradient header - more prominent
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            story.story.storytellerColor,
-                            story.story.storytellerColor.opacity(0.6)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(height: 50)
-                .overlay(alignment: .bottomLeading) {
-                    // Voice count badge
-                    if story.story.voiceCount > 1 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.2.fill")
-                                .font(.system(size: 10))
-                            Text("\(story.story.voiceCount)")
-                                .font(.system(size: 11, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(Color.black.opacity(0.3))
-                        )
-                        .padding(8)
-                    }
-                }
-
-            // Content
-            VStack(alignment: .leading, spacing: 6) {
-                Text(story.story.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.textColor)
-                    .lineLimit(2)
-
-                Text(story.story.storyteller)
-                    .font(.system(size: 12))
-                    .foregroundColor(story.story.storytellerColor)
-            }
-            .padding(12)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.cardBackgroundColor)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -842,10 +904,7 @@ struct UnheardVoiceCard: View {
                 .foregroundColor(theme.secondaryTextColor.opacity(0.4))
         }
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.cardBackgroundColor)
-        )
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var storytellerColor: Color {
@@ -892,11 +951,7 @@ struct ChildHeroSection: View {
                     }
                 }
                 .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(theme.cardBackgroundColor)
-                )
-                .shadow(color: .black.opacity(0.1), radius: 12)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24))
             }
         }
         .padding(.top, theme.screenPadding)
@@ -971,11 +1026,7 @@ struct ChildUnheardCard: View {
                 .foregroundColor(theme.accentColor)
         }
         .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 24)
-                .fill(theme.cardBackgroundColor)
-        )
-        .shadow(color: .black.opacity(0.08), radius: 8)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24))
     }
 
     private var storytellerColor: Color {
@@ -1017,10 +1068,7 @@ struct ElderHeroSection: View {
                 }
                 .padding(32)
                 .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(theme.cardBackgroundColor)
-                )
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
             }
         }
         .padding(.horizontal, theme.screenPadding)
@@ -1074,10 +1122,7 @@ struct ElderUpcomingCallSection: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(theme.cardBackgroundColor)
-        )
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
         .padding(.horizontal, theme.screenPadding)
     }
 }
@@ -1105,12 +1150,7 @@ struct CaptureMemoryButton: View {
                 Capsule()
                     .fill(hasUnlistenedContent ? Color.clear : theme.accentColor)
             )
-            .overlay(
-                Capsule()
-                    .stroke(hasUnlistenedContent ? theme.accentColor.opacity(0.5) : Color.clear, lineWidth: 1.5)
-            )
-            .shadow(color: hasUnlistenedContent ? .clear : theme.accentColor.opacity(0.3), radius: hasUnlistenedContent ? 0 : 10, y: hasUnlistenedContent ? 0 : 4)
-        }
+        }.buttonStyle(.glassProminent).tint(theme.accentColor.opacity(0.2))
         .padding(.bottom, 24)
     }
 

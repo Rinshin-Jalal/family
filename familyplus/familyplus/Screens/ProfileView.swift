@@ -153,20 +153,31 @@ struct TeenProfileContent: View {
 
     var progress: Double { Double(data.totalStories) / Double(data.nextMilestone) }
 
+    var streakOrange: Color {
+        switch theme.role {
+        case .teen:
+            // Lighter background → darker, richer orange
+            Color(red: 1.0, green: 0.4, blue: 0.0)
+        case .parent:
+            // Darker background → brighter orange
+            Color(red: 1.0, green: 0.6, blue: 0.0)
+        default:
+            .orange
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 // Streak & Stats Card
                 ZStack {
-                    LinearGradient(colors: [theme.accentColor.opacity(0.8), theme.accentColor], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    
 
                     VStack(spacing: 16) {
                         // Top section: Streak & Total Stories
                         HStack {
-                            ZStack {
-                                Circle().fill(.orange.opacity(0.3)).frame(width: 56, height: 56)
-                                Image(systemName: "flame.fill").font(.system(size: 28, weight: .bold)).foregroundColor(.orange)
-                            }
+                            Image(systemName: "flame.fill").font(.system(size: 35, weight: .bold)).foregroundColor(streakOrange)
+                            
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(data.weekStreak) Week Streak").font(.system(size: 22, weight: .bold)).foregroundColor(.white)
                                 Text("Keep it momentum!").font(.system(size: 14, weight: .medium)).foregroundColor(.white.opacity(0.8))
@@ -196,7 +207,7 @@ struct TeenProfileContent: View {
                     }
                     .padding(20)
                 }
-                .frame(height: 220)
+                .frame(height: 220).glassEffect(.regular.tint(theme.accentColor), in: .containerRelative)
                 .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
 
                 // Family Members
@@ -207,15 +218,15 @@ struct TeenProfileContent: View {
                             TeenFamilyMemberRow(member: member)
                         }
                     }.padding(.horizontal, 16).padding(.bottom, 16)
-                }.background(RoundedRectangle(cornerRadius: 16).fill(theme.cardBackgroundColor))
+                }.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
 
                 // Invite Button
                 Button(action: { showInvite = true }) {
                     HStack(spacing: 12) {
                         Image(systemName: "person.badge.plus").font(.system(size: 18, weight: .semibold))
                         Text("Invite Family Member").font(.system(size: 17, weight: .semibold))
-                    }.foregroundColor(.white).frame(maxWidth: .infinity).frame(height: theme.buttonHeight).background(LinearGradient(colors: [theme.accentColor, theme.accentColor.opacity(0.8)], startPoint: .leading, endPoint: .trailing)).clipShape(RoundedRectangle(cornerRadius: 16))
-                }.buttonStyle(.plain)
+                    }.foregroundColor(.white).frame(maxWidth: .infinity).frame(height: theme.buttonHeight)
+                }.buttonStyle(.glassProminent).tint(LinearGradient(colors: [theme.accentColor, theme.accentColor.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
 
                 // Achievements Card - 2 Column Grid
                 VStack(alignment: .leading, spacing: 16) {
@@ -232,8 +243,7 @@ struct TeenProfileContent: View {
                             TeenAchievementCard(achievement: achievement)
                         }
                     }.padding(.horizontal, 16).padding(.bottom, 16)
-                }.background(RoundedRectangle(cornerRadius: 16).fill(theme.cardBackgroundColor))
-            }
+                }.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))            }
             .padding(theme.screenPadding)
         }
     }
@@ -248,17 +258,33 @@ struct TeenAchievementCard: View {
     var body: some View {
         VStack(spacing: 12) {
             ZStack {
-                Circle().fill(achievement.earned ? theme.accentColor.opacity(0.2) : Color.gray.opacity(0.1)).frame(width: 56, height: 56)
-                Image(systemName: achievement.icon).font(.system(size: 24, weight: .semibold)).foregroundColor(achievement.earned ? theme.accentColor : .gray)
+                // Progress ring wraps around the icon (only shows when in progress)
+                if let progress = achievement.progress, !achievement.earned {
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(
+                            theme.accentColor,
+                            style: StrokeStyle(lineWidth: 5, lineCap: .round)
+                        )
+                        .frame(width: 64, height: 64)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.easeInOut, value: progress)
+                }
+
+                // Background circle
+                Circle()
+                    .fill(achievement.earned ? theme.accentColor.opacity(0.2) : Color.gray.opacity(0.1))
+                    .frame(width: 56, height: 56)
+
+                // Achievement icon
+                Image(systemName: achievement.icon)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(achievement.earned ? theme.accentColor : .gray)
             }
             Text(achievement.title).font(.system(size: 13, weight: .semibold)).foregroundColor(achievement.earned ? theme.textColor : .secondary).lineLimit(2).multilineTextAlignment(.center)
-            if let progress = achievement.progress, !achievement.earned {
-                ProgressView(value: progress).tint(theme.accentColor)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(achievement.earned ? Color(.systemGray6) : Color.gray.opacity(0.05)))
     }
 }
 
@@ -545,10 +571,7 @@ struct ElderProfile: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(theme.cardBackgroundColor)
-                )
+                .glassEffect(.regular.tint(theme.cardBackgroundColor),in:RoundedRectangle(cornerRadius: 20))
                 .padding(.horizontal, theme.screenPadding)
             }
 
@@ -565,10 +588,7 @@ struct ElderProfile: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 80)
-                .background(
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(callNow ? Color.red : Color.green)
-                        .shadow(color: (callNow ? Color.red : Color.green).opacity(0.4), radius: 16, y: 8)
+                .glassEffect(.regular.tint(theme.accentColor),in:RoundedRectangle(cornerRadius: 24)
                 )
             }
             .padding(.horizontal, theme.screenPadding)

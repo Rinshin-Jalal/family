@@ -13,6 +13,7 @@
 		0E7D0AE92EFC611A000574EF /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0AE82EFC611A000574EF /* Realtime */; };
 		0E7D0AEB2EFC611A000574EF /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0AEA2EFC611A000574EF /* Storage */; };
 		0E7D0AEE2EFC613C000574EF /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0AED2EFC613C000574EF /* Supabase */; };
+		0E7D0B0F2F022E66000574EF /* SwiftGlass in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7D0B0E2F022E66000574EF /* SwiftGlass */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 				0E7D0AEE2EFC613C000574EF /* Supabase in Frameworks */,
 				0E7D0AE32EFC611A000574EF /* Auth in Frameworks */,
 				0E7D0AEB2EFC611A000574EF /* Storage in Frameworks */,
+				0E7D0B0F2F022E66000574EF /* SwiftGlass in Frameworks */,
 				0E7D0AE92EFC611A000574EF /* Realtime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -94,6 +96,7 @@
 				0E7D0AE82EFC611A000574EF /* Realtime */,
 				0E7D0AEA2EFC611A000574EF /* Storage */,
 				0E7D0AED2EFC613C000574EF /* Supabase */,
+				0E7D0B0E2F022E66000574EF /* SwiftGlass */,
 			);
 			productName = familyplus;
 			productReference = 0E7D0AAF2EFC3398000574EF /* familyplus.app */;
@@ -125,6 +128,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				0E7D0B0D2F022E66000574EF /* XCRemoteSwiftPackageReference "SwiftGlass" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0E7D0AB02EFC3398000574EF /* Products */;
@@ -372,6 +376,14 @@
 				minimumVersion = 2.5.1;
 			};
 		};
+		0E7D0B0D2F022E66000574EF /* XCRemoteSwiftPackageReference "SwiftGlass" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/1998code/SwiftGlass.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 26.0.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -404,6 +416,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 0E7D0AE12EFC611A000574EF /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		0E7D0B0E2F022E66000574EF /* SwiftGlass */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0E7D0B0D2F022E66000574EF /* XCRemoteSwiftPackageReference "SwiftGlass" */;
+			productName = SwiftGlass;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
