@@ -459,7 +459,7 @@ struct ResponseCard: View {
                 .background(
                     Capsule()
                         .fill(response.storytellerColor.opacity(0.15))
-                )
+                ).glassEffect()
             }
 
             // Transcription (if available)
@@ -486,7 +486,7 @@ struct ResponseCard: View {
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(response.storytellerColor)
-                }
+                }.buttonStyle(.glass)
 
                 // Reply button
                 Button(action: onReply) {
@@ -497,7 +497,7 @@ struct ResponseCard: View {
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(theme.secondaryTextColor)
-                }
+                }.buttonStyle(.glass)
 
                 Spacer()
 
@@ -530,9 +530,7 @@ struct ResponseCard: View {
         .padding(cardPadding)
         .background(
             ZStack {
-                // Base card background
-                RoundedRectangle(cornerRadius: cardRadius)
-                    .fill(theme.cardBackgroundColor)
+    
 
                 // Enhanced highlight when playing
                 if isCurrentlyPlaying {
@@ -551,19 +549,21 @@ struct ResponseCard: View {
         .onAppear {
             // Start pulse animation when playing
             if isCurrentlyPlaying {
-                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
-                    pulseAnimation = true
-                }
+                startPulseAnimation()
             }
         }
         .onChange(of: isCurrentlyPlaying) { newValue in
             if newValue {
-                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
-                    pulseAnimation = true
-                }
+                startPulseAnimation()
             } else {
                 pulseAnimation = false
             }
+        }
+    }
+
+    private func startPulseAnimation() {
+        withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+            pulseAnimation = true
         }
     }
 }
@@ -685,6 +685,7 @@ struct ChronologicalResponseCard: View {
                                     )
                                     .frame(width: barWidth)
                                     .padding(.leading, level == 0 ? 8 : indentWidth - barWidth)
+                                    
                             } else {
                                 Rectangle()
                                     .fill(response.storytellerColor.opacity(barOpacity))
@@ -710,48 +711,15 @@ struct ChronologicalResponseCard: View {
                             response: response,
                             parentResponse: parentResponse,
                             onPlay: { onPlay(response) }
-                        )
+                        ).glassEffect(.regular.tint(response.storytellerColor.opacity( 0.03)))
                     }
                 }
                 .padding(.leading, effectiveDepth > 0 ? 16 : 0)
             }
-            .background(response.storytellerColor.opacity(isExpanded ? 0.06 : 0.03))
-            .clipShape(RoundedRectangle(cornerRadius: isExpanded ? 16 : 12))
-            .overlay(
-                // Animated curved connector to parent (overlay so it doesn't break layout)
-                Group {
-                    if let parent = parentResponse, effectiveDepth > 0 {
-                        GeometryReader { geometry in
-                            Path { path in
-                                // Start from left edge at current response
-                                let startX: CGFloat = 16 + 8
-                                let startY: CGFloat = 16
-
-                                // Curve up to connect visually to parent
-                                let endX = startX + CGFloat(effectiveDepth) * indentWidth
-                                let endY: CGFloat = -20
-
-                                path.move(to: CGPoint(x: startX, y: startY))
-                                path.addQuadCurve(
-                                    to: CGPoint(x: endX, y: endY),
-                                    control: CGPoint(x: startX, y: endY + 10)
-                                )
-                            }
-                            .trim(from: 0, to: animationProgress)
-                            .stroke(response.storytellerColor.opacity(0.5), lineWidth: 2.5)
-                            .onAppear {
-                                withAnimation(.easeOut(duration: 0.4)) {
-                                    animationProgress = 1.0
-                                }
-                            }
-                        }
-                    }
-                }
-            )
+            
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
-        .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 isExpanded.toggle()
@@ -864,19 +832,21 @@ struct CollapsedContent: View {
         )
         .onAppear {
             if isCurrentlyPlaying {
-                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
-                    pulseAnimation = true
-                }
+                startPulseAnimation()
             }
         }
         .onChange(of: isCurrentlyPlaying) { newValue in
             if newValue {
-                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
-                    pulseAnimation = true
-                }
+                startPulseAnimation()
             } else {
                 pulseAnimation = false
             }
+        }
+    }
+
+    private func startPulseAnimation() {
+        withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+            pulseAnimation = true
         }
     }
 
@@ -918,7 +888,7 @@ struct ExpandedContent: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 20) {
             if let parent = parentResponse {
                 HStack(spacing: 6) {
                     Image(systemName: "arrowshape.turn.up.left.fill")
@@ -1020,7 +990,7 @@ struct ExpandedContent: View {
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(response.storytellerColor)
-                }
+                }.buttonStyle(.glass)
 
                 Button(action: onReply) {
                     HStack(spacing: 6) {
@@ -1030,39 +1000,41 @@ struct ExpandedContent: View {
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(theme.secondaryTextColor)
-                }
+                }.buttonStyle(.glass)
 
                 Spacer()
 
                 // Memory Context button
                 Button(action: { onShowMemoryContext(response) }) {
-                    Image(systemName: "info.circle")
+                    Image(systemName: "info")
                         .font(.system(size: 16))
                         .foregroundColor(theme.secondaryTextColor.opacity(0.6))
-                }
+                }.buttonStyle(.glass)
             }
             .padding(.top, 4)
         }
+
         .padding(16)
-        .background(
-            isCurrentlyPlaying ?
-                response.storytellerColor.opacity(0.08) : Color.clear
-        )
+        .glassEffect(.regular.tint(response.storytellerColor.opacity(0.05)),in: RoundedRectangle(cornerRadius: 20))
+ 
         .onAppear {
             if isCurrentlyPlaying {
-                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
-                    pulseAnimation = true
-                }
+                startPulseAnimation()
             }
         }
         .onChange(of: isCurrentlyPlaying) { newValue in
             if newValue {
-                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
-                    pulseAnimation = true
-                }
+                startPulseAnimation()
             } else {
                 pulseAnimation = false
             }
+        }
+
+    }
+
+    private func startPulseAnimation() {
+        withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+            pulseAnimation = true
         }
     }
 
@@ -1169,7 +1141,145 @@ struct CompactResponseRow: View {
 
 struct ThreadedTimelineView_Previews: PreviewProvider {
     static var sampleResponses: [StorySegmentData] {
-        [
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let baseTime = Date()
+        let twoDaysAgo = formatter.string(from: baseTime.addingTimeInterval(-172800))
+        let oneDayAgo = formatter.string(from: baseTime.addingTimeInterval(-86400))
+        let hour6Ago = formatter.string(from: baseTime.addingTimeInterval(-21600))
+        let hour3Ago = formatter.string(from: baseTime.addingTimeInterval(-10800))
+        let hour1Ago = formatter.string(from: baseTime.addingTimeInterval(-3600))
+        let min20Ago = formatter.string(from: baseTime.addingTimeInterval(-1200))
+        let min5Ago = formatter.string(from: baseTime.addingTimeInterval(-300))
+        let now = formatter.string(from: baseTime)
+
+        return [
+            // ROOT: Grandma starts the story
+            StorySegmentData(
+                id: "resp-1",
+                userId: "user-1",
+                source: "app",
+                mediaUrl: "https://example.com/audio1.m4a",
+                transcriptionText: "In the summer of '68, your grandfather and I drove across the country in our old Chevy. We were so young and full of dreams. The whole trip was an adventure!",
+                durationSeconds: 45,
+                createdAt: twoDaysAgo,
+                fullName: "Grandma Rose",
+                role: "elder",
+                avatarUrl: nil,
+                replyToResponseId: nil
+            ),
+
+            // THREAD 1: Mom's memory
+            StorySegmentData(
+                id: "resp-2",
+                userId: "user-2",
+                source: "app",
+                mediaUrl: "https://example.com/audio2.m4a",
+                transcriptionText: "Mom, I remember you telling me about the flat tire in Nevada! Didn't you say it was actually a Ford, not a Chevy?",
+                durationSeconds: 30,
+                createdAt: oneDayAgo,
+                fullName: "Mom",
+                role: "parent",
+                avatarUrl: nil,
+                replyToResponseId: "resp-1"
+            ),
+
+            // THREAD 1.1: Grandma clarifies
+            StorySegmentData(
+                id: "resp-3",
+                userId: "user-1",
+                source: "app",
+                mediaUrl: "https://example.com/audio3.m4a",
+                transcriptionText: "You're absolutely right dear! It was a '65 Ford Mustang. My memory isn't what it used to be!",
+                durationSeconds: 22,
+                createdAt: hour6Ago,
+                fullName: "Grandma Rose",
+                role: "elder",
+                avatarUrl: nil,
+                replyToResponseId: "resp-2"
+            ),
+
+            // THREAD 1.1.1: Leo chimes in (max depth)
+            StorySegmentData(
+                id: "resp-4",
+                userId: "user-4",
+                source: "app",
+                mediaUrl: "https://example.com/audio4.m4a",
+                transcriptionText: "A '65 Mustang?! That's such a cool car! I wish we still had it.",
+                durationSeconds: 18,
+                createdAt: hour3Ago,
+                fullName: "Leo",
+                role: "teen",
+                avatarUrl: nil,
+                replyToResponseId: "resp-3"
+            ),
+
+            // THREAD 2: Uncle Joe's separate memory
+            StorySegmentData(
+                id: "resp-5",
+                userId: "user-3",
+                source: "app",
+                mediaUrl: "https://example.com/audio5.m4a",
+                transcriptionText: "I remember Dad telling me about that trip! He said you guys slept under the stars in Arizona.",
+                durationSeconds: 28,
+                createdAt: hour1Ago,
+                fullName: "Uncle Joe",
+                role: "parent",
+                avatarUrl: nil,
+                replyToResponseId: "resp-1"
+            ),
+
+            // THREAD 2.1: Grandma confirms
+            StorySegmentData(
+                id: "resp-6",
+                userId: "user-1",
+                source: "app",
+                mediaUrl: "https://example.com/audio6.m4a",
+                transcriptionText: "Yes! The Grand Canyon at sunset was breathtaking. We didn't have much money for hotels, so we made it an adventure.",
+                durationSeconds: 35,
+                createdAt: min20Ago,
+                fullName: "Grandma Rose",
+                role: "elder",
+                avatarUrl: nil,
+                replyToResponseId: "resp-5"
+            ),
+
+            // THREAD 3: Sophie asks a question
+            StorySegmentData(
+                id: "resp-8",
+                userId: "user-6",
+                source: "app",
+                mediaUrl: "https://example.com/audio8.m4a",
+                transcriptionText: "Grandma! Did you take pictures? I wanna see!",
+                durationSeconds: 15,
+                createdAt: min5Ago,
+                fullName: "Sophie",
+                role: "child",
+                avatarUrl: nil,
+                replyToResponseId: "resp-1"
+            ),
+
+            // THREAD 3.1: Mom responds to Sophie
+            StorySegmentData(
+                id: "resp-9",
+                userId: "user-2",
+                source: "app",
+                mediaUrl: "https://example.com/audio9.m4a",
+                transcriptionText: "We have an old photo album in the attic! Let's look at it together this weekend.",
+                durationSeconds: 20,
+                createdAt: now,
+                fullName: "Mom",
+                role: "parent",
+                avatarUrl: nil,
+                replyToResponseId: "resp-8"
+            )
+        ]
+    }
+
+    static var simpleResponses: [StorySegmentData] {
+        let formatter = ISO8601DateFormatter()
+        return [
             StorySegmentData(
                 id: "1",
                 userId: "user1",
@@ -1177,7 +1287,7 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 mediaUrl: "https://example.com/1.m4a",
                 transcriptionText: "I remember playing in the backyard every summer...",
                 durationSeconds: 45,
-                createdAt: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-3600)),
+                createdAt: formatter.string(from: Date().addingTimeInterval(-3600)),
                 fullName: "Grandma",
                 role: "elder",
                 avatarUrl: nil,
@@ -1190,35 +1300,84 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 mediaUrl: "https://example.com/2.m4a",
                 transcriptionText: "I loved those summers too! Remember the treehouse?",
                 durationSeconds: 30,
-                createdAt: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-3000)),
+                createdAt: formatter.string(from: Date().addingTimeInterval(-3000)),
                 fullName: "Mom",
                 role: "parent",
                 avatarUrl: nil,
                 replyToResponseId: "1"
-            ),
-            StorySegmentData(
-                id: "3",
-                userId: "user3",
-                source: "app",
-                mediaUrl: "https://example.com/3.m4a",
-                transcriptionText: "Yes! We built it together that one summer.",
-                durationSeconds: 25,
-                createdAt: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-2500)),
-                fullName: "Grandma",
-                role: "elder",
-                avatarUrl: nil,
-                replyToResponseId: "2"
             )
         ]
     }
 
     static var previews: some View {
-        ThreadedTimelineView(
-            responses: sampleResponses,
-            onReplyToResponse: { _ in },
-            onPlayResponse: { _ in }
-        )
-        .themed(ParentTheme())
-        .previewDisplayName("Threaded Timeline")
+        Group {
+            // ⭐️ USED IN STORYDETAILVIEW - Chronological with threading indicators
+            ChronologicalThreadedTimelineView(
+                responses: sampleResponses,
+                onReplyToResponse: { _ in },
+                onPlayResponse: { _ in },
+                onShowMemoryContext: { _ in }
+            )
+            .themed(ParentTheme())
+            .previewDisplayName("⭐️ Chronological (StoryDetailView)")
+
+            // Chronological - Teen Theme
+            ChronologicalThreadedTimelineView(
+                responses: sampleResponses,
+                onReplyToResponse: { _ in },
+                onPlayResponse: { _ in },
+                onShowMemoryContext: { _ in }
+            )
+            .themed(TeenTheme())
+            .previewDisplayName("⭐️ Chronological - Teen")
+
+            // Chronological - Dark Mode
+            ChronologicalThreadedTimelineView(
+                responses: sampleResponses,
+                onReplyToResponse: { _ in },
+                onPlayResponse: { _ in },
+                onShowMemoryContext: { _ in }
+            )
+            .themed(ParentTheme())
+            .preferredColorScheme(.dark)
+            .previewDisplayName("⭐️ Chronological - Dark")
+
+            // Hierarchical Threading (alternative view)
+            ThreadedTimelineView(
+                responses: sampleResponses,
+                onReplyToResponse: { _ in },
+                onPlayResponse: { _ in }
+            )
+            .themed(ParentTheme())
+            .previewDisplayName("Hierarchical Threading")
+
+            // Compact Timeline
+            CompactThreadedTimelineView(
+                responses: sampleResponses,
+                onTapResponse: { _ in }
+            )
+            .themed(ParentTheme())
+            .previewDisplayName("Compact Timeline")
+
+            // Simple 2-response thread
+            ChronologicalThreadedTimelineView(
+                responses: simpleResponses,
+                onReplyToResponse: { _ in },
+                onPlayResponse: { _ in },
+                onShowMemoryContext: { _ in }
+            )
+            .themed(ParentTheme())
+            .previewDisplayName("Simple Thread (2 responses)")
+
+            // Elder Theme
+            ChronologicalThreadedTimelineView(
+                responses: sampleResponses,
+                onReplyToResponse: { _ in },
+                onPlayResponse: { _ in },
+                onShowMemoryContext: { _ in }
+            )
+            .themed(ElderTheme())
+            .previewDisplayName("⭐️ Chronological - Elder")
+        }
     }
 }

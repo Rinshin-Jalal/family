@@ -129,6 +129,60 @@ enum Reaction: String, CaseIterable {
     }
 }
 
+// MARK: - Inline Reaction Picker
+
+struct InlineReactionPicker: View {
+    @Environment(\.theme) var theme
+    @Binding var selectedReaction: Reaction?
+    let onReactionSelected: (Reaction) -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ForEach(Reaction.allCases, id: \.self) { reaction in
+                Button(action: { onReactionSelected(reaction) }) {
+                    Text(reaction.rawValue)
+                        .font(.system(size: 32))
+                        .frame(width: 50, height: 50)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(selectedReaction == reaction ?
+                                    theme.accentColor.opacity(0.2) :
+                                    theme.cardBackgroundColor
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(selectedReaction == reaction ?
+                                    theme.accentColor : Color.clear,
+                                    lineWidth: 2)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(reaction.accessibilityLabel)
+            }
+
+            Spacer()
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(theme.secondaryTextColor)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.cardBackgroundColor)
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+        )
+        .padding(.horizontal, 16)
+    }
+}
+
 // MARK: - Story Detail View
 
 struct StoryDetailView: View {
@@ -140,7 +194,6 @@ struct StoryDetailView: View {
     @State private var currentTime: TimeInterval = 0
     @State private var isPlaying = false
     @State private var selectedReaction: Reaction?
-    @State private var showReactionPicker = false
 
     var totalDuration: TimeInterval {
         (segments.last?.startTime ?? 0) + (segments.last?.duration ?? 0)
@@ -163,7 +216,6 @@ struct StoryDetailView: View {
                     currentTime: $currentTime,
                     isPlaying: $isPlaying,
                     selectedReaction: $selectedReaction,
-                    showReactionPicker: $showReactionPicker,
                     currentSegment: currentSegment
                 )
             case .child:
@@ -190,7 +242,6 @@ struct FullStoryDetail: View {
     @Binding var currentTime: TimeInterval
     @Binding var isPlaying: Bool
     @Binding var selectedReaction: Reaction?
-    @Binding var showReactionPicker: Bool
     let currentSegment: StorySegment?
 
     // MARK: - Audio Player Service
@@ -199,8 +250,13 @@ struct FullStoryDetail: View {
     // MARK: - Multiplayer Perspectives State
     @State private var responses: [StorySegmentData] = []
     @State private var isLoadingResponses = false
-    @State private var showAddPerspective = false
     @State private var replyingTo: StorySegmentData? = nil
+
+    // Inline input state
+    @State private var inputText = ""
+    @State private var isRecordingMode = false
+    @State private var recordingDuration: TimeInterval = 0
+    @State private var inlineInputIsRecording = false
 
     // Memory context panel state
     @State private var showMemoryContext = false
@@ -237,7 +293,6 @@ struct FullStoryDetail: View {
                             startPoint: .top,
                             endPoint: .bottom
                         )
-                        .frame(height: 200)
 
                         // Title and info overlay
                         VStack(alignment: .leading, spacing: 12) {
@@ -262,7 +317,7 @@ struct FullStoryDetail: View {
                                         .font(.caption)
                                         .foregroundColor(theme.secondaryTextColor)
                                 }
-                            }
+                            }.padding(8).glassEffect(.regular.tint(story.storytellerColor.opacity(0.2)))
                         }
                         .padding(.horizontal, theme.screenPadding)
                         .padding(.bottom, 60)
@@ -286,10 +341,7 @@ struct FullStoryDetail: View {
                                 .foregroundColor(PromptCategory.story.color.opacity(0.9))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(
-                                    Capsule()
-                                        .fill(PromptCategory.story.color.opacity(0.12))
-                                )
+                                .glassEffect(.regular.tint(PromptCategory.story.color.opacity(0.12)))
 
                                 // Voice count
                                 HStack(spacing: 4) {
@@ -302,10 +354,7 @@ struct FullStoryDetail: View {
                                 .foregroundColor(theme.secondaryTextColor)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(theme.secondaryTextColor.opacity(0.08))
-                                )
+                                .glassEffect(.regular.tint(theme.secondaryTextColor.opacity(0.12)))
 
                                 // Listened count (mock for now)
                                 if !responses.isEmpty {
@@ -319,10 +368,8 @@ struct FullStoryDetail: View {
                                     .foregroundColor(theme.secondaryTextColor)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(
-                                        Capsule()
-                                            .fill(theme.secondaryTextColor.opacity(0.08))
-                                    )
+                                    .glassEffect(.clear.tint(theme.secondaryTextColor.opacity(0.12)))
+                                    
                                 }
 
                                 Spacer()
@@ -342,14 +389,12 @@ struct FullStoryDetail: View {
                             } else if responses.isEmpty {
                                 EmptyPerspectivesView {
                                     replyingTo = nil
-                                    showAddPerspective = true
                                 }
                             } else {
                                 ChronologicalThreadedTimelineView(
                                     responses: responses,
                                     onReplyToResponse: { response in
                                         replyingTo = response
-                                        showAddPerspective = true
                                     },
                                     onPlayResponse: { response in
                                         playResponse(response)
@@ -362,24 +407,44 @@ struct FullStoryDetail: View {
                             }
                         }
 
-                        // Add perspective button
-                        Button(action: {
-                            replyingTo = nil
-                            showAddPerspective = true
-                        }) {
-                            HStack {
-                                Image(systemName: "plus.bubble")
-                                Text("Add Your Perspective")
+                        // Add perspective button (for Teen/Parent)
+                        InlinePerspectiveInput(
+                            inputText: $inputText,
+                            isRecording: $inlineInputIsRecording,
+                            isParentRecordingMode: $isRecordingMode,
+                            onSend: { text in
+                                // TODO: Submit text response
+                                print("Text submitted: \(text)")
+                                inputText = ""
+                            },
+                            onRecordingStart: {
+                                withAnimation {
+                                    isRecordingMode = true
+                                    inlineInputIsRecording = true
+                                    isPlaying = false
+                                }
+                            },
+                            onRecordingUpdate: { duration in
+                                recordingDuration = duration
+                            },
+                            onRecordingComplete: { duration in
+                                withAnimation {
+                                    isRecordingMode = false
+                                    inlineInputIsRecording = false
+                                    recordingDuration = 0
+                                }
+                                // TODO: Handle recording completion
+                                print("Recording completed: \(duration)s")
+                            },
+                            onCancel: {
+                                withAnimation {
+                                    isRecordingMode = false
+                                    inlineInputIsRecording = false
+                                    recordingDuration = 0
+                                }
+                                inputText = ""
                             }
-                            .font(.headline)
-                            .foregroundColor(theme.accentColor)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: theme.buttonHeight)
-                            .background(
-                                RoundedRectangle(cornerRadius: theme.cardRadius)
-                                    .strokeBorder(theme.accentColor, lineWidth: 2)
-                            )
-                        }
+                        )
 
                         // Extra padding at bottom so content doesn't get hidden by player
                         Color.clear.frame(height: 140)
@@ -390,12 +455,30 @@ struct FullStoryDetail: View {
 
             // STICKY Player controls - fixed at bottom of screen
             VStack(spacing: 0) {
-                StoryPlayerControls(
-                    segments: segments,
-                    currentTime: $currentTime,
-                    isPlaying: $isPlaying,
-                    showReactionPicker: $showReactionPicker
-                )
+                Group {
+                    if isRecordingMode {
+                        // Recording interface replaces player controls
+                        RecordingModePlayer(
+                            duration: recordingDuration,
+                            isPlaying: $isPlaying,
+                            onStop: {
+                                withAnimation {
+                                    isRecordingMode = false
+                                    inlineInputIsRecording = false
+                                    recordingDuration = 0
+                                }
+                            }
+                        )
+                    } else {
+                        // Normal player controls
+                        StoryPlayerControls(
+                            segments: segments,
+                            currentTime: $currentTime,
+                            isPlaying: $isPlaying,
+                            selectedReaction: $selectedReaction
+                        )
+                    }
+                }
                 .padding(.horizontal)
                 .padding(.top)
                 .padding(.bottom, 12)
@@ -447,28 +530,6 @@ struct FullStoryDetail: View {
         }
         .navigationBarHidden(true)
         .ignoresSafeArea(.all, edges: .top)
-        .sheet(isPresented: $showReactionPicker) {
-            ReactionPickerView(selectedReaction: $selectedReaction)
-                .presentationDetents([.height(200)])
-        }
-        .sheet(isPresented: $showAddPerspective) {
-            AddPerspectiveView(
-                story: StoryData(
-                    id: story.id.uuidString,
-                    promptId: nil,
-                    familyId: "family-123",  // TODO: Get from actual family context
-                    title: story.title,
-                    summaryText: nil,
-                    coverImageUrl: nil,
-                    voiceCount: story.voiceCount,
-                    isCompleted: false,
-                    createdAt: ISO8601DateFormatter().string(from: Date()),
-                    promptText: story.title,
-                    promptCategory: nil
-                ),
-                replyingTo: replyingTo
-            )
-        }
         .sheet(isPresented: $showMemoryContext) {
             if let response = contextForResponse {
                 MemoryContextPanel(
@@ -799,11 +860,12 @@ struct StoryPlayerControls: View {
     let segments: [StorySegment]
     @Binding var currentTime: TimeInterval
     @Binding var isPlaying: Bool
-    @Binding var showReactionPicker: Bool
+    @Binding var selectedReaction: Reaction?
 
     @State private var playbackSpeed: PlaybackSpeed = .normal
     @State private var isDragging = false
     @GestureState private var dragOffset: CGFloat = 0
+    @State private var showReactionPicker = false
 
     var totalDuration: TimeInterval {
         let last = segments.last
@@ -936,8 +998,9 @@ struct StoryPlayerControls: View {
                 // Reaction button
                 Button(action: { showReactionPicker = true }) {
                     Image(systemName: "face.smiling")
-                        .font(.title3)
-                        .foregroundColor(theme.textColor)
+                        .font(.system(size: 22))
+                        .foregroundStyle(theme.secondaryTextColor)
+                        .symbolRenderingMode(.hierarchical)
                 }
                 .accessibilityLabel("Add reaction")
 
@@ -980,6 +1043,97 @@ struct StoryPlayerControls: View {
                         .foregroundColor(theme.textColor)
                 }
                 .accessibilityLabel("Share story")
+            }
+
+            // Inline Reaction Picker
+            if showReactionPicker {
+                InlineReactionPicker(
+                    selectedReaction: $selectedReaction,
+                    onReactionSelected: { reaction in
+                        selectedReaction = reaction
+                        withAnimation {
+                            showReactionPicker = false
+                        }
+                    },
+                    onDismiss: {
+                        withAnimation {
+                            showReactionPicker = false
+                        }
+                    }
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+}
+
+// MARK: - Recording Mode Player (replaces player controls during recording)
+
+struct RecordingModePlayer: View {
+    @Environment(\.theme) var theme
+    let duration: TimeInterval
+    @Binding var isPlaying: Bool
+    let onStop: () -> Void
+
+    @State private var amplitudes: [CGFloat] = Array(repeating: 0.5, count: 30)
+
+    var formattedDuration: String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Recording indicator + timer
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
+
+                Text("Recording")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.red)
+
+                Text(formattedDuration)
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundColor(.red)
+            }
+
+            // Compact waveform
+            HStack(spacing: 1) {
+                ForEach(0..<30, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.red)
+                        .frame(width: 2, height: 6 + amplitudes[index] * 16)
+                }
+            }
+            .frame(height: 24)
+
+            Spacer()
+
+            // Stop button
+            Button(action: onStop) {
+                Image(systemName: "stop.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(Color.red)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 4)
+        .onAppear {
+            startAnimation()
+        }
+    }
+
+    private func startAnimation() {
+        for index in 0..<30 {
+            withAnimation(
+                .easeInOut(duration: 0.3 + Double(index) * 0.02)
+                    .repeatForever(autoreverses: true)
+                    .delay(Double(index) * 0.02)
+            ) {
+                amplitudes[index] = CGFloat.random(in: 0.2...1.0)
             }
         }
     }
@@ -1408,9 +1562,9 @@ struct EmptyPerspectivesView: View {
 // MARK: - Prompt Memory Header
 
 enum PromptCategory: String, CaseIterable {
-    case voiceMemory = "🎙️ Voice Memory"
-    case story = "📖 Story"
-    case reflection = "💭 Reflection"
+    case voiceMemory = "Voice Memory"
+    case story = "Story"
+    case reflection = "Reflection"
 
     var icon: String {
         switch self {

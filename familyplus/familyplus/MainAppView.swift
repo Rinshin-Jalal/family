@@ -2,7 +2,7 @@
 //  MainAppView.swift
 //  StoryRide
 //
-//  Main app container with adaptive navigation
+//  Main app container with unified 3-tab navigation
 //
 
 import SwiftUI
@@ -12,7 +12,6 @@ import SwiftUI
 struct MainAppView: View {
     @State private var currentProfile: UserProfile
     @State private var selectedTab = 0
-    @State private var showStudio = false
 
     let profiles: [UserProfile] = [
         UserProfile(name: "Leo", role: .teen, avatarEmoji: "🎸"),
@@ -36,14 +35,12 @@ struct MainAppView: View {
             case .teen:
                 TeenNavigation(
                     selectedTab: $selectedTab,
-                    showStudio: $showStudio,
                     currentProfile: $currentProfile,
                     profiles: profiles
                 )
             case .parent:
                 ParentNavigation(
                     selectedTab: $selectedTab,
-                    showStudio: $showStudio,
                     currentProfile: $currentProfile,
                     profiles: profiles
                 )
@@ -64,46 +61,55 @@ struct MainAppView: View {
     }
 }
 
-// MARK: - Teen Navigation (Minimal Floating Bar)
+// MARK: - Tab Enum
+
+enum AppTab: Int {
+    case home = 0
+    case family = 1
+    case profile = 2
+}
+
+// MARK: - Teen Navigation (Minimal Floating Bar - 3 Tabs)
 
 struct TeenNavigation: View {
     @Binding var selectedTab: Int
-    @Binding var showStudio: Bool
     @Binding var currentProfile: UserProfile
     let profiles: [UserProfile]
+    @Environment(\.theme) var theme
 
     var body: some View {
         ZStack(alignment: .bottom) {
             // Content
             TabView(selection: $selectedTab) {
                 HubView()
-                    .tag(0)
+                    .tag(AppTab.home.rawValue)
+
+                MyFamilyView()
+                    .tag(AppTab.family.rawValue)
 
                 ProfileView()
-                    .tag(1)
+                    .tag(AppTab.profile.rawValue)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
 
             // Custom floating tab bar
-            HStack(spacing: 60) {
-                Button(action: { selectedTab = 0 }) {
-                    Image(systemName: selectedTab == 0 ? "house.fill" : "house")
+            HStack(spacing: 40) {
+                Button(action: { selectedTab = AppTab.home.rawValue }) {
+                    Image(systemName: selectedTab == AppTab.home.rawValue ? "house.fill" : "house")
                         .font(.title2)
-                        .foregroundColor(selectedTab == 0 ? .brandIndigo : .white.opacity(0.6))
+                        .foregroundColor(selectedTab == AppTab.home.rawValue ? theme.accentColor : .white.opacity(0.6))
                 }
 
-                // Floating action button
-                Button(action: { showStudio = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 56))
-                        .foregroundColor(.brandIndigo)
-                        .shadow(color: .brandIndigo.opacity(0.3), radius: 12)
+                Button(action: { selectedTab = AppTab.family.rawValue }) {
+                    Image(systemName: selectedTab == AppTab.family.rawValue ? "person.2.fill" : "person.2")
+                        .font(.title2)
+                        .foregroundColor(selectedTab == AppTab.family.rawValue ? theme.accentColor : .white.opacity(0.6))
                 }
 
-                Button(action: { selectedTab = 1 }) {
-                    Image(systemName: selectedTab == 1 ? "person.fill" : "person")
+                Button(action: { selectedTab = AppTab.profile.rawValue }) {
+                    Image(systemName: selectedTab == AppTab.profile.rawValue ? "person.fill" : "person")
                         .font(.title2)
-                        .foregroundColor(selectedTab == 1 ? .brandIndigo : .white.opacity(0.6))
+                        .foregroundColor(selectedTab == AppTab.profile.rawValue ? theme.accentColor : .white.opacity(0.6))
                 }
             }
             .padding(.vertical, 16)
@@ -114,28 +120,14 @@ struct TeenNavigation: View {
                     .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
             )
             .padding(.bottom, 20)
-
-            // Profile switcher
-            VStack {
-                HStack {
-                    Spacer()
-                    ProfileSwitcher(currentProfile: $currentProfile, profiles: profiles)
-                }
-                .padding()
-                Spacer()
-            }
-        }
-        .sheet(isPresented: $showStudio) {
-            StudioView()
         }
     }
 }
 
-// MARK: - Parent Navigation (Standard Tab Bar)
+// MARK: - Parent Navigation (Standard Tab Bar - 3 Tabs)
 
 struct ParentNavigation: View {
     @Binding var selectedTab: Int
-    @Binding var showStudio: Bool
     @Binding var currentProfile: UserProfile
     let profiles: [UserProfile]
 
@@ -143,39 +135,27 @@ struct ParentNavigation: View {
         TabView(selection: $selectedTab) {
             HubView()
                 .tabItem {
-                    Label("Stories", systemImage: "book.fill")
+                    Label("Home", systemImage: "house.fill")
                 }
-                .tag(0)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        ProfileSwitcher(currentProfile: $currentProfile, profiles: profiles)
-                    }
-                }
+                .tag(AppTab.home.rawValue)
 
-            ProfileView()
+            MyFamilyView()
                 .tabItem {
                     Label("Family", systemImage: "person.2.fill")
                 }
-                .tag(1)
+                .tag(AppTab.family.rawValue)
+
+            ProfileView()
+                .tabItem {
+                    Label("Profile", systemImage: "person.fill")
+                }
+                .tag(AppTab.profile.rawValue)
         }
-        .overlay(alignment: .bottomTrailing) {
-            // Floating action button
-            Button(action: { showStudio = true }) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.brandIndigo)
-                    .shadow(color: .brandIndigo.opacity(0.3), radius: 12)
-            }
-            .padding(.trailing, 20)
-            .padding(.bottom, 80)
-        }
-        .sheet(isPresented: $showStudio) {
-            StudioView()
-        }
+        .tint(.brandIndigo)
     }
 }
 
-// MARK: - Child Navigation (No Tab Bar, Linear Flow)
+// MARK: - Child Navigation (No Tab Bar, Linear Flow - Unchanged)
 
 struct ChildNavigation: View {
     @Binding var currentProfile: UserProfile
@@ -198,8 +178,6 @@ struct ChildNavigation: View {
 
             // Simple navigation arrows
             HStack {
-                ProfileSwitcher(currentProfile: $currentProfile, profiles: profiles)
-
                 Spacer()
 
                 Button(action: {
@@ -223,7 +201,7 @@ struct ChildNavigation: View {
     }
 }
 
-// MARK: - Elder Navigation (Single Screen)
+// MARK: - Elder Navigation (Single Screen - Unchanged)
 
 struct ElderNavigation: View {
     @Binding var currentProfile: UserProfile
@@ -231,13 +209,6 @@ struct ElderNavigation: View {
 
     var body: some View {
         VStack {
-            // Profile switcher
-            HStack {
-                Spacer()
-                ProfileSwitcher(currentProfile: $currentProfile, profiles: profiles)
-            }
-            .padding()
-
             // Single screen - Hub
             HubView()
         }

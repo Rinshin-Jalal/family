@@ -37,18 +37,9 @@ struct MyFamilyView: View {
     var body: some View {
         Group {
             switch theme.role {
-            case .teen:
-                TeenMyFamily(
-                    loadingState: loadingState,
-                    selectedMember: $selectedMember,
-                    showInviteSheet: $showInviteSheet,
-                    showAddElderSheet: $showAddElderSheet,
-                    showGovernance: $showGovernance,
-                    isOwner: isOwner,
-                    familyData: familyData
-                )
-            case .parent:
-                ParentMyFamily(
+            case .teen, .parent:
+                // Unified Teen/Parent view - same UX, different theme
+                TeenParentMyFamily(
                     loadingState: loadingState,
                     selectedMember: $selectedMember,
                     showInviteSheet: $showInviteSheet,
@@ -643,258 +634,16 @@ struct FamilyEmptyState: View {
     }
 }
 
-// MARK: - Teen Family View (Minimalist Cards)
+// MARK: - Unified Teen/Parent Family View
 
-struct TeenMyFamily: View {
-    let loadingState: LoadingState<[FamilyMember]>
-    @Binding var selectedMember: FamilyMember?
-    @Binding var showInviteSheet: Bool
-    @Binding var showAddElderSheet: Bool
-    @Binding var showGovernance: Bool
-    let isOwner: Bool // Can add members if owner
-    let familyData: FamilyData
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                switch loadingState {
-                case .loading:
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            ForEach(0..<4, id: \.self) { _ in
-                                FamilyMemberCardSkeleton()
-                            }
-                        }
-                        .padding(.horizontal, theme.screenPadding)
-                        .padding(.vertical, 12)
-                    }
-
-                case .empty:
-                    if isOwner {
-                        FamilyEmptyState(
-                            onInvite: { showInviteSheet = true },
-                            onAddElder: { showAddElderSheet = true }
-                        )
-                    } else {
-                        TeenNonOwnerEmptyState()
-                    }
-
-                case .loaded(let members):
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            // Family Header Card
-                            FamilyHeaderCard(family: familyData)
-
-                            // Governance quick access (owner only)
-                            if isOwner {
-                                Button(action: { showGovernance = true }) {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "shield.checkered")
-                                            .font(.title3)
-
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("Family Governance")
-                                                .font(.headline)
-
-                                            Text("Permissions & safety")
-                                                .font(.caption)
-                                                .foregroundColor(theme.secondaryTextColor)
-                                        }
-
-                                        Spacer()
-
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption)
-                                            .foregroundColor(theme.secondaryTextColor)
-                                    }
-                                    .foregroundColor(theme.accentColor)
-                                    .padding()
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(theme.accentColor.opacity(0.1))
-                                    )
-                                }
-                            }
-
-                            // Member cards
-                            ForEach(members) { member in
-                                TeenFamilyMemberCard(member: member)
-                                    .onTapGesture { selectedMember = member }
-                            }
-
-                            // Add member option for owners
-                            if isOwner {
-                                TeenAddMemberCard(
-                                    onInvite: { showInviteSheet = true },
-                                    onAddElder: { showAddElderSheet = true }
-                                )
-                            }
-                        }
-                        .padding(.horizontal, theme.screenPadding)
-                        .padding(.vertical, 12)
-                    }
-
-                case .error(let message):
-                    ErrorStateView(message: message, onRetry: {})
-                }
-            }
-            .background(theme.backgroundColor.ignoresSafeArea())
-            .navigationTitle(familyData.name)
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                if isOwner {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Menu {
-                            Button(action: { showInviteSheet = true }) {
-                                Label("Invite Member", systemImage: "person.badge.plus")
-                            }
-                            Button(action: { showAddElderSheet = true }) {
-                                Label("Add Elder (Phone)", systemImage: "phone.fill")
-                            }
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title3)
-                                .foregroundColor(theme.accentColor)
-                        }
-                    }
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-    }
-}
-
-// MARK: - Teen Add Member Card
-
-struct TeenAddMemberCard: View {
-    @Environment(\.theme) var theme
-    let onInvite: () -> Void
-    let onAddElder: () -> Void
-
-    var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .strokeBorder(theme.accentColor.opacity(0.4), style: StrokeStyle(lineWidth: 2, dash: [5]))
-                    .frame(width: 48, height: 48)
-
-                Image(systemName: "plus")
-                    .font(.title3)
-                    .foregroundColor(theme.accentColor)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Add Family Member")
-                    .font(.headline)
-                    .foregroundColor(theme.accentColor)
-
-                Text("Invite or add phone-only elder")
-                    .font(.caption)
-                    .foregroundColor(theme.secondaryTextColor)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .foregroundColor(theme.secondaryTextColor)
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: theme.cardRadius)
-                .strokeBorder(theme.accentColor.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [6]))
-        )
-        .contentShape(Rectangle())
-        .onTapGesture { onInvite() }
-    }
-}
-
-// MARK: - Teen Non-Owner Empty State
-
-struct TeenNonOwnerEmptyState: View {
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Image(systemName: "person.3.fill")
-                .font(.system(size: 56))
-                .foregroundColor(theme.accentColor.opacity(0.6))
-
-            VStack(spacing: 8) {
-                Text("No Family Members Yet")
-                    .font(.title3.bold())
-                    .foregroundColor(theme.textColor)
-
-                Text("Ask your parent to invite\nfamily members")
-                    .font(.subheadline)
-                    .foregroundColor(theme.secondaryTextColor)
-                    .multilineTextAlignment(.center)
-            }
-
-            Spacer()
-        }
-    }
-}
-
-struct TeenFamilyMemberCard: View {
-    let member: FamilyMember
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Text(member.avatarEmoji)
-                .font(.system(size: 48))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(member.name)
-                    .font(.headline)
-                    .foregroundColor(theme.textColor)
-
-                Text(member.role.displayName)
-                    .font(.caption)
-                    .foregroundColor(theme.secondaryTextColor)
-
-                HStack(spacing: 8) {
-                    Image(systemName: "mic.fill")
-                        .font(.caption2)
-                    Text("\(member.storyCount) stories")
-                        .font(.caption2)
-                }
-                .foregroundColor(theme.secondaryTextColor.opacity(0.7))
-            }
-
-            Spacer()
-
-            VStack(spacing: 4) {
-                Circle()
-                    .fill(member.statusColor)
-                    .frame(width: 12, height: 12)
-
-                Text(member.statusText)
-                    .font(.caption2)
-                    .foregroundColor(theme.secondaryTextColor)
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: theme.cardRadius)
-                .fill(theme.cardBackgroundColor)
-        )
-    }
-}
-
-// MARK: - Parent Family View (Detailed Grid)
-
-struct ParentMyFamily: View {
+struct TeenParentMyFamily: View {
     let loadingState: LoadingState<[FamilyMember]>
     @Binding var selectedMember: FamilyMember?
     @Binding var showInviteSheet: Bool
     @Binding var showAddElderSheet: Bool
     @Binding var showGovernance: Bool
     @Binding var selectedElderForPreferences: FamilyMember?
-    let isOwner: Bool // Can add members if owner
+    let isOwner: Bool
     let familyData: FamilyData
     @Environment(\.theme) var theme
 
@@ -910,17 +659,14 @@ struct ParentMyFamily: View {
                 case .loading:
                     ScrollView {
                         VStack(spacing: 24) {
-                            // Stats skeleton
-                            HStack(spacing: 20) {
-                                SkeletonShape(height: 120, cornerRadius: 16)
-                                SkeletonShape(height: 120, cornerRadius: 16)
-                            }
-                            .padding(.horizontal, theme.screenPadding)
+                            // Header skeleton
+                            SkeletonShape(height: 100, cornerRadius: 16)
+                                .padding(.horizontal, theme.screenPadding)
 
                             // Grid skeleton
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(0..<4, id: \.self) { _ in
-                                    ParentFamilyMemberCardSkeleton()
+                                    UnifiedFamilyMemberCardSkeleton()
                                 }
                             }
                             .padding(.horizontal, theme.screenPadding)
@@ -935,7 +681,7 @@ struct ParentMyFamily: View {
                             onAddElder: { showAddElderSheet = true }
                         )
                     } else {
-                        ParentNonOwnerEmptyState()
+                        NonOwnerEmptyState()
                     }
 
                 case .loaded(let members):
@@ -947,7 +693,7 @@ struct ParentMyFamily: View {
                             // Governance quick access (owner only)
                             if isOwner {
                                 Button(action: { showGovernance = true }) {
-                                    HStack {
+                                    HStack(spacing: 12) {
                                         Image(systemName: "shield.checkered")
                                             .font(.title3)
 
@@ -955,7 +701,7 @@ struct ParentMyFamily: View {
                                             Text("Family Governance")
                                                 .font(.headline)
 
-                                            Text("Permissions, privacy & safety settings")
+                                            Text("Permissions, privacy & safety")
                                                 .font(.caption)
                                                 .foregroundColor(theme.secondaryTextColor)
                                         }
@@ -978,13 +724,13 @@ struct ParentMyFamily: View {
                             // Members grid
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(members) { member in
-                                    ParentGridMemberCard(member: member)
+                                    UnifiedFamilyMemberCard(member: member)
                                         .onTapGesture { selectedMember = member }
                                 }
 
                                 // Add member card (only for owners)
                                 if isOwner {
-                                    AddMemberCard(
+                                    UnifiedAddMemberCard(
                                         onInvite: { showInviteSheet = true },
                                         onAddElder: { showAddElderSheet = true }
                                     )
@@ -1013,7 +759,7 @@ struct ParentMyFamily: View {
                                 Label("Add Elder (Phone)", systemImage: "phone.fill")
                             }
                         } label: {
-                            Image(systemName: "plus.circle.fill")
+                            Image(systemName: "plus")
                                 .font(.title3)
                                 .foregroundColor(theme.accentColor)
                         }
@@ -1025,80 +771,9 @@ struct ParentMyFamily: View {
     }
 }
 
-// MARK: - Parent Non-Owner Empty State
+// MARK: - Unified Family Member Card
 
-struct ParentNonOwnerEmptyState: View {
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            ZStack {
-                Circle()
-                    .fill(theme.accentColor.opacity(0.1))
-                    .frame(width: 140, height: 140)
-
-                Image(systemName: "person.3.fill")
-                    .font(.system(size: 56))
-                    .foregroundColor(theme.accentColor)
-            }
-
-            VStack(spacing: 12) {
-                Text("No Family Members Yet")
-                    .font(.title2.bold())
-                    .foregroundColor(theme.textColor)
-
-                Text("The family owner will invite\nmembers to join.")
-                    .font(.subheadline)
-                    .foregroundColor(theme.secondaryTextColor)
-                    .multilineTextAlignment(.center)
-            }
-
-            Spacer()
-        }
-    }
-}
-
-// MARK: - Add Member Card
-
-struct AddMemberCard: View {
-    @Environment(\.theme) var theme
-    let onInvite: () -> Void
-    let onAddElder: () -> Void
-
-    var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .strokeBorder(theme.accentColor.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [6]))
-                    .frame(width: 60, height: 60)
-
-                Image(systemName: "plus")
-                    .font(.title2)
-                    .foregroundColor(theme.accentColor)
-            }
-
-            Text("Add Member")
-                .font(.subheadline.bold())
-                .foregroundColor(theme.accentColor)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(theme.accentColor.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [8]))
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onInvite()
-        }
-    }
-}
-
-// MARK: - Parent Grid Member Card (for 2-column grid)
-
-struct ParentGridMemberCard: View {
+struct UnifiedFamilyMemberCard: View {
     let member: FamilyMember
     @Environment(\.theme) var theme
 
@@ -1108,10 +783,10 @@ struct ParentGridMemberCard: View {
             ZStack {
                 Circle()
                     .fill(member.roleColor.opacity(0.2))
-                    .frame(width: 80, height: 80)
+                    .frame(width: 72, height: 72)
 
                 Text(member.avatarEmoji)
-                    .font(.system(size: 48))
+                    .font(.system(size: 40))
             }
 
             // Name
@@ -1175,36 +850,118 @@ struct ParentGridMemberCard: View {
     }
 }
 
-// MARK: - Parent Family Member Card Skeleton
+// MARK: - Unified Add Member Card
 
-struct ParentFamilyMemberCardSkeleton: View {
+struct UnifiedAddMemberCard: View {
+    @Environment(\.theme) var theme
+    let onInvite: () -> Void
+    let onAddElder: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .strokeBorder(theme.accentColor.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [6]))
+                    .frame(width: 60, height: 60)
+
+                Image(systemName: "plus")
+                    .font(.title2)
+                    .foregroundColor(theme.accentColor)
+            }
+
+            Text("Add Member")
+                .font(.subheadline.bold())
+                .foregroundColor(theme.accentColor)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(theme.accentColor.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [8]))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onInvite()
+        }
+    }
+}
+
+// MARK: - Unified Family Member Card Skeleton
+
+struct UnifiedFamilyMemberCardSkeleton: View {
     @Environment(\.theme) var theme
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Circle()
                 .fill(Color.gray.opacity(0.15))
-                .frame(width: 80, height: 80)
+                .frame(width: 72, height: 72)
                 .shimmer()
 
-            VStack(spacing: 8) {
-                SkeletonShape(width: 80, height: 16, cornerRadius: 4)
-                SkeletonShape(width: 60, height: 14, cornerRadius: 4)
-            }
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.gray.opacity(0.15))
+                .frame(width: 80, height: 16)
+                .shimmer()
 
-            HStack(spacing: 16) {
-                SkeletonShape(width: 30, height: 12, cornerRadius: 3)
-                SkeletonShape(width: 30, height: 12, cornerRadius: 3)
-            }
+            Capsule()
+                .fill(Color.gray.opacity(0.15))
+                .frame(width: 60, height: 20)
+                .shimmer()
 
-            SkeletonShape(width: 50, height: 10, cornerRadius: 3)
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.gray.opacity(0.15))
+                    .frame(width: 40, height: 30)
+                    .shimmer()
+
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.gray.opacity(0.15))
+                    .frame(width: 40, height: 30)
+                    .shimmer()
+            }
         }
-        .padding()
+        .padding(.vertical, 16)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(theme.cardBackgroundColor)
         )
+    }
+}
+
+// MARK: - Non-Owner Empty State (Unified)
+
+struct NonOwnerEmptyState: View {
+    @Environment(\.theme) var theme
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(theme.accentColor.opacity(0.1))
+                    .frame(width: 140, height: 140)
+
+                Image(systemName: "person.3.fill")
+                    .font(.system(size: 56))
+                    .foregroundColor(theme.accentColor)
+            }
+
+            VStack(spacing: 12) {
+                Text("No Family Members Yet")
+                    .font(.title2.bold())
+                    .foregroundColor(theme.textColor)
+
+                Text("The family owner will invite\nmembers to join.")
+                    .font(.subheadline)
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+            }
+
+            Spacer()
+        }
     }
 }
 

@@ -99,85 +99,55 @@ struct StoryCard: View {
     }
 }
 
-// MARK: - Teen Story Card (Full Bleed, Minimalist)
+// MARK: - Teen Story Card (Compact, Full Text)
 
 struct TeenStoryCard: View {
     let story: Story
     let theme: PersonaTheme
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
-                // Full screen background
-                AsyncImage(url: URL(string: story.imageURL ?? "")) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipped()
-                    case .failure(_), .empty:
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        story.storytellerColor.opacity(0.6),
-                                        story.storytellerColor
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    @unknown default:
-                        Color.gray
-                    }
-                }
-
-                // Text overlay at bottom
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(story.title)
-                        .font(theme.headlineFont)
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-                        .shadow(color: .black.opacity(0.5), radius: 4, y: 2)
-
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(story.storytellerColor)
-                            .frame(width: 10, height: 10)
-
-                        Text(story.storyteller)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.white.opacity(0.95))
-
-                        if story.voiceCount > 1 {
-                            Text("+ \(story.voiceCount - 1) more")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 40)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
+        VStack(alignment: .leading, spacing: 0) {
+            // Color strip header
+            Rectangle()
+                .fill(
                     LinearGradient(
-                        colors: [
-                            .clear,
-                            .black.opacity(0.4),
-                            .black.opacity(0.75),
-                            .black.opacity(0.95)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+                        colors: [story.storytellerColor, story.storytellerColor.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-                    .frame(height: 250)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
                 )
+                .frame(height: 8)
+
+            // Content
+            VStack(alignment: .leading, spacing: 10) {
+                // Title - FULL TEXT, no truncation
+                Text(story.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(theme.textColor)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // Storyteller with voice count
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(story.storytellerColor)
+                        .frame(width: 6, height: 6)
+
+                    Text(story.storyteller)
+                        .font(.system(size: 13))
+                        .foregroundColor(story.storytellerColor)
+
+                    if story.voiceCount > 1 {
+                        Text("·\(story.voiceCount)")
+                            .font(.system(size: 13))
+                            .foregroundColor(theme.secondaryTextColor)
+                    }
+                }
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            .padding(14)
         }
+        .background(theme.cardBackgroundColor)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(story.title) by \(story.storyteller)")
         .accessibilityHint("Double tap to view story")

@@ -16,6 +16,8 @@ struct RecentActivity: Identifiable {
     let subtitle: String
     let timestamp: Date
     let storyId: String?
+    let duration: TimeInterval?  // Duration in seconds for stories
+    let hasListened: Bool        // Whether user has listened to this
 
     enum ActivityType {
         case newStory        // 🎙️
@@ -29,6 +31,8 @@ struct ActiveStory: Identifiable {
     let story: Story
     let lastActivity: Date
     let isEvolving: Bool  // Still receiving new perspectives
+    let emotionalHint: String?  // Why should I open this story?
+    let freshnessText: String?  // When was it last updated
 }
 
 struct UnheardVoice: Identifiable {
@@ -46,7 +50,6 @@ struct HubView: View {
     @Environment(\.theme) var theme
     @State private var loadingState: LoadingState<DashboardData> = .loading
     @State private var showCaptureSheet = false
-    @State private var selectedCaptureAction: CaptureAction? = nil
     @State private var currentProfile: UserProfile = UserProfile(name: "Leo", role: .teen, avatarEmoji: "🎸")
     @State private var profiles: [UserProfile] = [
         UserProfile(name: "Leo", role: .teen, avatarEmoji: "🎸"),
@@ -60,32 +63,32 @@ struct HubView: View {
             case .teen:
                 TeenDashboard(
                     loadingState: loadingState,
-                    onShowCapture: { selectedCaptureAction = nil; showCaptureSheet = true },
+                    onShowCapture: { showCaptureSheet = true },
                     currentProfile: $currentProfile,
                     profiles: profiles
                 )
             case .parent:
                 ParentDashboard(
                     loadingState: loadingState,
-                    onShowCapture: { selectedCaptureAction = nil; showCaptureSheet = true },
+                    onShowCapture: { showCaptureSheet = true },
                     currentProfile: $currentProfile,
                     profiles: profiles
                 )
             case .child:
                 ChildDashboard(
                     loadingState: loadingState,
-                    onShowCapture: { selectedCaptureAction = nil; showCaptureSheet = true }
+                    onShowCapture: { showCaptureSheet = true }
                 )
             case .elder:
                 ElderDashboard(
                     loadingState: loadingState,
-                    onShowCapture: { selectedCaptureAction = nil; showCaptureSheet = true }
+                    onShowCapture: { showCaptureSheet = true }
                 )
             }
         }
         .animation(theme.animation, value: theme.role)
         .sheet(isPresented: $showCaptureSheet) {
-            CaptureMemorySheet(selectedCaptureAction: $selectedCaptureAction)
+            CaptureMemorySheet()
         }
         .onAppear {
             loadDashboard()
@@ -116,32 +119,54 @@ struct DashboardData {
             RecentActivity(
                 type: .newStory,
                 title: "Grandpa shared a new story",
-                subtitle: "about 'The Summer of 1968'",
+                subtitle: "The Summer of 1968",
                 timestamp: Date().addingTimeInterval(-86400),
-                storyId: "story-1"
+                storyId: "story-1",
+                duration: 180,  // 3 minutes
+                hasListened: false
             ),
             RecentActivity(
                 type: .newPerspective,
                 title: "A new perspective was added",
                 subtitle: "to 'Our First Home' by Mom",
                 timestamp: Date().addingTimeInterval(-172800),
-                storyId: "story-2"
+                storyId: "story-2",
+                duration: 120,  // 2 minutes
+                hasListened: false
             ),
             RecentActivity(
                 type: .upcomingCall,
                 title: "Next call with Grandma",
                 subtitle: "Tomorrow, 6 PM",
                 timestamp: Date().addingTimeInterval(82800),
-                storyId: nil
+                storyId: nil,
+                duration: nil,
+                hasListened: false
             )
         ],
-        activeStories: Story.sampleStories.map { story in
+        activeStories: [
             ActiveStory(
-                story: story,
-                lastActivity: story.timestamp,
-                isEvolving: story.voiceCount > 2
+                story: Story.sampleStories[0],
+                lastActivity: Date().addingTimeInterval(-259200),  // 3 days ago
+                isEvolving: true,
+                emotionalHint: "Remembered very differently by each person",
+                freshnessText: "New perspective 3 days ago"
+            ),
+            ActiveStory(
+                story: Story.sampleStories[1],
+                lastActivity: Date().addingTimeInterval(-604800),  // 1 week ago
+                isEvolving: false,
+                emotionalHint: "A joyful memory for everyone",
+                freshnessText: "Last updated 1 week ago"
+            ),
+            ActiveStory(
+                story: Story.sampleStories[2],
+                lastActivity: Date().addingTimeInterval(-1209600),  // 2 weeks ago
+                isEvolving: true,
+                emotionalHint: "The last trip before everything changed",
+                freshnessText: "Still evolving"
             )
-        }.prefix(3).map { $0 },
+        ],
         unheardVoices: [
             UnheardVoice(
                 storyteller: "Grandma Rose",
@@ -190,13 +215,8 @@ struct TeenDashboard: View {
                 }
             }
             .background(theme.backgroundColor.ignoresSafeArea())
-            .navigationTitle("Memory Dashboard")
+            .navigationTitle("Home")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    ProfileSwitcher(currentProfile: $currentProfile, profiles: profiles)
-                }
-            }
         }
     }
 }
@@ -208,7 +228,7 @@ struct TeenDashboardContent: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            VStack(spacing: 24) {
                 // MARK: - Hero Section: What's New
                 HeroSection(activities: data.recentActivities.prefix(2).map { $0 })
 
@@ -218,17 +238,18 @@ struct TeenDashboardContent: View {
                 // MARK: - Unheard Voices
                 if !data.unheardVoices.isEmpty {
                     UnheardVoicesSection(voices: data.unheardVoices)
-                        .padding(.top, 24)
                 }
 
                 // MARK: - Floating Action Button
-                Spacer()
-                    .frame(height: 100)
+                Color.clear.frame(height: 100)
             }
             .padding(theme.screenPadding)
         }
         .overlay(alignment: .bottom) {
-            CaptureMemoryButton(action: onShowCapture)
+            CaptureMemoryButton(
+                action: onShowCapture,
+                hasUnlistenedContent: !data.unheardVoices.isEmpty || data.recentActivities.contains(where: { !$0.hasListened })
+            )
         }
     }
 }
@@ -260,13 +281,8 @@ struct ParentDashboard: View {
                 }
             }
             .background(theme.backgroundColor.ignoresSafeArea())
-            .navigationTitle("Family Memories")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    ProfileSwitcher(currentProfile: $currentProfile, profiles: profiles)
-                }
-            }
+            .navigationTitle("Home")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
@@ -279,11 +295,8 @@ struct ParentDashboardContent: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // MARK: - Hero Section: What's New
-                HeroSection(activities: data.recentActivities.prefix(2).map { $0 })
-
-                // MARK: - Stats Row (Calm overview)
-                StatsRow(totalVoices: data.totalVoices, totalStories: data.totalStories)
+                // MARK: - Hero Section: What's New (Primary Story)
+                HeroSection(activities: data.recentActivities)
 
                 // MARK: - Active Stories (Grid for Parents)
                 ActiveStoriesGrid(stories: data.activeStories)
@@ -299,7 +312,10 @@ struct ParentDashboardContent: View {
             .padding(theme.screenPadding)
         }
         .overlay(alignment: .bottom) {
-            CaptureMemoryButton(action: onShowCapture)
+            CaptureMemoryButton(
+                action: onShowCapture,
+                hasUnlistenedContent: !data.unheardVoices.isEmpty || data.recentActivities.contains(where: { !$0.hasListened })
+            )
         }
     }
 }
@@ -447,83 +463,131 @@ struct HeroSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("What's New in Our Family")
-                .font(theme.headlineFont)
-                .foregroundColor(theme.textColor)
-                .padding(.bottom, 4)
+            // Show only the most important activity (first one)
+            if let primaryActivity = activities.first {
+                ActivityCard(activity: primaryActivity, theme: theme, isPrimary: true)
+            }
 
-            VStack(spacing: 8) {
-                ForEach(activities) { activity in
-                    ActivityCard(activity: activity, theme: theme)
+            // "See all updates" link if there are more activities
+            if activities.count > 1 {
+                Button(action: {
+                    // TODO: Navigate to all updates view
+                }) {
+                    HStack(spacing: 4) {
+                        Text("See all updates")
+                            .font(.system(size: 14, weight: .medium))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(theme.accentColor)
                 }
             }
         }
-        .padding(.bottom, 24)
     }
 }
 
 struct ActivityCard: View {
     let activity: RecentActivity
     let theme: PersonaTheme
+    var isPrimary: Bool = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Icon
+        HStack(spacing: 14) {
+            // Colored icon circle
             ZStack {
                 Circle()
-                    .fill(backgroundColor)
+                    .fill(
+                        LinearGradient(
+                            colors: [activityColor, activityColor.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .frame(width: 44, height: 44)
 
-                Text(icon)
-                    .font(.system(size: 20))
+                Image(systemName: activityIcon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
             }
 
             // Content
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(activity.title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(theme.textColor)
 
                 Text(activity.subtitle)
                     .font(.system(size: 13))
                     .foregroundColor(theme.secondaryTextColor)
+
+                // Meta info
+                HStack(spacing: 8) {
+                    if let duration = activity.duration {
+                        Text(durationText(duration))
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.secondaryTextColor.opacity(0.7))
+                    }
+
+                    Text(timeAgoText)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryTextColor.opacity(0.7))
+                }
             }
 
             Spacer()
+
+            // Arrow
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.secondaryTextColor.opacity(0.4))
         }
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(theme.cardBackgroundColor)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(borderColor, lineWidth: 1)
-        )
     }
 
-    private var icon: String {
+    private var activityIcon: String {
         switch activity.type {
-        case .newStory: return "🎙️"
-        case .newPerspective: return "🧵"
-        case .upcomingCall: return "📞"
+        case .newStory: return "waveform"
+        case .newPerspective: return "bubble.left.and.bubble.right"
+        case .upcomingCall: return "phone"
         }
     }
 
-    private var backgroundColor: Color {
+    private var activityColor: Color {
         switch activity.type {
-        case .newStory: return .storytellerPurple.opacity(0.15)
-        case .newPerspective: return .storytellerBlue.opacity(0.15)
-        case .upcomingCall: return .storytellerOrange.opacity(0.15)
+        case .newStory: return .storytellerOrange
+        case .newPerspective: return .storytellerBlue
+        case .upcomingCall: return .storytellerPurple
         }
     }
 
-    private var borderColor: Color {
-        switch activity.type {
-        case .newStory: return .storytellerPurple.opacity(0.3)
-        case .newPerspective: return .storytellerBlue.opacity(0.3)
-        case .upcomingCall: return .storytellerOrange.opacity(0.3)
+    private var timeAgoText: String {
+        let now = Date()
+        let interval = now.timeIntervalSince(activity.timestamp)
+
+        if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes)m ago"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "\(hours)h ago"
+        } else if interval < 172800 {
+            return "Yesterday"
+        } else {
+            let days = Int(interval / 86400)
+            return "\(days)d ago"
         }
+    }
+
+    private func durationText(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration / 60)
+        if minutes == 0 {
+            return "\(Int(duration))s"
+        }
+        return "\(minutes) min"
     }
 }
 
@@ -535,20 +599,12 @@ struct ActiveStoriesSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Active Stories")
-                    .font(theme.headlineFont)
-                    .foregroundColor(theme.textColor)
-
-                Spacer()
-
-                Text("\(stories.count) evolving")
-                    .font(.caption)
-                    .foregroundColor(theme.secondaryTextColor)
-            }
+            Text("Stories")
+                .font(theme.headlineFont)
+                .foregroundColor(theme.textColor)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     ForEach(stories, id: \.story.id) { activeStory in
                         NavigationLink(destination: StoryDetailView(story: activeStory.story)) {
                             ActiveStoryCard(story: activeStory, theme: theme)
@@ -556,10 +612,8 @@ struct ActiveStoriesSection: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.vertical, 4)
             }
         }
-        .padding(.bottom, 24)
     }
 }
 
@@ -568,77 +622,59 @@ struct ActiveStoryCard: View {
     let theme: PersonaTheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Visual indicator
-            ZStack {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                story.story.storytellerColor.opacity(0.4),
-                                story.story.storytellerColor.opacity(0.6)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+        VStack(alignment: .leading, spacing: 0) {
+            // Gradient header - more prominent
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            story.story.storytellerColor,
+                            story.story.storytellerColor.opacity(0.6)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-                    .frame(height: 120)
-                    .frame(width: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                // Evolving indicator
-                if story.isEvolving {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Circle()
-                                .fill(Color.white.opacity(0.9))
-                                .frame(width: 6, height: 6)
-                            Text("Evolving")
-                                .font(.caption2.bold())
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.2))
-                                )
-                            Spacer()
+                )
+                .frame(height: 50)
+                .overlay(alignment: .bottomLeading) {
+                    // Voice count badge
+                    if story.story.voiceCount > 1 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.2.fill")
+                                .font(.system(size: 10))
+                            Text("\(story.story.voiceCount)")
+                                .font(.system(size: 11, weight: .semibold))
                         }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.3))
+                        )
                         .padding(8)
                     }
                 }
-            }
 
-            // Story info
-            VStack(alignment: .leading, spacing: 4) {
+            // Content
+            VStack(alignment: .leading, spacing: 6) {
                 Text(story.story.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(theme.textColor)
                     .lineLimit(2)
 
-                HStack(spacing: 4) {
-                    Text(story.story.storyteller)
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor)
-
-                    Text("·")
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor.opacity(0.5))
-
-                    Text("\(story.story.voiceCount) perspectives")
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor)
-                }
+                Text(story.story.storyteller)
+                    .font(.system(size: 12))
+                    .foregroundColor(story.story.storytellerColor)
             }
+            .padding(12)
         }
-        .frame(width: 200)
-        .padding(12)
+        .frame(width: 160)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(theme.cardBackgroundColor)
         )
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -649,17 +685,17 @@ struct ActiveStoriesGrid: View {
     @Environment(\.theme) var theme
 
     let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Active Stories")
+            Text("Stories")
                 .font(theme.headlineFont)
                 .foregroundColor(theme.textColor)
 
-            LazyVGrid(columns: columns, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(stories, id: \.story.id) { activeStory in
                     NavigationLink(destination: StoryDetailView(story: activeStory.story)) {
                         ParentActiveStoryCard(story: activeStory, theme: theme)
@@ -677,39 +713,38 @@ struct ParentActiveStoryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Image
-            ZStack {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                story.story.storytellerColor.opacity(0.3),
-                                story.story.storytellerColor.opacity(0.6)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            // Gradient header - more prominent
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            story.story.storytellerColor,
+                            story.story.storytellerColor.opacity(0.6)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(height: 50)
+                .overlay(alignment: .bottomLeading) {
+                    // Voice count badge
+                    if story.story.voiceCount > 1 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.2.fill")
+                                .font(.system(size: 10))
+                            Text("\(story.story.voiceCount)")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.3))
                         )
-                    )
-                    .frame(height: 140)
-
-                // Voice count
-                if story.story.voiceCount > 1 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.2.fill")
-                            .font(.caption2)
-                        Text("\(story.story.voiceCount)")
-                            .font(.caption2.bold())
+                        .padding(8)
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.5))
-                    )
-                    .padding(8)
                 }
-            }
 
             // Content
             VStack(alignment: .leading, spacing: 6) {
@@ -718,21 +753,17 @@ struct ParentActiveStoryCard: View {
                     .foregroundColor(theme.textColor)
                     .lineLimit(2)
 
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(story.story.storytellerColor)
-                        .frame(width: 6, height: 6)
-
-                    Text(story.story.storyteller)
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor)
-                }
+                Text(story.story.storyteller)
+                    .font(.system(size: 12))
+                    .foregroundColor(story.story.storytellerColor)
             }
-            .padding(10)
+            .padding(12)
         }
-        .background(Color(.systemBackground))
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(theme.cardBackgroundColor)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
     }
 }
 
@@ -744,7 +775,7 @@ struct UnheardVoicesSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Voices You Haven't Heard Yet")
+            Text("Unheard")
                 .font(theme.headlineFont)
                 .foregroundColor(theme.textColor)
 
@@ -762,60 +793,58 @@ struct UnheardVoiceCard: View {
     let theme: PersonaTheme
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Avatar circle
-            ZStack {
-                Circle()
-                    .fill(storytellerColor.opacity(0.15))
-                    .frame(width: 48, height: 48)
-                    .overlay(
-                        Circle()
-                            .stroke(storytellerColor, lineWidth: 2)
-                    )
-                    .overlay {
-                        Text(String(voice.storyteller.prefix(1)).uppercased())
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(storytellerColor)
-                    }
-            }
+        HStack(spacing: 14) {
+            // Colored initial circle
+            Text(String(voice.storyteller.prefix(1)).uppercased())
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    storytellerColor,
+                                    storytellerColor.opacity(0.7)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
 
             // Content
             VStack(alignment: .leading, spacing: 4) {
-                Text("1 new memory from \(voice.storyteller)")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(theme.textColor)
-
                 Text(voice.storyTitle)
-                    .font(.caption)
-                    .foregroundColor(theme.secondaryTextColor)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(theme.textColor)
                     .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Text(voice.storyteller)
+                        .font(.system(size: 13))
+                        .foregroundColor(storytellerColor)
+
+                    Text("·")
+                        .foregroundColor(theme.secondaryTextColor.opacity(0.5))
+
+                    Text(durationText)
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.secondaryTextColor)
+                }
             }
 
             Spacer()
 
-            // Duration
-            HStack(spacing: 4) {
-                Image(systemName: "play.circle.fill")
-                    .font(.caption)
-                Text("\(Int(voice.duration / 60))m")
-                    .font(.caption)
-            }
-            .foregroundColor(theme.accentColor)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(theme.accentColor.opacity(0.1))
-            )
+            // Arrow
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.secondaryTextColor.opacity(0.4))
         }
-        .padding(12)
+        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(theme.cardBackgroundColor)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(theme.accentColor.opacity(0.2), lineWidth: 1)
         )
     }
 
@@ -827,54 +856,10 @@ struct UnheardVoiceCard: View {
         case .child: return .storytellerGreen
         }
     }
-}
 
-// MARK: - Stats Row (Parent)
-
-struct StatsRow: View {
-    let totalVoices: Int
-    let totalStories: Int
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        HStack(spacing: 12) {
-            DashboardStatCard(
-                title: "\(totalVoices)",
-                subtitle: "Voices",
-                color: .storytellerBlue
-            )
-
-            DashboardStatCard(
-                title: "\(totalStories)",
-                subtitle: "Stories",
-                color: .storytellerPurple
-            )
-        }
-    }
-}
-
-struct DashboardStatCard: View {
-    let title: String
-    let subtitle: String
-    let color: Color
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Text(title)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(color)
-
-            Text(subtitle)
-                .font(.caption)
-                .foregroundColor(theme.secondaryTextColor)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.cardBackgroundColor)
-        )
+    private var durationText: String {
+        let minutes = Int(voice.duration / 60)
+        return "\(minutes) min"
     }
 }
 
@@ -892,8 +877,9 @@ struct ChildHeroSection: View {
 
             if let activity = activities.first {
                 HStack(spacing: 12) {
-                    Text(activity.type == .newStory ? "🎙️" : activity.type == .newPerspective ? "🧵" : "📞")
-                        .font(.system(size: 60))
+                    Image(systemName: activityIcon(for: activity.type))
+                        .font(.system(size: 48))
+                        .foregroundColor(activityColor(for: activity.type))
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(activity.title)
@@ -914,6 +900,22 @@ struct ChildHeroSection: View {
             }
         }
         .padding(.top, theme.screenPadding)
+    }
+
+    private func activityIcon(for type: RecentActivity.ActivityType) -> String {
+        switch type {
+        case .newStory: return "waveform.circle.fill"
+        case .newPerspective: return "bubble.left.and.bubble.right.fill"
+        case .upcomingCall: return "phone.circle.fill"
+        }
+    }
+
+    private func activityColor(for type: RecentActivity.ActivityType) -> Color {
+        switch type {
+        case .newStory: return .storytellerPurple
+        case .newPerspective: return .storytellerBlue
+        case .upcomingCall: return .storytellerOrange
+        }
     }
 }
 
@@ -1000,8 +1002,9 @@ struct ElderHeroSection: View {
 
             if let activity = activities.first {
                 VStack(spacing: 16) {
-                    Text(activity.type == .newStory ? "🎙️" : activity.type == .newPerspective ? "🧵" : "📞")
-                        .font(.system(size: 80))
+                    Image(systemName: activityIcon(for: activity.type))
+                        .font(.system(size: 64))
+                        .foregroundColor(activityColor(for: activity.type))
 
                     Text(activity.title)
                         .font(.system(size: 28, weight: .bold))
@@ -1022,6 +1025,22 @@ struct ElderHeroSection: View {
         }
         .padding(.horizontal, theme.screenPadding)
     }
+
+    private func activityIcon(for type: RecentActivity.ActivityType) -> String {
+        switch type {
+        case .newStory: return "waveform.circle.fill"
+        case .newPerspective: return "bubble.left.and.bubble.right.fill"
+        case .upcomingCall: return "phone.circle.fill"
+        }
+    }
+
+    private func activityColor(for type: RecentActivity.ActivityType) -> Color {
+        switch type {
+        case .newStory: return .storytellerPurple
+        case .newPerspective: return .storytellerBlue
+        case .upcomingCall: return .storytellerOrange
+        }
+    }
 }
 
 struct ElderUpcomingCallSection: View {
@@ -1034,8 +1053,9 @@ struct ElderUpcomingCallSection: View {
                 .fill(Color.storytellerOrange.opacity(0.15))
                 .frame(width: 80, height: 80)
                 .overlay {
-                    Text("📞")
+                    Image(systemName: "phone.circle.fill")
                         .font(.system(size: 40))
+                        .foregroundColor(.storytellerOrange)
                 }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -1066,163 +1086,40 @@ struct ElderUpcomingCallSection: View {
 
 struct CaptureMemoryButton: View {
     let action: () -> Void
+    let hasUnlistenedContent: Bool
     @Environment(\.theme) var theme
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 20))
+                Image(systemName: hasUnlistenedContent ? "plus.circle" : "plus.circle.fill")
+                    .font(.system(size: hasUnlistenedContent ? 18 : 20))
 
-                Text("Capture a Memory")
-                    .font(.system(size: 16, weight: .semibold))
+                Text(buttonText)
+                    .font(.system(size: hasUnlistenedContent ? 15 : 16, weight: hasUnlistenedContent ? .medium : .semibold))
             }
-            .foregroundColor(.white)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .foregroundColor(hasUnlistenedContent ? theme.accentColor : .white)
+            .padding(.horizontal, hasUnlistenedContent ? 18 : 20)
+            .padding(.vertical, hasUnlistenedContent ? 12 : 14)
             .background(
                 Capsule()
-                    .fill(theme.accentColor)
+                    .fill(hasUnlistenedContent ? Color.clear : theme.accentColor)
             )
-            .shadow(color: theme.accentColor.opacity(0.3), radius: 10, y: 4)
+            .overlay(
+                Capsule()
+                    .stroke(hasUnlistenedContent ? theme.accentColor.opacity(0.5) : Color.clear, lineWidth: 1.5)
+            )
+            .shadow(color: hasUnlistenedContent ? .clear : theme.accentColor.opacity(0.3), radius: hasUnlistenedContent ? 0 : 10, y: hasUnlistenedContent ? 0 : 4)
         }
         .padding(.bottom, 24)
     }
-}
 
-// MARK: - Capture Memory Sheet
-
-enum CaptureAction {
-    case record          // 🎙️ Add a prompt
-    case suggest         // 💡 Suggest a prompt to AI
-    case triggerCall     // 📞 Trigger a call
-}
-
-struct CaptureMemorySheet: View {
-    @Environment(\.theme) var theme
-    @Environment(\.dismiss) var dismiss
-    @Binding var selectedCaptureAction: CaptureAction?
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Header
-                VStack(spacing: 8) {
-                    Text("Capture a Memory")
-                        .font(theme.headlineFont)
-                        .foregroundColor(theme.textColor)
-
-                    Text("Choose how you'd like to add to your family's story")
-                        .font(.subheadline)
-                        .foregroundColor(theme.secondaryTextColor)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 20)
-                .padding(.bottom, 24)
-
-                Divider()
-
-                // Actions
-                VStack(spacing: 0) {
-                    CaptureActionRow(
-                        icon: "🎙️",
-                        title: "Add a Prompt",
-                        subtitle: "Record your story in your own words",
-                        color: .storytellerPurple
-                    ) {
-                        selectedCaptureAction = .record
-                        dismiss()
-                    }
-
-                    Divider()
-                        .padding(.leading, 60)
-
-                    CaptureActionRow(
-                        icon: "💡",
-                        title: "Suggest a Prompt",
-                        subtitle: "Let AI help you remember",
-                        color: .storytellerBlue
-                    ) {
-                        selectedCaptureAction = .suggest
-                        dismiss()
-                    }
-
-                    Divider()
-                        .padding(.leading, 60)
-
-                    CaptureActionRow(
-                        icon: "📞",
-                        title: "Trigger a Call",
-                        subtitle: "Schedule a conversation",
-                        color: .storytellerOrange
-                    ) {
-                        selectedCaptureAction = .triggerCall
-                        dismiss()
-                    }
-                }
-
-                Spacer()
-
-                // Cancel
-                Button("Cancel") {
-                    dismiss()
-                }
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(theme.accentColor)
-                .padding(.bottom, 24)
-            }
-            .background(theme.backgroundColor)
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(theme.accentColor)
-                }
-            }
+    private var buttonText: String {
+        if hasUnlistenedContent {
+            return "Record when ready"
+        } else {
+            return "Capture a Memory"
         }
-        .presentationDetents([.height(460)])
-        .presentationDragIndicator(.visible)
-    }
-}
-
-struct CaptureActionRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let color: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                Text(icon)
-                    .font(.system(size: 32))
-                    .frame(width: 50)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.primary)
-
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color.gray.opacity(0.4))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
     }
 }
 
