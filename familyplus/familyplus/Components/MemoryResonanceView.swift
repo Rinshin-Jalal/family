@@ -499,7 +499,7 @@ struct MemoryResonanceView_Previews: PreviewProvider {
             ),
             onResponseShared: nil
         )
-        .themed(ParentTheme())
+        .themed(LightTheme())
         .previewDisplayName("Memory Resonance")
 
         GentleResonanceInvitation(
@@ -517,7 +517,7 @@ struct MemoryResonanceView_Previews: PreviewProvider {
                 replyToResponseId: nil
             ),
             onTap: {},
-            theme: ParentTheme()
+            theme: LightTheme()
         )
         .padding()
         .previewDisplayName("Gentle Invitation")

@@ -2,42 +2,36 @@
 //  PersonaTheme.swift
 //  StoryRide
 //
-//  Adaptive theme system that morphs UI based on user persona
+//  Adaptive theme system with Dark/Light mode support
 //
 
 import SwiftUI
 
-// MARK: - Persona Types
+// MARK: - App Theme Types
 
-public enum PersonaRole: String, Codable, CaseIterable {
-    case teen
-    case parent
-    case child
-    case elder
+public enum AppTheme: String, Codable, CaseIterable {
+    case dark
+    case light
 
     var displayName: String {
         switch self {
-        case .teen: return "Teen"
-        case .parent: return "Parent"
-        case .child: return "Child"
-        case .elder: return "Elder"
+        case .dark: return "Dark"
+        case .light: return "Light"
         }
     }
 
     var icon: String {
         switch self {
-        case .teen: return "music.note"
-        case .parent: return "person.fill"
-        case .child: return "star.fill"
-        case .elder: return "heart.fill"
+        case .dark: return "moon.fill"
+        case .light: return "sun.max.fill"
         }
     }
 }
 
-// MARK: - Persona Theme Protocol
+// MARK: - App Theme Protocol
 
 public protocol PersonaTheme {
-    var role: PersonaRole { get }
+    var role: AppTheme { get }
 
     // Colors
     var backgroundColor: Color { get }
@@ -67,10 +61,10 @@ public protocol PersonaTheme {
     var enableHaptics: Bool { get }
 }
 
-// MARK: - Teen Theme
+// MARK: - Dark Theme
 
-struct TeenTheme: PersonaTheme {
-    let role: PersonaRole = .teen
+struct DarkTheme: PersonaTheme {
+    let role: AppTheme = .dark
 
     // Colors - Dark mode aesthetic
     let backgroundColor = Color.inkBlack
@@ -100,10 +94,10 @@ struct TeenTheme: PersonaTheme {
     let enableHaptics = true
 }
 
-// MARK: - Parent Theme
+// MARK: - Light Theme
 
-struct ParentTheme: PersonaTheme {
-    let role: PersonaRole = .parent
+struct LightTheme: PersonaTheme {
+    let role: AppTheme = .light
 
     // Colors - Light mode, clean
     let backgroundColor = Color.paperWhite
@@ -133,85 +127,15 @@ struct ParentTheme: PersonaTheme {
     let enableHaptics = false
 }
 
-// MARK: - Child Theme
-
-struct ChildTheme: PersonaTheme {
-    let role: PersonaRole = .child
-
-    // Colors - Bright, playful
-    let backgroundColor = Color.paperWhite
-    let textColor = Color.black
-    let secondaryTextColor = Color.gray
-    let accentColor = Color.playfulOrange
-    let cardBackgroundColor = Color.white
-
-    // Typography - Playful, friendly, large
-    let headlineFont = Font.system(size: 32, weight: .heavy, design: .rounded)
-    let bodyFont = Font.system(size: 22, weight: .medium, design: .rounded)
-    let storyFont = Font.system(size: 24, weight: .medium, design: .rounded)
-
-    // Spacing - Large touch targets
-    let screenPadding: CGFloat = 24
-    let cardRadius: CGFloat = 24
-    let buttonHeight: CGFloat = 80
-    let touchTarget: CGFloat = 80
-
-    // Motion - Bouncy, elastic
-    let animation = Animation.spring(response: 0.4, dampingFraction: 0.6)
-    let transitionDuration: Double = 0.4
-
-    // Features
-    let showNavigation = false // Hidden - use arrows
-    let enableAudioPrompts = true
-    let enableHaptics = true
-}
-
-// MARK: - Elder Theme
-
-struct ElderTheme: PersonaTheme {
-    let role: PersonaRole = .elder
-
-    // Colors - High contrast, warm
-    let backgroundColor = Color.warmYellow
-    let textColor = Color.black
-    let secondaryTextColor = Color.black.opacity(0.7)
-    let accentColor = Color.brandIndigo
-    let cardBackgroundColor = Color.white
-
-    // Typography - Maximum legibility
-    let headlineFont = Font.system(size: 34, weight: .bold, design: .default)
-    let bodyFont = Font.system(size: 28, weight: .medium, design: .default)
-    let storyFont = Font.system(size: 28, weight: .medium, design: .default)
-
-    // Spacing - Accessible
-    let screenPadding: CGFloat = 32
-    let cardRadius: CGFloat = 24
-    let buttonHeight: CGFloat = 60
-    let touchTarget: CGFloat = 60
-
-    // Motion - Slow, gentle fades
-    let animation = Animation.easeInOut(duration: 0.5)
-    let transitionDuration: Double = 0.5
-
-    // Features
-    let showNavigation = false // One screen at a time
-    let enableAudioPrompts = true
-    let enableHaptics = false
-}
-
 // MARK: - Theme Factory
 
 struct ThemeFactory {
-    static func theme(for role: PersonaRole) -> PersonaTheme {
+    static func theme(for role: AppTheme) -> PersonaTheme {
         switch role {
-        case .teen:
-            return TeenTheme()
-        case .parent:
-            return ParentTheme()
-        case .child:
-            return ChildTheme()
-        case .elder:
-            return ElderTheme()
+        case .dark:
+            return DarkTheme()
+        case .light:
+            return LightTheme()
         }
     }
 }
@@ -219,7 +143,7 @@ struct ThemeFactory {
 // MARK: - Theme Environment Key
 
 private struct ThemeKey: EnvironmentKey {
-    static let defaultValue: PersonaTheme = ParentTheme()
+    static let defaultValue: PersonaTheme = LightTheme()
 }
 
 extension EnvironmentValues {
@@ -243,11 +167,11 @@ struct ThemedView: ViewModifier {
     }
 
     private func colorScheme(for theme: PersonaTheme) -> ColorScheme {
-        // Teen theme uses dark mode for proper text contrast
+        // Dark theme uses dark color scheme, Light theme uses light
         switch theme.role {
-        case .teen:
+        case .dark:
             return .dark
-        case .parent, .child, .elder:
+        case .light:
             return .light
         }
     }

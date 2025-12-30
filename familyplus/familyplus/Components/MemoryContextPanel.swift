@@ -17,8 +17,7 @@ struct MemoryContextData {
 
     struct Contributor: Hashable {
         let name: String
-        let role: PersonaRole
-        let avatarColor: Color
+        let avatarColor: Color  // Direct color instead of PersonaRole
     }
 
     struct YearsSpan {
@@ -170,23 +169,8 @@ struct ContributorAvatar: View {
                     .foregroundColor(theme.textColor)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-
-                Text(roleDisplayName(contributor.role))
-                    .font(.system(size: 11))
-                    .foregroundColor(theme.secondaryTextColor)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
             }
             .frame(minWidth: 60, maxWidth: 80)
-        }
-    }
-
-    private func roleDisplayName(_ role: PersonaRole) -> String {
-        switch role {
-        case .elder: return "Grandparent"
-        case .parent: return "Parent"
-        case .teen: return "Teen"
-        case .child: return "Child"
         }
     }
 }
@@ -493,10 +477,10 @@ struct FlowLayout: Layout {
 extension MemoryContextData {
     static let mock = MemoryContextData(
         contributors: [
-            Contributor(name: "Grandma Rose", role: .elder, avatarColor: .storytellerOrange),
-            Contributor(name: "Dad", role: .parent, avatarColor: .storytellerBlue),
-            Contributor(name: "Mom", role: .parent, avatarColor: .storytellerBlue),
-            Contributor(name: "Jake", role: .teen, avatarColor: .storytellerPurple)
+            Contributor(name: "Grandma Rose",  avatarColor: .storytellerOrange),
+            Contributor(name: "Dad", avatarColor: .storytellerBlue),
+            Contributor(name: "Mom", avatarColor: .storytellerBlue),
+            Contributor(name: "Jake", avatarColor: .storytellerPurple)
         ],
         yearsSpanned: YearsSpan(
             startYear: 2019,
@@ -522,19 +506,19 @@ extension MemoryContextData {
 struct MemoryContextPanel_Previews: PreviewProvider {
     static var previews: some View {
         MemoryContextPanel(context: .mock)
-            .themed(ParentTheme())
-            .previewDisplayName("Parent Theme")
+            .themed(LightTheme())
+            .previewDisplayName("light Theme")
 
         MemoryContextPanel(context: .mock)
-            .themed(ChildTheme())
+            .themed(LightTheme())
             .previewDisplayName("Child Theme")
 
         MemoryContextPanel(context: .mock)
-            .themed(ElderTheme())
+            .themed(LightTheme())
             .previewDisplayName("Elder Theme")
 
         MemoryContextPanel(context: .mock)
-            .themed(TeenTheme())
-            .previewDisplayName("Teen Theme")
+            .themed(DarkTheme())
+            .previewDisplayName("dark Theme")
     }
 }

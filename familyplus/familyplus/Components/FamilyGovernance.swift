@@ -27,74 +27,44 @@ struct Permission: Identifiable {
     let name: String
     let description: String
     let icon: String
-    let elderAllowed: Bool
-    let parentAllowed: Bool
-    let teenAllowed: Bool
-    let childAllowed: Bool
-
-    func isAllowed(for role: PersonaRole) -> Bool {
-        switch role {
-        case .elder: return elderAllowed
-        case .parent: return parentAllowed
-        case .teen: return teenAllowed
-        case .child: return childAllowed
-        }
-    }
+    let isAllowed: Bool  // Simplified - no role-based checks
 
     static let all: [Permission] = [
         Permission(
             name: "Add Prompts",
             description: "Create new story prompts for the family",
             icon: "plus.bubble",
-            elderAllowed: false,
-            parentAllowed: true,
-            teenAllowed: true,
-            childAllowed: false
+            isAllowed: true
         ),
         Permission(
             name: "Vote on Prompts",
             description: "Vote to prioritize which prompts to answer",
             icon: "hand.thumbsup",
-            elderAllowed: false,
-            parentAllowed: true,
-            teenAllowed: true,
-            childAllowed: false
+            isAllowed: true
         ),
         Permission(
             name: "Trigger Calls",
             description: "Initiate phone calls to elders for stories",
             icon: "phone.fill",
-            elderAllowed: false,
-            parentAllowed: true,
-            teenAllowed: false,
-            childAllowed: false
+            isAllowed: true
         ),
         Permission(
             name: "See Sensitive Memories",
             description: "Access to memories marked as sensitive",
             icon: "eye",
-            elderAllowed: true,
-            parentAllowed: true,
-            teenAllowed: false,
-            childAllowed: false
+            isAllowed: true
         ),
         Permission(
             name: "Invite Members",
             description: "Send invitations to join the family",
             icon: "person.badge.plus",
-            elderAllowed: false,
-            parentAllowed: true, // Owner only in practice
-            teenAllowed: false,
-            childAllowed: false
+            isAllowed: true
         ),
         Permission(
             name: "Export Audio",
             description: "Download and export story recordings",
             icon: "square.and.arrow.down",
-            elderAllowed: false,
-            parentAllowed: true,
-            teenAllowed: false,
-            childAllowed: false
+            isAllowed: true
         )
     ]
 }
@@ -136,164 +106,8 @@ struct CallTimeWindow: Identifiable {
     }
 }
 
-// MARK: - Memory Visibility
-
-enum MemoryVisibility: String, CaseIterable {
-    case entireFamily = "Entire Family"
-    case adultsOnly = "Adults Only"
-    case privateToRecorder = "Private"
-    case legacyMode = "Release Later"
-
-    var icon: String {
-        switch self {
-        case .entireFamily: return "person.3.fill"
-        case .adultsOnly: return "person.2.fill"
-        case .privateToRecorder: return "lock.fill"
-        case .legacyMode: return "clock.fill"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .entireFamily: return .blue
-        case .adultsOnly: return .orange
-        case .privateToRecorder: return .red
-        case .legacyMode: return .purple
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .entireFamily:
-            return "Everyone in the family can see this"
-        case .adultsOnly:
-            return "Only parents and elders can see this"
-        case .privateToRecorder:
-            return "Only you can see this"
-        case .legacyMode:
-            return "Will be released at a specified future date"
-        }
-    }
-}
-
-// MARK: - Family Header Component
-
-struct FamilyHeaderCard: View {
-    let family: FamilyData
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Stats row
-            HStack(spacing: 24) {
-                HStack(spacing: 8) {
-                    Image(systemName: "person.2.fill")
-                        .foregroundColor(theme.accentColor)
-                    Text("\(family.memberCount) members")
-                        .font(.subheadline)
-                        .foregroundColor(theme.secondaryTextColor)
-                }
-
-                HStack(spacing: 8) {
-                    Image(systemName: "book.fill")
-                        .foregroundColor(.green)
-                    Text("\(family.storyCount) stories")
-                        .font(.subheadline)
-                        .foregroundColor(theme.secondaryTextColor)
-                }
-            }
-
-            // Governance indicators
-            VStack(alignment: .leading, spacing: 8) {
-                if family.hasSensitiveTopics {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.shield.fill")
-                            .foregroundColor(.green)
-                            .font(.caption)
-                        Text("Sensitive topics handled with care")
-                            .font(.caption)
-                            .foregroundColor(theme.secondaryTextColor)
-                    }
-                }
-
-                if family.allowsConflictingPerspectives {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.blue)
-                            .font(.caption)
-                        Text("Different perspectives welcome")
-                            .font(.caption)
-                            .foregroundColor(theme.secondaryTextColor)
-                    }
-                }
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(theme.cardBackgroundColor)
-        )
-    }
-}
 
 // MARK: - Permissions Matrix Component
-
-struct PermissionsMatrixView: View {
-    @Environment(\.theme) var theme
-    @State private var expandedPermission: Permission?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Permissions")
-                        .font(.title2.bold())
-                        .foregroundColor(theme.textColor)
-
-                    Text("What each role can do in this family")
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor)
-                }
-
-                Spacer()
-
-                // Info button
-                Button(action: {}) {
-                    Image(systemName: "info.circle")
-                        .foregroundColor(theme.accentColor)
-                }
-            }
-            .padding(.horizontal, 20)
-
-            // Permissions list
-            VStack(spacing: 12) {
-                ForEach(Permission.all) { permission in
-                    PermissionRow(
-                        permission: permission,
-                        isExpanded: expandedPermission?.id == permission.id,
-                        onTap: {
-                            withAnimation(.spring(response: 0.3)) {
-                                if expandedPermission?.id == permission.id {
-                                    expandedPermission = nil
-                                } else {
-                                    expandedPermission = permission
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-        .padding(.vertical, 20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(theme.cardBackgroundColor)
-        )
-    }
-}
 
 struct PermissionRow: View {
     let permission: Permission
@@ -319,13 +133,10 @@ struct PermissionRow: View {
 
                     Spacer()
 
-                    // Role indicators (compact)
-                    HStack(spacing: 4) {
-                        RoleIndicator(role: .elder, allowed: permission.elderAllowed)
-                        RoleIndicator(role: .parent, allowed: permission.parentAllowed)
-                        RoleIndicator(role: .teen, allowed: permission.teenAllowed)
-                        RoleIndicator(role: .child, allowed: permission.childAllowed)
-                    }
+                    // Permission status indicator
+                    Image(systemName: permission.isAllowed ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(permission.isAllowed ? .green : .gray)
 
                     // Expand chevron
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
@@ -347,12 +158,12 @@ struct PermissionRow: View {
                         .foregroundColor(theme.secondaryTextColor)
                         .padding(.top, 8)
 
-                    // Detailed role breakdown
-                    VStack(alignment: .leading, spacing: 6) {
-                        RolePermissionDetail(role: .elder, allowed: permission.elderAllowed)
-                        RolePermissionDetail(role: .parent, allowed: permission.parentAllowed)
-                        RolePermissionDetail(role: .teen, allowed: permission.teenAllowed)
-                        RolePermissionDetail(role: .child, allowed: permission.childAllowed)
+                    HStack(spacing: 6) {
+                        Image(systemName: permission.isAllowed ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(permission.isAllowed ? .green : .gray)
+                        Text(permission.isAllowed ? "This permission is enabled" : "This permission is disabled")
+                            .font(.caption)
+                            .foregroundColor(theme.secondaryTextColor)
                     }
                 }
                 .padding(12)
@@ -363,17 +174,8 @@ struct PermissionRow: View {
 }
 
 struct RoleIndicator: View {
-    let role: PersonaRole
+    let name: String  // Simple name instead of PersonaRole
     let allowed: Bool
-
-    var roleEmoji: String {
-        switch role {
-        case .elder: return "👴"
-        case .parent: return "👨"
-        case .teen: return "🧑"
-        case .child: return "🧒"
-        }
-    }
 
     var body: some View {
         ZStack {
@@ -395,7 +197,7 @@ struct RoleIndicator: View {
 }
 
 struct RolePermissionDetail: View {
-    let role: PersonaRole
+    let name: String  // Simple name instead of PersonaRole
     let allowed: Bool
     @Environment(\.theme) var theme
 
@@ -405,7 +207,7 @@ struct RolePermissionDetail: View {
                 .foregroundColor(allowed ? .green : .gray)
                 .font(.caption)
 
-            Text(role.displayName)
+            Text(name)
                 .font(.caption)
                 .foregroundColor(theme.textColor)
 
@@ -705,8 +507,7 @@ struct GovernanceSheet: View {
                             .fill(Color(.secondarySystemBackground))
                     )
 
-                    // Permissions Matrix
-                    PermissionsMatrixView()
+            
 
                     Spacer(minLength: 40)
                 }

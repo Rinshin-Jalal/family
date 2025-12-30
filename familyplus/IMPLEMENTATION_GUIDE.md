@@ -69,7 +69,7 @@ protocol PersonaTheme {
 **Aesthetic:** Dark mode, minimalist, Instagram-style
 
 ```swift
-TeenTheme()
+DarkTheme()
 - Background: #000000 (Ink Black)
 - Accent: #5856D6 (Brand Indigo)
 - Font: SF Pro Display Bold + New York Serif
@@ -87,7 +87,7 @@ TeenTheme()
 **Aesthetic:** Light mode, organized, dashboard-style
 
 ```swift
-ParentTheme()
+LightTheme()
 - Background: #FFFFFF (Paper White)
 - Accent: #5856D6 (Brand Indigo)
 - Font: SF Pro Semibold
@@ -105,7 +105,7 @@ ParentTheme()
 **Aesthetic:** Bright, tactile, audio-first
 
 ```swift
-ChildTheme()
+LightTheme()
 - Background: #FFFFFF (Paper White)
 - Accent: #FF9500 (Playful Orange)
 - Font: SF Pro Rounded Heavy (32pt)
@@ -124,7 +124,7 @@ ChildTheme()
 **Aesthetic:** High contrast, large text, phone-based
 
 ```swift
-ElderTheme()
+LightTheme()
 - Background: #FFF9C4 (Warm Yellow)
 - Accent: #5856D6 (Brand Indigo)
 - Font: SF Pro Bold (34pt headlines)
@@ -145,7 +145,7 @@ ElderTheme()
 ```swift
 // Apply theme to any view
 MyView()
-    .themed(TeenTheme())
+    .themed(DarkTheme())
 
 // Access theme in view
 struct MyView: View {
@@ -407,7 +407,7 @@ enum PersonaRole {
 
 2. **Create theme:**
 ```swift
-struct GrandparentTheme: PersonaTheme {
+struct GrandLightTheme: PersonaTheme {
     let role: PersonaRole = .grandparent
     // Implement all protocol requirements
 }
@@ -418,7 +418,7 @@ struct GrandparentTheme: PersonaTheme {
 static func theme(for role: PersonaRole) -> PersonaTheme {
     switch role {
     case .grandparent:
-        return GrandparentTheme()
+        return GrandLightTheme()
     // ...
     }
 }
@@ -470,7 +470,7 @@ Each layout adapts to its theme automatically
    ```swift
    #Preview {
        MyView()
-           .themed(TeenTheme())
+           .themed(DarkTheme())
    }
    ```
 

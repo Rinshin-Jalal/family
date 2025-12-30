@@ -89,24 +89,11 @@ struct MiniWaveformView: View {
 struct StorySegment: Identifiable {
     let id = UUID()
     let storyteller: String
-    let role: PersonaRole
+    let color: Color  // Direct color instead of PersonaRole
     let text: String
     let audioURL: String?
     let duration: TimeInterval
     let startTime: TimeInterval
-
-    var color: Color {
-        switch role {
-        case .elder:
-            return .storytellerOrange
-        case .parent:
-            return .storytellerBlue
-        case .teen:
-            return .storytellerPurple
-        case .child:
-            return .storytellerGreen
-        }
-    }
 }
 
 // MARK: - Reaction
@@ -207,31 +194,19 @@ struct StoryDetailView: View {
     }
 
     var body: some View {
-        Group {
-            switch theme.role {
-            case .teen, .parent:
-                FullStoryDetail(
-                    story: story,
-                    segments: segments,
-                    currentTime: $currentTime,
-                    isPlaying: $isPlaying,
-                    selectedReaction: $selectedReaction,
-                    currentSegment: currentSegment
-                )
-            case .child:
-                ChildStoryDetail(
-                    story: story,
-                    segments: segments,
-                    isPlaying: $isPlaying
-                )
-            case .elder:
-                ElderStoryDetail(story: story)
-            }
-        }
+        // Unified story detail for both dark and light themes
+        FullStoryDetail(
+            story: story,
+            segments: segments,
+            currentTime: $currentTime,
+            isPlaying: $isPlaying,
+            selectedReaction: $selectedReaction,
+            currentSegment: currentSegment
+        )
     }
 }
 
-// MARK: - Full Story Detail (Teen/Parent)
+// MARK: - Full Story Detail (dark/light)
 
 struct FullStoryDetail: View {
     @Environment(\.theme) var theme
@@ -407,11 +382,10 @@ struct FullStoryDetail: View {
                             }
                         }
 
-                        // Add perspective button (for Teen/Parent)
+                        // Add perspective button (for dark/light)
                         InlinePerspectiveInput(
                             inputText: $inputText,
                             isRecording: $inlineInputIsRecording,
-                            isParentRecordingMode: $isRecordingMode,
                             onSend: { text in
                                 // TODO: Submit text response
                                 print("Text submitted: \(text)")
@@ -553,7 +527,6 @@ struct FullStoryDetail: View {
     //
     // 2. POST /api/stories/{storyId}/responses
     //    Body: { mediaUrl, durationSeconds, replyToResponseId }
-    //    Used in: AddPerspectiveView after upload
     //    Returns: New StorySegmentData with threading link
     //
     // 3. Real-time updates (future):
@@ -624,7 +597,7 @@ struct FullStoryDetail: View {
                 durationSeconds: 30,
                 createdAt: oneDayAgo,
                 fullName: "Mom",
-                role: "parent",
+                role: "light",
                 avatarUrl: nil,
                 replyToResponseId: "resp-1"
             ),
@@ -654,7 +627,7 @@ struct FullStoryDetail: View {
                 durationSeconds: 18,
                 createdAt: hour3Ago,
                 fullName: "Leo",
-                role: "teen",
+                role: "dark",
                 avatarUrl: nil,
                 replyToResponseId: "resp-3"
             ),
@@ -669,7 +642,7 @@ struct FullStoryDetail: View {
                 durationSeconds: 28,
                 createdAt: hour1Ago,
                 fullName: "Uncle Joe",
-                role: "parent",
+                role: "light",
                 avatarUrl: nil,
                 replyToResponseId: "resp-1"
             ),
@@ -699,7 +672,7 @@ struct FullStoryDetail: View {
                 durationSeconds: 26,
                 createdAt: min10Ago,
                 fullName: "Dad",
-                role: "parent",
+                role: "light",
                 avatarUrl: nil,
                 replyToResponseId: "resp-5"
             ),
@@ -729,7 +702,7 @@ struct FullStoryDetail: View {
                 durationSeconds: 20,
                 createdAt: now,
                 fullName: "Mom",
-                role: "parent",
+                role: "light",
                 avatarUrl: nil,
                 replyToResponseId: "resp-8"
             )
@@ -754,7 +727,6 @@ struct FullStoryDetail: View {
                 let response = threadResponses.first { $0.fullName == name }!
                 return MemoryContextData.Contributor(
                     name: name,
-                    role: PersonaRole(rawValue: response.role) ?? .parent,
                     avatarColor: response.storytellerColor
                 )
             }
@@ -1493,7 +1465,7 @@ extension StorySegment {
     static let sampleSegments: [StorySegment] = [
         StorySegment(
             storyteller: "Grandma Rose",
-            role: .elder,
+            color: .storytellerOrange,
             text: "In the summer of 1968, your grandfather and I drove across the country in our Chevy. We were so young and full of dreams.",
             audioURL: nil,
             duration: 15,
@@ -1501,7 +1473,7 @@ extension StorySegment {
         ),
         StorySegment(
             storyteller: "Dad",
-            role: .parent,
+            color: .storytellerBlue,
             text: "Actually Mom, I remember you saying it was a Ford, not a Chevy. And you had a flat tire in Nevada!",
             audioURL: nil,
             duration: 10,
@@ -1509,7 +1481,7 @@ extension StorySegment {
         ),
         StorySegment(
             storyteller: "Leo",
-            role: .teen,
+            color: .storytellerPurple,
             text: "That's so cool! I can't believe you drove all that way without GPS.",
             audioURL: nil,
             duration: 8,
@@ -1735,19 +1707,19 @@ struct StoryDetailView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             StoryDetailView(story: sampleStory)
-                .themed(TeenTheme())
-                .previewDisplayName("Teen Detail")
+                .themed(DarkTheme())
+                .previewDisplayName("dark Detail")
 
             StoryDetailView(story: sampleStory)
-                .themed(ParentTheme())
-                .previewDisplayName("Parent Detail")
+                .themed(LightTheme())
+                .previewDisplayName("light Detail")
 
             StoryDetailView(story: sampleStory)
-                .themed(ChildTheme())
+                .themed(LightTheme())
                 .previewDisplayName("Child Detail")
 
             StoryDetailView(story: sampleStory)
-                .themed(ElderTheme())
+                .themed(LightTheme())
                 .previewDisplayName("Elder Detail")
         }
     }

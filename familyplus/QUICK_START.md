@@ -175,7 +175,7 @@ Story(
 
 ```swift
 // In PersonaTheme.swift
-struct TeenTheme: PersonaTheme {
+struct DarkTheme: PersonaTheme {
     let accentColor = Color.brandIndigo // Change here
 }
 ```

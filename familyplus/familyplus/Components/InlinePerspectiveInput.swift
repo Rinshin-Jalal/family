@@ -15,7 +15,6 @@ struct InlinePerspectiveInput: View {
     @Environment(\.theme) var theme
     @Binding var inputText: String
     @Binding var isRecording: Bool
-    @Binding var isParentRecordingMode: Bool
     @State private var recordingDuration: TimeInterval = 0
     @State private var recordingTimer: Timer?
     @State private var dragOffset: CGFloat = 0
@@ -28,13 +27,12 @@ struct InlinePerspectiveInput: View {
     let onCancel: () -> Void
 
     private var recordingState: RecordingState {
-        if isParentRecordingMode { return .parentControlled }
         if isRecording { return .recording }
         return .idle
     }
 
     private enum RecordingState {
-        case idle, recording, parentControlled
+        case idle, recording
     }
 
     var body: some View {
@@ -42,7 +40,7 @@ struct InlinePerspectiveInput: View {
             switch recordingState {
             case .recording:
                 recordingBarView
-            case .idle, .parentControlled:
+            case .idle:
                 inputBarView
             }
         }
@@ -178,7 +176,7 @@ struct InlinePerspectiveInput: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-    
+
 
             // Mic button (press-and-hold to record)
             Button(action: {}) {
@@ -381,7 +379,7 @@ struct CompactPerspectiveInput: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-        
+
 
             // Mic button (press-and-hold)
             Button(action: onRecord) {
@@ -408,110 +406,6 @@ struct CompactPerspectiveInput: View {
     }
 }
 
-// MARK: - Child-Friendly Variant (Fun, large, playful)
-
-struct ChildPerspectiveInput: View {
-    @Environment(\.theme) var theme
-    @Binding var inputText: String
-    @State private var isRecording = false
-
-    let onSend: (String) -> Void
-    let onRecord: () -> Void
-
-    var body: some View {
-        VStack(spacing: 20) {
-            // Big fun record button
-            Button(action: onRecord) {
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: isRecording ? [Color.red, Color.red.opacity(0.8)] : [theme.accentColor, theme.accentColor.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 100, height: 100)
-                        .shadow(color: (isRecording ? Color.red : theme.accentColor).opacity(0.4), radius: 15)
-
-                    Image(systemName: isRecording ? "stop.fill" : "mic.fill")
-                        .font(.system(size: 40, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                .scaleEffect(isRecording ? 1.1 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRecording)
-            }
-            .buttonStyle(.plain)
-
-            // Or type option (compact)
-            Button(action: {
-                // TODO: Show text input
-            }) {
-                Image(systemName: "keyboard")
-                    .font(.title2)
-                    .foregroundColor(theme.secondaryTextColor)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 24)
-                .fill(theme.cardBackgroundColor)
-                .shadow(color: .black.opacity(0.08), radius: 10, y: 5)
-        )
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-    }
-}
-
-// MARK: - Elder-Friendly Variant (Large, accessible, clear)
-
-struct ElderPerspectiveInput: View {
-    @Environment(\.theme) var theme
-    @Binding var inputText: String
-    @State private var isRecording = false
-
-    let onSend: (String) -> Void
-    let onRecord: () -> Void
-
-    var body: some View {
-        VStack(spacing: 20) {
-            // Large accessible record button
-            Button(action: onRecord) {
-                HStack(spacing: 16) {
-                    ZStack {
-                        Circle()
-                            .fill(isRecording ? Color.red : theme.accentColor)
-                            .frame(width: 72, height: 72)
-                            .shadow(color: (isRecording ? Color.red : theme.accentColor).opacity(0.3), radius: 10)
-
-                        Image(systemName: isRecording ? "stop.fill" : "mic.fill")
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(isRecording ? "Recording..." : "Record")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(theme.textColor)
-                        Text(isRecording ? "Tap to stop" : "Tap to start")
-                            .font(.system(size: 15))
-                            .foregroundColor(theme.secondaryTextColor)
-                    }
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(theme.cardBackgroundColor)
-                        .shadow(color: .black.opacity(0.08), radius: 8)
-                )
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(20)
-        .background(theme.backgroundColor)
-    }
-}
-
 // MARK: - Preview
 
 struct InlinePerspectiveInput_Previews: PreviewProvider {
@@ -523,7 +417,6 @@ struct InlinePerspectiveInput_Previews: PreviewProvider {
                 InlinePerspectiveInput(
                     inputText: .constant(""),
                     isRecording: .constant(false),
-                    isParentRecordingMode: .constant(false),
                     onSend: { _ in },
                     onRecordingStart: {},
                     onRecordingUpdate: { _ in },
@@ -531,8 +424,8 @@ struct InlinePerspectiveInput_Previews: PreviewProvider {
                     onCancel: {}
                 )
             }
-            .themed(TeenTheme())
-            .previewDisplayName("Teen - Redesigned (WhatsApp-style)")
+            .themed(DarkTheme())
+            .previewDisplayName("Dark - Redesigned (WhatsApp-style)")
 
             // Compact variant
             VStack {
@@ -543,32 +436,8 @@ struct InlinePerspectiveInput_Previews: PreviewProvider {
                     onRecord: {}
                 )
             }
-            .themed(ParentTheme())
-            .previewDisplayName("Parent - Compact (Icon-only)")
-
-            // Child variant
-            VStack {
-                Spacer()
-                ChildPerspectiveInput(
-                    inputText: .constant(""),
-                    onSend: { _ in },
-                    onRecord: {}
-                )
-            }
-            .themed(ChildTheme())
-            .previewDisplayName("Child - Fun & Large")
-
-            // Elder variant
-            VStack {
-                Spacer()
-                ElderPerspectiveInput(
-                    inputText: .constant(""),
-                    onSend: { _ in },
-                    onRecord: {}
-                )
-            }
-            .themed(ElderTheme())
-            .previewDisplayName("Elder - Accessible")
+            .themed(LightTheme())
+            .previewDisplayName("Light - Compact (Icon-only)")
         }
     }
 }

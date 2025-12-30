@@ -415,20 +415,13 @@ struct CaptureMemorySheet_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             CaptureMemorySheet()
-                .themed(TeenTheme())
-                .previewDisplayName("Teen")
+                .themed(DarkTheme())
+                .previewDisplayName("dark")
 
             CaptureMemorySheet()
-                .themed(ParentTheme())
-                .previewDisplayName("Parent")
+                .themed(LightTheme())
+                .previewDisplayName("light")
 
-            CaptureMemorySheet()
-                .themed(ChildTheme())
-                .previewDisplayName("Child")
-
-            CaptureMemorySheet()
-                .themed(ElderTheme())
-                .previewDisplayName("Elder")
         }
     }
 }

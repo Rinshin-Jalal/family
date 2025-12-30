@@ -164,24 +164,24 @@ struct LegacySignalsView_Previews: PreviewProvider {
                 voiceCount: 5,
                 heardCount: 47,
                 lastAdded: Date().addingTimeInterval(-86400 * 3),
-                theme: ParentTheme()
+                theme: LightTheme()
             )
-            .previewDisplayName("Full Signals - Parent")
+            .previewDisplayName("Full Signals - light")
 
             // Compact signals view
             CompactLegacySignalsView(
                 voiceCount: 8,
                 heardCount: 124,
-                theme: ParentTheme()
+                theme: LightTheme()
             )
-            .previewDisplayName("Compact Signals - Parent")
+            .previewDisplayName("Compact Signals - light")
 
             // No listens yet
             LegacySignalsView(
                 voiceCount: 3,
                 heardCount: 0,
                 lastAdded: Date().addingTimeInterval(-3600),
-                theme: ElderTheme()
+                theme: LightTheme()
             )
             .previewDisplayName("No Listens - Elder")
         }

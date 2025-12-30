@@ -319,7 +319,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 - **Views**: PascalCase (e.g., `HubView`, `TeenHub`, `ParentHub`)
 - **Components**: PascalCase (e.g., `AdaptiveButton`, `StoryCard`)
-- **Themes**: `[Persona]Theme` (e.g., `TeenTheme`, `ParentTheme`)
+- **Themes**: `[Persona]Theme` (e.g., `DarkTheme`, `LightTheme`)
 - **Properties**: camelCase (e.g., `screenPadding`, `buttonHeight`)
 - **Color extensions**: `Color.name` (e.g., `Color.inkBlack`, `Color.brandIndigo`)
 - **File organization**: Group by feature (Theme/, Components/, Screens/)

@@ -123,8 +123,8 @@ struct ThreadedTimelineView: View {
         for response in responses {
             guard let node = nodeMap[response.id] else { continue }
 
-            if let parentId = response.replyToResponseId,
-               let parentNode = nodeMap[parentId] {
+            if let replyId = response.replyToResponseId,
+               let parentNode = nodeMap[replyId] {
                 // This is a reply - add to parent's children
                 parentNode.children.append(node)
             } else {
@@ -146,7 +146,6 @@ struct ThreadedTimelineView: View {
         let uniqueContributors = Array(Set(threadResponses.map { response in
             MemoryContextData.Contributor(
                 name: response.fullName,
-                role: PersonaRole(rawValue: response.role) ?? .parent,
                 avatarColor: response.storytellerColor
             )
         }))
@@ -619,9 +618,9 @@ struct ChronologicalResponseCard: View {
         var depth = 0
         var currentId = response.replyToResponseId
 
-        while let parentId = currentId {
+        while let lightId = currentId {
             depth += 1
-            currentId = allResponses.first { $0.id == parentId }?.replyToResponseId
+            currentId = allResponses.first { $0.id == lightId }?.replyToResponseId
         }
 
         return depth
@@ -650,8 +649,8 @@ struct ChronologicalResponseCard: View {
 
     // Find parent response for context label
     private var parentResponse: StorySegmentData? {
-        guard let parentId = response.replyToResponseId else { return nil }
-        return allResponses.first { $0.id == parentId }
+        guard let replyId = response.replyToResponseId else { return nil }
+        return allResponses.first { $0.id == replyId }
     }
 
     private let indentWidth: CGFloat = 20
@@ -808,12 +807,12 @@ struct CollapsedContent: View {
                         .lineLimit(1)
                 }
 
-                if let parent = parentResponse {
+                if let parentResponse = parentResponse {
                     HStack(spacing: 4) {
                         Image(systemName: "arrowshape.turn.up.left")
                             .font(.caption2)
-                        Text(parent.fullName)
-                            .font(.caption2)
+//                        Text(parent.fullName)
+//                            .font(.caption2)
                     }
                     .foregroundColor(response.storytellerColor)
                 }
@@ -1180,7 +1179,7 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 durationSeconds: 30,
                 createdAt: oneDayAgo,
                 fullName: "Mom",
-                role: "parent",
+                role: "light",
                 avatarUrl: nil,
                 replyToResponseId: "resp-1"
             ),
@@ -1210,7 +1209,7 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 durationSeconds: 18,
                 createdAt: hour3Ago,
                 fullName: "Leo",
-                role: "teen",
+                role: "dark",
                 avatarUrl: nil,
                 replyToResponseId: "resp-3"
             ),
@@ -1225,7 +1224,7 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 durationSeconds: 28,
                 createdAt: hour1Ago,
                 fullName: "Uncle Joe",
-                role: "parent",
+                role: "light",
                 avatarUrl: nil,
                 replyToResponseId: "resp-1"
             ),
@@ -1270,7 +1269,7 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 durationSeconds: 20,
                 createdAt: now,
                 fullName: "Mom",
-                role: "parent",
+                role: "light",
                 avatarUrl: nil,
                 replyToResponseId: "resp-8"
             )
@@ -1302,7 +1301,7 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 durationSeconds: 30,
                 createdAt: formatter.string(from: Date().addingTimeInterval(-3000)),
                 fullName: "Mom",
-                role: "parent",
+                role: "light",
                 avatarUrl: nil,
                 replyToResponseId: "1"
             )
@@ -1318,18 +1317,18 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 onPlayResponse: { _ in },
                 onShowMemoryContext: { _ in }
             )
-            .themed(ParentTheme())
+            .themed(LightTheme())
             .previewDisplayName("⭐️ Chronological (StoryDetailView)")
 
-            // Chronological - Teen Theme
+            // Chronological - dark Theme
             ChronologicalThreadedTimelineView(
                 responses: sampleResponses,
                 onReplyToResponse: { _ in },
                 onPlayResponse: { _ in },
                 onShowMemoryContext: { _ in }
             )
-            .themed(TeenTheme())
-            .previewDisplayName("⭐️ Chronological - Teen")
+            .themed(DarkTheme())
+            .previewDisplayName("⭐️ Chronological - dark")
 
             // Chronological - Dark Mode
             ChronologicalThreadedTimelineView(
@@ -1338,7 +1337,7 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 onPlayResponse: { _ in },
                 onShowMemoryContext: { _ in }
             )
-            .themed(ParentTheme())
+            .themed(LightTheme())
             .preferredColorScheme(.dark)
             .previewDisplayName("⭐️ Chronological - Dark")
 
@@ -1348,7 +1347,7 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 onReplyToResponse: { _ in },
                 onPlayResponse: { _ in }
             )
-            .themed(ParentTheme())
+            .themed(LightTheme())
             .previewDisplayName("Hierarchical Threading")
 
             // Compact Timeline
@@ -1356,7 +1355,7 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 responses: sampleResponses,
                 onTapResponse: { _ in }
             )
-            .themed(ParentTheme())
+            .themed(LightTheme())
             .previewDisplayName("Compact Timeline")
 
             // Simple 2-response thread
@@ -1366,18 +1365,18 @@ struct ThreadedTimelineView_Previews: PreviewProvider {
                 onPlayResponse: { _ in },
                 onShowMemoryContext: { _ in }
             )
-            .themed(ParentTheme())
+            .themed(LightTheme())
             .previewDisplayName("Simple Thread (2 responses)")
 
-            // Elder Theme
+            // Light Theme
             ChronologicalThreadedTimelineView(
                 responses: sampleResponses,
                 onReplyToResponse: { _ in },
                 onPlayResponse: { _ in },
                 onShowMemoryContext: { _ in }
             )
-            .themed(ElderTheme())
-            .previewDisplayName("⭐️ Chronological - Elder")
+            .themed(LightTheme())
+            .previewDisplayName("⭐️ Chronological - Light")
         }
     }
 }

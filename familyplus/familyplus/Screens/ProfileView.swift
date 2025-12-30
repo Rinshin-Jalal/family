@@ -12,30 +12,17 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(\.theme) var theme
     @State private var loadingState: LoadingState<ProfileData> = .loading
-    @State private var currentProfile: UserProfile = UserProfile(name: "Leo", role: .teen, avatarEmoji: "🎸")
-    let profiles: [UserProfile] = [
-        UserProfile(name: "Leo", role: .teen, avatarEmoji: "🎸"),
-        UserProfile(name: "Mom", role: .parent, avatarEmoji: "👩"),
-        UserProfile(name: "Mia", role: .child, avatarEmoji: "🌟"),
-        UserProfile(name: "Grandma", role: .elder, avatarEmoji: "❤️")
-    ]
+    
+
+    
+
 
     var body: some View {
-        Group {
-            switch theme.role {
-            case .teen, .parent:
-                // Unified Teen/Parent view - same UX, different theme
-                TeenProfile(loadingState: loadingState, currentProfile: $currentProfile, profiles: profiles)
-            case .child:
-                ChildProfile(loadingState: loadingState, currentProfile: $currentProfile, profiles: profiles)
-            case .elder:
-                ElderProfile(currentProfile: $currentProfile, profiles: profiles)
+        TeenProfile(loadingState: loadingState)
+            .animation(theme.animation, value: loadingState)
+            .onAppear {
+                loadProfile()
             }
-        }
-        .animation(theme.animation, value: loadingState)
-        .onAppear {
-            loadProfile()
-        }
     }
 
     private func loadProfile() {
@@ -63,10 +50,10 @@ struct ProfileData {
         totalStories: 42,
         nextMilestone: 50,
         familyMembers: [
-            FamilyMember(name: "Grandma Rose", role: .elder, avatarEmoji: "❤️", storyCount: 15, weeksStreak: 3, status: .offline),
-            FamilyMember(name: "Dad", role: .parent, avatarEmoji: "👨", storyCount: 12, weeksStreak: 4, status: .online),
-            FamilyMember(name: "Leo", role: .teen, avatarEmoji: "🎸", storyCount: 8, weeksStreak: 2, status: .away),
-            FamilyMember(name: "Mia", role: .child, avatarEmoji: "🌟", storyCount: 7, weeksStreak: 3, status: .online)
+            FamilyMember(name: "Grandma Rose", avatarEmoji: "❤️", storyCount: 15, weeksStreak: 3, status: .offline),
+            FamilyMember(name: "Dad",  avatarEmoji: "👨", storyCount: 12, weeksStreak: 4, status: .online),
+            FamilyMember(name: "Leo",  avatarEmoji: "🎸", storyCount: 8, weeksStreak: 2, status: .away),
+            FamilyMember(name: "Mia", avatarEmoji: "🌟", storyCount: 7, weeksStreak: 3, status: .online)
         ],
         earnedStickers: ["⭐️", "🚀", "🦁", "🎨", "🌈"],
         lockedStickers: ["🐶", "🎪", "🎈", "🎯", "🏆"],
@@ -107,15 +94,23 @@ struct Activity {
     let timestamp: Date
 }
 
-// MARK: - Teen Profile ("Family Stats" - Instagram Style)
-
 struct TeenProfile: View {
     let loadingState: LoadingState<ProfileData>
-    @Binding var currentProfile: UserProfile
-    let profiles: [UserProfile]
     @Environment(\.theme) var theme
     @State private var showAchievements = false
     @State private var showInvite = false
+    
+    // TODO: Replace with actual family data from API
+    @State private var familyData = FamilyData(
+        id: "family-123",
+        name: "The Rodriguez Family",
+        memberCount: 4,
+        storyCount: 42,
+        ownerId: "user-1",
+        createdAt: Date(),
+        hasSensitiveTopics: true,
+        allowsConflictingPerspectives: true
+    )
 
     var body: some View {
         NavigationStack {
@@ -126,13 +121,13 @@ struct TeenProfile: View {
                 case .empty:
                     TeenProfileEmptyState()
                 case .loaded(let data):
-                    TeenProfileContent(data: data, showAchievements: $showAchievements, showInvite: $showInvite)
+                    TeenProfileContent(data: data, showAchievements: $showAchievements, showInvite: $showInvite, familyData: $familyData)
                 case .error(let message):
                     ErrorStateView(message: message, onRetry: {})
                 }
             }
             .background(theme.backgroundColor.ignoresSafeArea())
-            .navigationTitle("Stats")
+            .navigationTitle("\(familyData.name)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -149,22 +144,27 @@ struct TeenProfileContent: View {
     let data: ProfileData
     @Binding var showAchievements: Bool
     @Binding var showInvite: Bool
+    @Binding var familyData: FamilyData
     @Environment(\.theme) var theme
+    @State private var showGovernance = false
+
+    // TODO: Replace with actual user ownership status from API
+    @State private var isOwner: Bool = true
 
     var progress: Double { Double(data.totalStories) / Double(data.nextMilestone) }
 
     var streakOrange: Color {
         switch theme.role {
-        case .teen:
+        case .dark:
             // Lighter background → darker, richer orange
             Color(red: 1.0, green: 0.4, blue: 0.0)
-        case .parent:
+        case .light:
             // Darker background → brighter orange
             Color(red: 1.0, green: 0.6, blue: 0.0)
-        default:
-            .orange
         }
     }
+    
+
 
     var body: some View {
         ScrollView {
@@ -210,6 +210,37 @@ struct TeenProfileContent: View {
                 .frame(height: 220).glassEffect(.regular.tint(theme.accentColor), in: .containerRelative)
                 .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
 
+                // Governance quick access (owner only)
+                if isOwner {
+                    Button(action: { showGovernance = true }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "shield.checkered")
+                                .font(.title3)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Family Governance")
+                                    .font(.headline)
+
+                                Text("Permissions, privacy & safety")
+                                    .font(.caption)
+                                    .foregroundColor(theme.secondaryTextColor)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(theme.secondaryTextColor)
+                        }
+                        .foregroundColor(theme.accentColor)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(theme.accentColor.opacity(0.1))
+                        )
+                    }
+                }
+
                 // Family Members
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Family Members").font(.system(size: 17, weight: .bold)).foregroundColor(theme.textColor).padding(.horizontal, 16).padding(.top, 16)
@@ -228,6 +259,7 @@ struct TeenProfileContent: View {
                     }.foregroundColor(.white).frame(maxWidth: .infinity).frame(height: theme.buttonHeight)
                 }.buttonStyle(.glassProminent).tint(LinearGradient(colors: [theme.accentColor, theme.accentColor.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
 
+                
                 // Achievements Card - 2 Column Grid
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
@@ -293,12 +325,7 @@ struct TeenFamilyMemberRow: View {
     @Environment(\.theme) var theme
 
     var storytellerColor: Color {
-        switch member.role {
-        case .elder: return .storytellerOrange
-        case .parent: return .storytellerBlue
-        case .teen: return .storytellerPurple
-        case .child: return .storytellerGreen
-        }
+        return .storytellerGreen
     }
 
     var body: some View {
@@ -344,268 +371,6 @@ struct TeenProfileEmptyState: View {
         }.padding(theme.screenPadding)
     }
 }
-// MARK: - Child Profile ("Sticker Book" - Magical)
-
-struct ChildProfile: View {
-    let loadingState: LoadingState<ProfileData>; @Environment(\.theme) var theme
-    @Binding var currentProfile: UserProfile
-    let profiles: [UserProfile]
-    @State private var showStickerCelebration = false; @State private var selectedSticker: String?
-
-    var body: some View {
-        Group {
-            switch loadingState {
-            case .loading: ChildProfileSkeleton()
-            case .empty: ChildProfileEmptyState()
-            case .loaded(let data): ChildProfileContent(data: data, showStickerCelebration: $showStickerCelebration, selectedSticker: $selectedSticker)
-            case .error: ChildProfileErrorState()
-            }
-        }.background(theme.backgroundColor.ignoresSafeArea())
-        .sheet(isPresented: $showStickerCelebration) { ChildStickerCelebrationView { showStickerCelebration = false } }.animation(theme.animation, value: loadingState)
-    }
-}
-
-struct ChildProfileContent: View {
-    let data: ProfileData; @Binding var showStickerCelebration: Bool; @Binding var selectedSticker: String?
-    @Environment(\.theme) var theme
-
-    let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
-
-    var totalStickers: Int { data.earnedStickers.count + data.lockedStickers.count }
-
-    var body: some View {
-        VStack(spacing: 24) {
-            VStack(spacing: 16) {
-                Text("My Sticker Book!").font(.system(size: 40, weight: .heavy, design: .rounded)).foregroundColor(theme.textColor)
-                VStack(spacing: 12) {
-                    Text("\(data.earnedStickers.count) of \(totalStickers) Stickers").font(.system(size: 22, weight: .semibold, design: .rounded)).foregroundColor(theme.accentColor)
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.gray.opacity(0.2)).frame(height: 20)
-                        Capsule().fill(theme.accentColor).frame(width: CGFloat(data.earnedStickers.count) / CGFloat(totalStickers) * 300, height: 20).shadow(color: theme.accentColor.opacity(0.4), radius: 8)
-                    }.frame(height: 20)
-                    Text("\(totalStickers - data.earnedStickers.count) more to collect!").font(.system(size: 20, weight: .medium, design: .rounded)).foregroundColor(theme.secondaryTextColor)
-                }.padding().background(RoundedRectangle(cornerRadius: 24).fill(theme.cardBackgroundColor).shadow(color: .black.opacity(0.06), radius: 8, y: 4))
-            }.padding(.top, theme.screenPadding)
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 24) {
-                    ForEach(data.earnedStickers, id: \.self) { sticker in ChildStickerView(sticker: sticker, isLocked: false) { selectedSticker = sticker; showStickerCelebration = true } }
-                    ForEach(data.lockedStickers, id: \.self) { sticker in ChildStickerView(sticker: sticker, isLocked: true) {} }
-                }.padding(.horizontal, theme.screenPadding).padding(.vertical, 24)
-            }
-            VStack(spacing: 12) {
-                Text("Record more stories to collect stickers!").font(.system(size: 22, weight: .semibold, design: .rounded)).foregroundColor(theme.secondaryTextColor).multilineTextAlignment(.center)
-                HStack(spacing: 12) {
-                    Image(systemName: "star.fill").font(.system(size: 24)).foregroundColor(.yellow)
-                    Image(systemName: "star.fill").font(.system(size: 20)).foregroundColor(.orange)
-                    Image(systemName: "star.fill").font(.system(size: 16)).foregroundColor(.red)
-                }
-            }.padding(.horizontal, theme.screenPadding).padding(.bottom, theme.screenPadding)
-        }
-    }
-}
-
-struct ChildStickerView: View {
-    let sticker: String; let isLocked: Bool; let action: () -> Void
-    @Environment(\.theme) var theme; @State private var isPressed = false
-
-    var body: some View {
-        Button(action: action) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 20).fill(isLocked ? Color.gray.opacity(0.15) : theme.accentColor.opacity(0.2)).frame(width: 100, height: 120).overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(isLocked ? Color.gray.opacity(0.2) : theme.accentColor, lineWidth: isLocked ? 2 : 4))
-                if isLocked {
-                    ZStack { Circle().fill(Color.gray).frame(width: 36, height: 36); Image(systemName: "lock.fill").font(.system(size: 20, weight: .semibold)).foregroundColor(.white) }.shadow(color: .black.opacity(0.2), radius: 4)
-                } else {
-                    Text(sticker).font(.system(size: 64)).scaleEffect(isPressed ? 0.8 : 1.0).animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-                }
-            }.shadow(color: isLocked ? .clear : theme.accentColor.opacity(0.3), radius: isPressed ? 4 : 12, y: isPressed ? 2 : 6)
-        }.buttonStyle(.plain).disabled(isLocked)
-    }
-}
-
-struct ChildProfileSkeleton: View {
-    @Environment(\.theme) var theme
-    var body: some View {
-        VStack(spacing: 24) {
-            VStack(spacing: 12) { Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 30); Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 20) }
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 24) {
-                ForEach(0..<6) { _ in Rectangle().fill(Color.gray.opacity(0.1)).frame(width: 100, height: 120).clipShape(RoundedRectangle(cornerRadius: 20)) }
-            }
-        }.padding(theme.screenPadding).background(theme.backgroundColor)
-    }
-}
-
-struct ChildProfileEmptyState: View {
-    @Environment(\.theme) var theme
-    var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
-            Image(systemName: "book.closed").font(.system(size: 100)).foregroundColor(theme.secondaryTextColor.opacity(0.5))
-            VStack(spacing: 16) {
-                Text("Your Sticker Book is Empty!").font(.system(size: 32, weight: .heavy, design: .rounded)).foregroundColor(theme.textColor).multilineTextAlignment(.center)
-                Text("Record your first story\nto get your first sticker!").font(.system(size: 22, weight: .medium, design: .rounded)).foregroundColor(theme.secondaryTextColor).multilineTextAlignment(.center).lineSpacing(6)
-            }
-            Spacer()
-        }.padding(theme.screenPadding)
-    }
-}
-
-struct ChildProfileErrorState: View {
-    @Environment(\.theme) var theme
-    var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
-            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 80)).foregroundColor(.orange)
-            VStack(spacing: 16) {
-                Text("Oops!").font(.system(size: 36, weight: .heavy, design: .rounded)).foregroundColor(theme.textColor)
-                Text("Something went wrong.\nLet's try again!").font(.system(size: 22, weight: .medium, design: .rounded)).foregroundColor(theme.secondaryTextColor).multilineTextAlignment(.center).lineSpacing(6)
-            }
-            Button(action: {}) {
-                Text("Try Again").font(.system(size: 24, weight: .heavy, design: .rounded)).foregroundColor(.white).frame(width: 200, height: 70).background(Capsule().fill(theme.accentColor).shadow(color: theme.accentColor.opacity(0.4), radius: 12, y: 6))
-            }.buttonStyle(.plain)
-            Spacer()
-        }.padding(theme.screenPadding)
-    }
-}
-
-struct ChildStickerCelebrationView: View {
-    let onDismiss: () -> Void; @Environment(\.theme) var theme
-    @State private var showContent = false; @State private var confettiActive = false
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
-            VStack(spacing: 32) {
-                Text("").font(.system(size: 120)).scaleEffect(showContent ? 1.0 : 0.1).rotationEffect(.degrees(showContent ? 0 : -180)).shadow(color: .yellow.opacity(0.5), radius: 20)
-                VStack(spacing: 16) {
-                    Text("Wow!").font(.system(size: 52, weight: .heavy, design: .rounded)).foregroundColor(.white)
-                    Text("You found a sticker!").font(.system(size: 28, weight: .bold, design: .rounded)).foregroundColor(.white.opacity(0.95))
-                }.opacity(showContent ? 1 : 0).offset(y: showContent ? 0 : 30)
-                Button(action: onDismiss) {
-                    Text("Yay!").font(.system(size: 32, weight: .heavy, design: .rounded)).foregroundColor(.white).frame(width: 200, height: 80).background(Capsule().fill(Color.storytellerGreen).shadow(color: Color.storytellerGreen.opacity(0.5), radius: 16, y: 8))
-                }.opacity(showContent ? 1 : 0).scaleEffect(showContent ? 1 : 0.5)
-            }
-            if confettiActive { ConfettiView().ignoresSafeArea() }
-        }.onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) { showContent = true }
-            confettiActive = true
-        }
-    }
-}
-
-struct ConfettiView: View {
-    @State private var animate = false
-    let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .purple, .pink, .mint, .cyan]
-    var body: some View {
-        ZStack {
-            ForEach(0..<60) { index in ConfettiPiece(color: colors.randomElement() ?? .blue, startDelay: Double(index) * 0.015) }
-        }.onAppear { animate = true }
-    }
-}
-
-struct ConfettiPiece: View {
-    let color: Color; let startDelay: Double
-    @State private var offset: CGFloat = -100; @State private var rotation: Double = 0; @State private var xOffset: CGFloat = 0
-    var body: some View {
-        RoundedRectangle(cornerRadius: 2).fill(color).frame(width: CGFloat.random(in: 8...16), height: CGFloat.random(in: 8...16)).offset(x: xOffset, y: offset).rotationEffect(.degrees(rotation))
-            .onAppear {
-                xOffset = CGFloat.random(in: -250...250)
-                DispatchQueue.main.asyncAfter(deadline: .now() + startDelay) {
-                    withAnimation(.linear(duration: Double.random(in: 2.5...4.5))) {
-                        offset = UIScreen.main.bounds.height + 100
-                        rotation = Double.random(in: 360...720) * (Bool.random() ? 1 : -1)
-                        xOffset += CGFloat.random(in: -150...150)
-                    }
-                }
-            }
-    }
-}
-
-// MARK: - Elder Profile
-
-struct ElderProfile: View {
-    @Environment(\.theme) var theme
-    @Binding var currentProfile: UserProfile
-    let profiles: [UserProfile]
-    @State private var upcomingCall: Date? = Date().addingTimeInterval(86400 * 2)
-    @State private var callNow = false
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            // Profile header
-            VStack(spacing: 20) {
-                ZStack {
-                    Circle()
-                        .fill(theme.accentColor.opacity(0.15))
-                        .frame(width: 120, height: 120)
-                    Image(systemName: "phone.fill")
-                        .font(.system(size: 48, weight: .medium))
-                        .foregroundColor(theme.accentColor)
-                }
-
-                VStack(spacing: 12) {
-                    Text("Your Profile")
-                        .font(.system(size: 34, weight: .bold))
-                        .foregroundColor(theme.textColor)
-                    Text("Stories saved: 15")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(theme.secondaryTextColor)
-                }
-            }
-
-            Spacer()
-
-            // Next call card
-            if let callTime = upcomingCall, !callNow {
-                VStack(spacing: 12) {
-                    Image(systemName: "bell.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(theme.accentColor)
-                    Text("Next Call")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(theme.textColor)
-                    Text(formatCallDate(callTime))
-                        .font(.system(size: 20))
-                        .foregroundColor(theme.accentColor)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(20)
-                .glassEffect(.regular.tint(theme.cardBackgroundColor),in:RoundedRectangle(cornerRadius: 20))
-                .padding(.horizontal, theme.screenPadding)
-            }
-
-            Spacer()
-
-            // Call button
-            Button(action: { callNow.toggle() }) {
-                HStack(spacing: 12) {
-                    Image(systemName: callNow ? "phone.down.fill" : "phone.fill")
-                        .font(.system(size: 28, weight: .semibold))
-                    Text(callNow ? "Ending..." : "Call Me Now")
-                        .font(.system(size: 26, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 80)
-                .glassEffect(.regular.tint(theme.accentColor),in:RoundedRectangle(cornerRadius: 24)
-                )
-            }
-            .padding(.horizontal, theme.screenPadding)
-            .padding(.bottom, 40)
-        }
-        .background(theme.backgroundColor.ignoresSafeArea())
-        .animation(.spring(), value: callNow)
-    }
-
-    private func formatCallDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMMM d"
-        formatter.timeZone = TimeZone.current
-        return formatter.string(from: date)
-    }
-}
-
 // MARK: - Modal Views
 
 struct AchievementsView: View {
@@ -703,10 +468,8 @@ struct InviteFamilyView: View {
 struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            ProfileView().themed(TeenTheme()).previewDisplayName("Teen Profile")
-            ProfileView().themed(ParentTheme()).previewDisplayName("Parent Profile")
-            ProfileView().themed(ChildTheme()).previewDisplayName("Child Profile")
-            ProfileView().themed(ElderTheme()).previewDisplayName("Elder Profile")
+            ProfileView().themed(DarkTheme()).previewDisplayName("dark Profile")
+            ProfileView().themed(LightTheme()).previewDisplayName("light Profile")
         }
     }
 }

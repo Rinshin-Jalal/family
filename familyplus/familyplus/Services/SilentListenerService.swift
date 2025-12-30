@@ -259,7 +259,7 @@ struct SilentListenerIndicator_Previews: PreviewProvider {
             SilentListenerIndicator(
                 listenCount: 3,
                 totalListenTime: 245,
-                theme: ParentTheme()
+                theme: LightTheme()
             )
             .previewDisplayName("Multiple Listens")
 
@@ -267,36 +267,36 @@ struct SilentListenerIndicator_Previews: PreviewProvider {
             SilentListenerIndicator(
                 listenCount: 0,
                 totalListenTime: 0,
-                theme: ElderTheme()
+                theme: LightTheme()
             )
             .previewDisplayName("Never Listened")
 
             // Silent mode badge
             SilentModeBadge()
-                .themed(ParentTheme())
+                .themed(LightTheme())
                 .previewDisplayName("Silent Mode Badge")
 
             // Heard by section
             HeardBySection(
                 heardCount: 12,
                 hasListened: true,
-                theme: ParentTheme()
+                theme: LightTheme()
             )
             .previewDisplayName("Heard By - Listened")
 
             HeardBySection(
                 heardCount: 0,
                 hasListened: false,
-                theme: ChildTheme()
+                theme: LightTheme()
             )
             .previewDisplayName("Heard By - Not Listened")
 
             // Progress ring
             HStack(spacing: 16) {
-                ListeningProgressRing(progress: 0.0, theme: ParentTheme())
-                ListeningProgressRing(progress: 0.3, theme: ParentTheme())
-                ListeningProgressRing(progress: 0.7, theme: ParentTheme())
-                ListeningProgressRing(progress: 1.0, theme: ParentTheme())
+                ListeningProgressRing(progress: 0.0, theme: LightTheme())
+                ListeningProgressRing(progress: 0.3, theme: LightTheme())
+                ListeningProgressRing(progress: 0.7, theme: LightTheme())
+                ListeningProgressRing(progress: 1.0, theme: LightTheme())
             }
             .previewDisplayName("Progress Rings")
         }

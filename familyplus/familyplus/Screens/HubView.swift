@@ -56,7 +56,7 @@ struct UnheardVoice: Identifiable {
     let id = UUID()
     let storyteller: String
     let storyTitle: String
-    let role: PersonaRole
+    let role: AppTheme
     let duration: TimeInterval
     let recordedDate: Date
 }
@@ -67,48 +67,18 @@ struct HubView: View {
     @Environment(\.theme) var theme
     @State private var loadingState: LoadingState<DashboardData> = .loading
     @State private var showCaptureSheet = false
-    @State private var currentProfile: UserProfile = UserProfile(name: "Leo", role: .teen, avatarEmoji: "🎸")
     @State private var dailyPrompt: DailyPrompt?
     @State private var selectedPromptForCapture: PromptData?
-    @State private var profiles: [UserProfile] = [
-        UserProfile(name: "Leo", role: .teen, avatarEmoji: "🎸"),
-        UserProfile(name: "Mom", role: .parent, avatarEmoji: "👩"),
-        UserProfile(name: "Grandma", role: .elder, avatarEmoji: "👵")
-    ]
 
     var body: some View {
-        Group {
-            switch theme.role {
-            case .teen, .parent:
-                // Unified Teen/Parent dashboard - same UX, different theme colors
-                UnifiedTeenParentDashboard(
-                    loadingState: loadingState,
-                    onShowCapture: { prompt in
-                        selectedPromptForCapture = prompt
-                        showCaptureSheet = true
-                    },
-                    currentProfile: $currentProfile,
-                    profiles: profiles,
-                    dailyPrompt: dailyPrompt
-                )
-            case .child:
-                ChildDashboard(
-                    loadingState: loadingState,
-                    onShowCapture: { _ in
-                        selectedPromptForCapture = nil
-                        showCaptureSheet = true
-                    }
-                )
-            case .elder:
-                ElderDashboard(
-                    loadingState: loadingState,
-                    onShowCapture: { _ in
-                        selectedPromptForCapture = nil
-                        showCaptureSheet = true
-                    }
-                )
-            }
-        }
+        UnifiedDashboard(
+            loadingState: loadingState,
+            onShowCapture: { prompt in
+                selectedPromptForCapture = prompt
+                showCaptureSheet = true
+            },
+            dailyPrompt: dailyPrompt
+        )
         .animation(theme.animation, value: theme.role)
         .sheet(isPresented: $showCaptureSheet) {
             CaptureMemorySheet(initialPrompt: selectedPromptForCapture)
@@ -211,14 +181,14 @@ struct DashboardData {
             UnheardVoice(
                 storyteller: "Grandma Rose",
                 storyTitle: "When I Met Your Grandfather",
-                role: .elder,
+                role: .light,
                 duration: 180,
                 recordedDate: Date().addingTimeInterval(-432000)
             ),
             UnheardVoice(
                 storyteller: "Dad",
                 storyTitle: "My First Day at School",
-                role: .parent,
+                role: .light,
                 duration: 120,
                 recordedDate: Date().addingTimeInterval(-259200)
             )
@@ -228,13 +198,11 @@ struct DashboardData {
     )
 }
 
-// MARK: - Unified Teen/Parent Dashboard
+// MARK: - Unified dark/light Dashboard
 
-struct UnifiedTeenParentDashboard: View {
+struct UnifieddarklightDashboard: View {
     let loadingState: LoadingState<DashboardData>
     let onShowCapture: (PromptData?) -> Void
-    @Binding var currentProfile: UserProfile
-    let profiles: [UserProfile]
     let dailyPrompt: DailyPrompt?
     @Environment(\.theme) var theme
 
@@ -275,8 +243,8 @@ struct UnifiedDashboardContent: View {
             // Layer 2: Hero-style diagonal gradient (StoryDetailView pattern)
             LinearGradient(
                 colors: [
-                    theme.accentColor.opacity(theme.role == .teen ? 0.25 : 0.50),
-                    complementaryColor.opacity(theme.role == .teen ? 0.35 : 0.65),
+                    theme.accentColor.opacity(0.35),
+                    complementaryColor.opacity(0.45),
                     theme.backgroundColor.opacity(0.70),
                     theme.backgroundColor
                 ],
@@ -298,8 +266,8 @@ struct UnifiedDashboardContent: View {
             VStack(spacing: 0) {
                 LinearGradient(
                     colors: [
-                        theme.accentColor.opacity(theme.role == .teen ? 0.15 : 0.35),
-                        complementaryColor.opacity(theme.role == .teen ? 0.08 : 0.20),
+                        theme.accentColor.opacity(theme.role == .dark ? 0.15 : 0.35),
+                        complementaryColor.opacity(theme.role == .dark ? 0.08 : 0.20),
                         .clear
                     ],
                     startPoint: .top,
@@ -354,19 +322,15 @@ struct UnifiedDashboardContent: View {
 
     private var complementaryColor: Color {
         switch theme.role {
-        case .teen: return Color(red: 0.4, green: 0.7, blue: 1.0) // Sky blue
-        case .parent: return Color.storytellerBlue
-        case .child: return Color.storytellerGreen
-        case .elder: return Color.storytellerOrange
+        case .dark: return Color(red: 0.4, green: 0.7, blue: 1.0) // Sky blue
+        case .light: return Color.storytellerBlue
         }
     }
 
     private var tertiaryColor: Color {
         switch theme.role {
-        case .teen: return Color.storytellerBlue
-        case .parent: return Color.storytellerOrange
-        case .child: return Color.storytellerOrange
-        case .elder: return Color.storytellerBlue
+        case .dark: return Color.storytellerBlue
+        case .light: return Color.storytellerOrange
         }
     }
 }
@@ -405,220 +369,31 @@ struct UnifiedEmptyState: View {
     }
 }
 
-// MARK: - Child Dashboard
+// MARK: - Unified Dashboard
 
-struct ChildDashboard: View {
+struct UnifiedDashboard: View {
     let loadingState: LoadingState<DashboardData>
     let onShowCapture: (PromptData?) -> Void
+    let dailyPrompt: DailyPrompt?
     @Environment(\.theme) var theme
 
     var body: some View {
-        Group {
-            switch loadingState {
-            case .loading:
-                ChildCardSkeleton()
-
-            case .empty:
-                ChildEmptyState(onRecordStory: { onShowCapture(nil) })
-
-            case .loaded(let data):
-                ChildDashboardContent(data: data, onShowCapture: onShowCapture)
-
-            case .error(let message):
-                ErrorStateView(message: message, onRetry: {})
-            }
-        }
-        .background(theme.backgroundColor.ignoresSafeArea())
-        .safeAreaInset(edge: .top, alignment: .trailing) {
-            Button(action: { onShowCapture(nil) }) {
-                ZStack {
-                    Circle()
-                        .fill(theme.accentColor)
-                        .frame(width: 70, height: 70)
-                        .shadow(color: theme.accentColor.opacity(0.4), radius: 10)
-
-                    Image(systemName: "plus")
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
+        NavigationStack {
+            Group {
+                switch loadingState {
+                case .loading:
+                    DashboardSkeleton()
+                case .empty:
+                    UnifiedEmptyState(onCreateStory: { onShowCapture(nil) })
+                case .loaded(let data):
+                    UnifiedDashboardContent(data: data, onShowCapture: onShowCapture, dailyPrompt: dailyPrompt)
+                case .error(let message):
+                    ErrorStateView(message: message, onRetry: {})
                 }
             }
-            .padding(.trailing, 20)
-            .padding(.top, 8)
-        }
-    }
-}
-
-struct ChildDashboardContent: View {
-    let data: DashboardData
-    let onShowCapture: (PromptData?) -> Void
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        ZStack {
-            // MARK: - StoryDetailView-Style Background (Vibrant for Kids)
-            theme.backgroundColor.ignoresSafeArea()
-
-            // Layer 1: Vibrant multi-color gradient (StoryDetailView style)
-            LinearGradient(
-                colors: [
-                    Color.storytellerGreen.opacity(0.40),
-                    Color.storytellerPurple.opacity(0.55),
-                    Color.storytellerOrange.opacity(0.35),
-                    theme.backgroundColor.opacity(0.70),
-                    theme.backgroundColor
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            // Layer 2: Text visibility gradient
-            LinearGradient(
-                colors: [.clear, theme.backgroundColor.opacity(0.90)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 200)
-            .ignoresSafeArea(edges: .top)
-
-            // Layer 3: Playful sticky gradient
-            VStack(spacing: 0) {
-                LinearGradient(
-                    colors: [
-                        Color.storytellerGreen.opacity(0.30),
-                        Color.yellow.opacity(0.15),
-                        .clear
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 120)
-                .ignoresSafeArea(edges: .top)
-                Spacer()
-            }
-
-            VStack(spacing: 32) {
-                Spacer()
-
-                // MARK: - Hero: "What's New" (Giant, playful)
-                ChildHeroSection(activities: data.recentActivities)
-
-                // MARK: - Unheard Voices (Giant cards for kids)
-                if !data.unheardVoices.isEmpty {
-                    ChildUnheardSection(voices: data.unheardVoices)
-                }
-
-                Spacer()
-            }
-        }
-    }
-}
-
-// MARK: - Elder Dashboard
-
-struct ElderDashboard: View {
-    let loadingState: LoadingState<DashboardData>
-    let onShowCapture: (PromptData?) -> Void
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        Group {
-            switch loadingState {
-            case .loading:
-                ElderSkeleton()
-
-            case .empty:
-                ElderEmptyState(onCallMe: { onShowCapture(nil) })
-
-            case .loaded(let data):
-                ElderDashboardContent(data: data, onShowCapture: onShowCapture)
-
-            case .error(let message):
-                ErrorStateView(message: message, onRetry: {})
-            }
-        }
-        .background(theme.backgroundColor.ignoresSafeArea())
-    }
-}
-
-struct ElderDashboardContent: View {
-    let data: DashboardData
-    let onShowCapture: (PromptData?) -> Void
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        ZStack {
-            // MARK: - StoryDetailView-Style Background (Calm for Elders)
-            theme.backgroundColor.ignoresSafeArea()
-
-            // Layer 1: Warm, calming gradient (StoryDetailView style)
-            LinearGradient(
-                colors: [
-                    Color.storytellerOrange.opacity(0.30),
-                    Color.storytellerBlue.opacity(0.40),
-                    theme.backgroundColor.opacity(0.75),
-                    theme.backgroundColor
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-
-            // Layer 2: Text visibility gradient
-            LinearGradient(
-                colors: [.clear, theme.backgroundColor.opacity(0.92)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 200)
-            .ignoresSafeArea(edges: .top)
-
-            // Layer 3: Gentle sticky gradient
-            VStack(spacing: 0) {
-                LinearGradient(
-                    colors: [
-                        Color.storytellerOrange.opacity(0.20),
-                        Color.storytellerBlue.opacity(0.10),
-                        .clear
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 120)
-                .ignoresSafeArea(edges: .top)
-                Spacer()
-            }
-
-            VStack(spacing: 40) {
-                Spacer()
-
-                // MARK: - Hero: What's New (Very large, clear)
-                ElderHeroSection(activities: data.recentActivities.prefix(1).map { $0 })
-
-                // MARK: - Upcoming Call (Primary action)
-                if let upcoming = data.recentActivities.first(where: { $0.type == .upcomingCall }) {
-                    ElderUpcomingCallSection(activity: upcoming)
-                }
-
-                Spacer()
-
-                // MARK: - Giant Record Button
-                Button(action: { onShowCapture(nil) }) {
-                    HStack(spacing: 16) {
-                        Image(systemName: "waveform.circle.fill")
-                            .font(.system(size: 32))
-
-                        Text("Record a Memory")
-                            .font(.system(size: 22, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 90)
-                    .glassEffect(.clear.tint(theme.accentColor).interactive(), in: RoundedRectangle(cornerRadius: 24))
-                }
-                .padding(.horizontal, theme.screenPadding)
-                .padding(.bottom, 60)
-            }
+            .background(theme.backgroundColor.ignoresSafeArea())
+            .navigationTitle("Home")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
@@ -794,8 +569,8 @@ struct ActiveStoryCard: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            story.story.storytellerColor,
-                            story.story.storytellerColor.opacity(0.6)
+                            .storytellerPurple,
+                            .storytellerPurple.opacity(0.6)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -835,7 +610,7 @@ struct ActiveStoryCard: View {
 
                 Text(story.story.storyteller)
                     .font(.system(size: 12))
-                    .foregroundColor(story.story.storytellerColor)
+                    .foregroundColor(.storytellerPurple)
             }
             .padding(12)
         }
@@ -956,10 +731,8 @@ struct UnheardVoiceCard: View {
 
     private var storytellerColor: Color {
         switch voice.role {
-        case .elder: return .storytellerOrange
-        case .parent: return .storytellerBlue
-        case .teen: return .storytellerPurple
-        case .child: return .storytellerGreen
+        case .light: return .storytellerBlue
+        case .dark: return .storytellerPurple
         }
     }
 
@@ -988,7 +761,7 @@ struct PromptHeroCard: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity,minHeight: 200)
-            
+
             .glassEffect(.regular.tint(.accentColor), in: RoundedRectangle(cornerRadius: 20))
             .shadow(color: theme.accentColor.opacity(0.3), radius: 20, y: 12)
         }
@@ -996,217 +769,9 @@ struct PromptHeroCard: View {
 
     private var complementaryColor: Color {
         switch theme.role {
-        case .teen: return Color(red: 0.4, green: 0.7, blue: 1.0)
-        case .parent: return Color.storytellerBlue
-        case .child: return Color.storytellerGreen
-        case .elder: return Color.storytellerOrange
+        case .dark: return Color(red: 0.4, green: 0.7, blue: 1.0)
+        case .light: return Color.storytellerBlue
         }
-    }
-}
-
-// MARK: - Child-Specific Sections
-
-struct ChildHeroSection: View {
-    let activities: [RecentActivity]
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("What's New!")
-                .font(.system(size: 36, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textColor)
-
-            if let activity = activities.first {
-                HStack(spacing: 12) {
-                    Image(systemName: activityIcon(for: activity.type))
-                        .font(.system(size: 48))
-                        .foregroundColor(activityColor(for: activity.type))
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(activity.title)
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(theme.textColor)
-
-                        Text(activity.subtitle)
-                            .font(.system(size: 18))
-                            .foregroundColor(theme.secondaryTextColor)
-                    }
-                }
-                .padding(20)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24))
-            }
-        }
-        .padding(.top, theme.screenPadding)
-    }
-
-    private func activityIcon(for type: RecentActivity.ActivityType) -> String {
-        switch type {
-        case .newStory: return "waveform.circle.fill"
-        case .newPerspective: return "bubble.left.and.bubble.right.fill"
-        case .upcomingCall: return "phone.circle.fill"
-        }
-    }
-
-    private func activityColor(for type: RecentActivity.ActivityType) -> Color {
-        switch type {
-        case .newStory: return .storytellerPurple
-        case .newPerspective: return .storytellerBlue
-        case .upcomingCall: return .storytellerOrange
-        }
-    }
-}
-
-struct ChildUnheardSection: View {
-    let voices: [UnheardVoice]
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("New Stories to Listen!")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textColor)
-
-            ForEach(voices.prefix(2)) { voice in
-                ChildUnheardCard(voice: voice)
-            }
-        }
-    }
-}
-
-struct ChildUnheardCard: View {
-    let voice: UnheardVoice
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(storytellerColor.opacity(0.2))
-                    .frame(width: 80, height: 80)
-                    .overlay {
-                        Text(String(voice.storyteller.prefix(1)).uppercased())
-                            .font(.system(size: 36, weight: .bold))
-                            .foregroundColor(storytellerColor)
-                    }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(voice.storyteller)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(theme.textColor)
-
-                Text(voice.storyTitle)
-                    .font(.system(size: 16))
-                    .foregroundColor(theme.secondaryTextColor)
-                    .lineLimit(2)
-            }
-
-            Spacer()
-
-            Image(systemName: "play.circle.fill")
-                .font(.system(size: 48))
-                .foregroundColor(theme.accentColor)
-        }
-        .padding(24)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
-    }
-
-    private var storytellerColor: Color {
-        switch voice.role {
-        case .elder: return .storytellerOrange
-        case .parent: return .storytellerBlue
-        case .teen: return .storytellerPurple
-        case .child: return .storytellerGreen
-        }
-    }
-}
-
-// MARK: - Elder-Specific Sections
-
-struct ElderHeroSection: View {
-    let activities: [RecentActivity]
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("What's New")
-                .font(.system(size: 34, weight: .bold))
-                .foregroundColor(theme.textColor)
-
-            if let activity = activities.first {
-                VStack(spacing: 16) {
-                    Image(systemName: activityIcon(for: activity.type))
-                        .font(.system(size: 64))
-                        .foregroundColor(activityColor(for: activity.type))
-
-                    Text(activity.title)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(theme.textColor)
-                        .multilineTextAlignment(.center)
-
-                    Text(activity.subtitle)
-                        .font(.system(size: 22))
-                        .foregroundColor(theme.secondaryTextColor)
-                }
-                .padding(32)
-                .frame(maxWidth: .infinity)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
-            }
-        }
-        .padding(.horizontal, theme.screenPadding)
-    }
-
-    private func activityIcon(for type: RecentActivity.ActivityType) -> String {
-        switch type {
-        case .newStory: return "waveform.circle.fill"
-        case .newPerspective: return "bubble.left.and.bubble.right.fill"
-        case .upcomingCall: return "phone.circle.fill"
-        }
-    }
-
-    private func activityColor(for type: RecentActivity.ActivityType) -> Color {
-        switch type {
-        case .newStory: return .storytellerPurple
-        case .newPerspective: return .storytellerBlue
-        case .upcomingCall: return .storytellerOrange
-        }
-    }
-}
-
-struct ElderUpcomingCallSection: View {
-    let activity: RecentActivity
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        HStack(spacing: 20) {
-            Circle()
-                .fill(Color.storytellerOrange.opacity(0.15))
-                .frame(width: 80, height: 80)
-                .overlay {
-                    Image(systemName: "phone.circle.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.storytellerOrange)
-                }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Upcoming Call")
-                    .font(.system(size: 18))
-                    .foregroundColor(theme.secondaryTextColor)
-
-                Text(activity.title)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(theme.textColor)
-
-                Text(activity.subtitle)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(theme.accentColor)
-            }
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
-        .padding(.horizontal, theme.screenPadding)
     }
 }
 
@@ -1312,20 +877,12 @@ struct HubView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             HubView()
-                .themed(TeenTheme())
-                .previewDisplayName("Teen Dashboard")
+                .themed(DarkTheme())
+                .previewDisplayName("dark Dashboard")
 
             HubView()
-                .themed(ParentTheme())
-                .previewDisplayName("Parent Dashboard")
-
-            HubView()
-                .themed(ChildTheme())
-                .previewDisplayName("Child Dashboard")
-
-            HubView()
-                .themed(ElderTheme())
-                .previewDisplayName("Elder Dashboard")
+                .themed(LightTheme())
+                .previewDisplayName("light Dashboard")
         }
     }
 }

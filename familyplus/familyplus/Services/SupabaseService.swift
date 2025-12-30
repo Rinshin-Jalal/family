@@ -128,16 +128,6 @@ struct FamilyMemberData: Identifiable, Codable {
     let avatarUrl: String?
     let role: String
     let phoneNumber: String?
-    
-    var personaRole: PersonaRole {
-        switch role {
-        case "teen": return .teen
-        case "parent", "organizer": return .parent
-        case "child": return .child
-        case "elder": return .elder
-        default: return .teen
-        }
-    }
 }
 
 struct StoryData: Identifiable, Codable {
@@ -190,8 +180,8 @@ struct StorySegmentData: Identifiable, Codable {
 
     var storytellerColor: Color {
         switch role {
-        case "teen": return .storytellerPurple
-        case "parent", "organizer": return .storytellerBlue
+        case "dark": return .storytellerPurple
+        case "light", "organizer": return .storytellerBlue
         case "child": return .storytellerGreen
         case "elder": return .storytellerOrange
         default: return .storytellerBlue

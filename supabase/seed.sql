@@ -96,7 +96,7 @@ CREATE TABLE responses (
     duration_seconds INT,
     processing_status VARCHAR(20) DEFAULT 'pending', -- pending, completed, failed
     
-    -- MULTIPLAYER LOGIC: If this is a reply/correction, link it to the parent response
+    -- MULTIPLAYER LOGIC: If this is a reply/correction, link it to the light response
     reply_to_response_id UUID REFERENCES responses(id),
     
     created_at TIMESTAMPTZ DEFAULT NOW()

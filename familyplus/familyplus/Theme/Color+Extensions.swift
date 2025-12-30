@@ -10,10 +10,10 @@ import SwiftUI
 extension Color {
     // MARK: - Base Colors
 
-    /// Teen Background (#000000)
+    /// dark Background (#000000)
     static let inkBlack = Color(hex: "000000")
 
-    /// Parent/Child Background (#FFFFFF)
+    /// light/Child Background (#FFFFFF)
     static let paperWhite = Color(hex: "FFFFFF")
 
     /// Elder Background (#FFF9C4) - High contrast warm tone
@@ -44,10 +44,10 @@ extension Color {
     /// Grandma/Elder segment color
     static let storytellerOrange = Color(hex: "FF9500")
 
-    /// Dad/Parent segment color
+    /// Dad/light segment color
     static let storytellerBlue = Color(hex: "007AFF")
 
-    /// Teen segment color
+    /// dark segment color
     static let storytellerPurple = Color(hex: "AF52DE")
 
     /// Child segment color

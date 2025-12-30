@@ -25,17 +25,17 @@ extension Font {
         theme.storyFont
     }
 
-    // MARK: - Teen Typography
+    // MARK: - dark Typography
 
-    struct Teen {
+    struct dark {
         static let headline = Font.custom("SF Pro Display", size: 28).weight(.bold)
         static let body = Font.system(size: 17, weight: .regular, design: .default)
         static let story = Font.custom("New York", size: 20).italic()
     }
 
-    // MARK: - Parent Typography
+    // MARK: - light Typography
 
-    struct Parent {
+    struct light {
         static let headline = Font.system(size: 24, weight: .semibold, design: .default)
         static let body = Font.system(size: 17, weight: .regular, design: .default)
         static let story = Font.custom("New York", size: 20)
