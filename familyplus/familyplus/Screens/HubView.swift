@@ -479,9 +479,8 @@ struct StoryCardRow: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        HStack(spacing: 16) {
-            // Color indicator
-            RoundedRectangle(cornerRadius: 8)
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 10)
                 .fill(storyColor)
                 .frame(width: 48, height: 48)
                 .overlay(
@@ -490,61 +489,46 @@ struct StoryCardRow: View {
                         .foregroundColor(.white)
                 )
 
-            // Content
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(story.story.title)
-                        .font(.body)
-                        .foregroundColor(Color(UIColor.label))
-                        .lineLimit(2)
+                Text(story.story.title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Color(UIColor.label))
+                    .lineLimit(1)
 
-                    if story.isEvolving {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(.blue)
-                    }
-                }
-
-                HStack(spacing: 8) {
-                    Text(story.story.storyteller)
-                        .font(.footnote)
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-
-                    if let freshness = story.freshnessText {
-                        Text("·")
-                            .font(.footnote)
-                            .foregroundColor(Color(UIColor.tertiaryLabel))
-
-                        Text(freshness)
-                            .font(.footnote)
-                            .foregroundColor(Color(UIColor.secondaryLabel))
-                    }
-                }
+                Text(story.story.storyteller)
+                    .font(.caption)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
+                    .lineLimit(1)
             }
 
             Spacer()
 
-            // Voice count
+            if story.isEvolving {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.blue)
+            }
+
             if story.story.voiceCount > 1 {
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 10))
                     Text("\(story.story.voiceCount)")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                 }
                 .foregroundColor(.blue)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.blue.opacity(0.1))
+                .background(Color.blue.opacity(0.15))
                 .clipShape(Capsule())
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
 
     private var storyColor: Color {
-        // Use role-based color from theme if available
         .storytellerPurple
     }
 }
@@ -830,7 +814,8 @@ struct DashboardSkeleton: View {
 
 struct CreateStoryModal: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedPrompt: Prompt?
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedPrompt: String?
     @State private var customPrompt = ""
     @State private var storyText = ""
     @State private var isRecording = false
@@ -855,7 +840,7 @@ struct CreateStoryModal: View {
     ]
 
     var canProceed: Bool {
-        if let prompt = selectedPrompt {
+        if selectedPrompt != nil {
             return true
         }
         return !customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -865,7 +850,7 @@ struct CreateStoryModal: View {
         Group {
             if showStoryView {
                 StoryCreationView(
-                    prompt: selectedPrompt?.text ?? customPrompt,
+                    prompt: selectedPrompt ?? customPrompt,
                     storyText: $storyText,
                     isRecording: $isRecording,
                     inputMethod: $inputMethod,
@@ -888,11 +873,11 @@ struct CreateStoryModal: View {
                 )
             }
         }
-        .preferredColorScheme(.light)
+        .background(Color(uiColor: .systemBackground))
     }
 
     func submitStory() {
-        print("Creating story with prompt: \(selectedPrompt?.text ?? customPrompt)")
+        print("Creating story with prompt: \(selectedPrompt ?? customPrompt)")
         print("Method: \(inputMethod.rawValue)")
         print("Content: \(storyText)")
         dismiss()
