@@ -181,6 +181,117 @@ final class APIService {
         let (data, _) = try await session.data(for: request)
         return try JSONDecoder().decode(ReactionData.self, from: data)
     }
+    
+    // MARK: - Settings API
+    
+    /// Update user profile
+    func updateProfile(name: String, avatarEmoji: String, theme: String) async throws {
+        let body = UpdateProfileRequest(name: name, avatar_emoji: avatarEmoji, theme: theme)
+        var request = await createRequest(endpoint: "/api/settings/profile", method: "PATCH")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.updateFailed
+        }
+    }
+    
+    /// Update notification settings
+    func updateNotificationSettings(
+        pushEnabled: Bool,
+        emailEnabled: Bool,
+        storyReminders: Bool,
+        familyUpdates: Bool,
+        weeklyDigest: Bool
+    ) async throws {
+        let body = NotificationSettingsRequest(
+            push_enabled: pushEnabled,
+            email_enabled: emailEnabled,
+            story_reminders: storyReminders,
+            family_updates: familyUpdates,
+            weekly_digest: weeklyDigest
+        )
+        var request = await createRequest(endpoint: "/api/settings/notifications", method: "PATCH")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.updateFailed
+        }
+    }
+    
+    /// Update privacy settings
+    func updatePrivacySettings(shareWithFamily: Bool, allowSuggestions: Bool, dataRetention: String) async throws {
+        let body = PrivacySettingsRequest(
+            share_with_family: shareWithFamily,
+            allow_suggestions: allowSuggestions,
+            data_retention: dataRetention
+        )
+        var request = await createRequest(endpoint: "/api/settings/privacy", method: "PATCH")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.updateFailed
+        }
+    }
+    
+    /// Update preference settings
+    func updatePreferenceSettings(autoPlayAudio: Bool, hapticsEnabled: Bool, defaultPromptCategory: String) async throws {
+        let body = PreferenceSettingsRequest(
+            auto_play_audio: autoPlayAudio,
+            haptics_enabled: hapticsEnabled,
+            default_prompt_category: defaultPromptCategory
+        )
+        var request = await createRequest(endpoint: "/api/settings/preferences", method: "PATCH")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.updateFailed
+        }
+    }
+    
+    /// Export user data
+    func exportUserData() async throws -> Data {
+        let request = await createRequest(endpoint: "/api/settings/export", method: "POST")
+        let (data, _) = try await session.data(for: request)
+        return data
+    }
+    
+    /// Delete user account
+    func deleteAccount() async throws {
+        var request = await createRequest(endpoint: "/api/settings/account", method: "DELETE")
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.deleteFailed
+        }
+    }
+}
+
+// MARK: - API Errors
+
+enum APIError: LocalizedError {
+    case updateFailed
+    case deleteFailed
+    case exportFailed
+    
+    var errorDescription: String? {
+        switch self {
+        case .updateFailed:
+            return "Failed to update settings"
+        case .deleteFailed:
+            return "Failed to delete account"
+        case .exportFailed:
+            return "Failed to export data"
+        }
+    }
 }
 
 // MARK: - Request Models
@@ -210,6 +321,34 @@ struct AddReactionRequest: Codable {
     let target_id: String
     let target_type: String
     let emoji: String
+}
+
+// MARK: - Settings Request Models
+
+struct UpdateProfileRequest: Codable {
+    let name: String
+    let avatar_emoji: String
+    let theme: String
+}
+
+struct NotificationSettingsRequest: Codable {
+    let push_enabled: Bool
+    let email_enabled: Bool
+    let story_reminders: Bool
+    let family_updates: Bool
+    let weekly_digest: Bool
+}
+
+struct PrivacySettingsRequest: Codable {
+    let share_with_family: Bool
+    let allow_suggestions: Bool
+    let data_retention: String
+}
+
+struct PreferenceSettingsRequest: Codable {
+    let auto_play_audio: Bool
+    let haptics_enabled: Bool
+    let default_prompt_category: String
 }
 
 // MARK: - Response Models (reused from SupabaseService for consistency)

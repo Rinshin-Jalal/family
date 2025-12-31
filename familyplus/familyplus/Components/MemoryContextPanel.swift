@@ -510,14 +510,6 @@ struct MemoryContextPanel_Previews: PreviewProvider {
             .previewDisplayName("light Theme")
 
         MemoryContextPanel(context: .mock)
-            .themed(LightTheme())
-            .previewDisplayName("Child Theme")
-
-        MemoryContextPanel(context: .mock)
-            .themed(LightTheme())
-            .previewDisplayName("Elder Theme")
-
-        MemoryContextPanel(context: .mock)
             .themed(DarkTheme())
             .previewDisplayName("dark Theme")
     }

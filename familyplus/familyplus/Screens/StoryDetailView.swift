@@ -1429,38 +1429,6 @@ struct ElderStoryDetail: View {
 
 // MARK: - Reaction Picker
 
-struct ReactionPickerView: View {
-    @Binding var selectedReaction: Reaction?
-    @Environment(\.dismiss) var dismiss
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("React to this story")
-                .font(.headline)
-                .padding(.top)
-
-            HStack(spacing: 20) {
-                ForEach(Reaction.allCases, id: \.self) { reaction in
-                    Button(action: {
-                        selectedReaction = reaction
-                        dismiss()
-                    }) {
-                        Text(reaction.rawValue)
-                            .font(.system(size: 48))
-                    }
-                    .accessibilityLabel(reaction.accessibilityLabel)
-                }
-            }
-            .padding()
-
-            Spacer()
-        }
-    }
-}
-
-// MARK: - Sample Data
-
 extension StorySegment {
     static let sampleSegments: [StorySegment] = [
         StorySegment(

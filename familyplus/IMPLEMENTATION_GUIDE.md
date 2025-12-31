@@ -19,7 +19,8 @@ familyplus/
 ├── Screens/
 │   ├── HubView.swift               # Home feed (4 layouts)
 │   ├── StudioView.swift            # Creation page (4 layouts)
-│   ├── ProfileView.swift           # Profile/Stats (4 layouts)
+│   ├── FamilyView.swift            # Family/Stats (4 layouts)
+│   ├── SettingsView.swift          # User settings
 │   └── StoryDetailView.swift      # Story detail with timeline
 ├── MainAppView.swift               # Main app container
 └── familyplusApp.swift            # App entry point

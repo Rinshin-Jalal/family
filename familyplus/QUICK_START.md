@@ -82,7 +82,7 @@ Layout: Minimal, centered
 - Child: Tap "Listen to Question" → Giant mic appears
 - Elder: See "Call Me Now" phone interface
 
-### 3. Profile
+### 3. Family
 **Location:** Second tab (Teen/Parent) or sticker icon (Child)
 
 **What to Test:**
@@ -243,7 +243,8 @@ Components/
 Screens/
 ├── HubView.swift               ← Home feed
 ├── StudioView.swift            ← Creation
-├── ProfileView.swift           ← Stats/Profile
+├── FamilyView.swift            ← Family/Stats
+├── SettingsView.swift          ← User settings
 └── StoryDetailView.swift      ← Story player
 
 MainAppView.swift               ← Main container

@@ -1,22 +1,18 @@
 //
-//  ProfileView.swift
+//  FamilyView.swift
 //  StoryRide
 //
-//  Profile - Motivation loop tailored per persona
+//  Family - Motivation loop tailored per persona
 //
 
 import SwiftUI
 
-// MARK: - Profile View
+// MARK: - Family View
 
-struct ProfileView: View {
+struct FamilyView: View {
     @Environment(\.theme) var theme
     @State private var loadingState: LoadingState<ProfileData> = .loading
     
-
-    
-
-
     var body: some View {
         TeenProfile(loadingState: loadingState)
             .animation(theme.animation, value: loadingState)
@@ -69,15 +65,6 @@ struct ProfileData {
             Activity(type: .achievement, title: "Streak Master unlocked", member: nil, timestamp: Date().addingTimeInterval(-86400 * 2))
         ]
     )
-}
-
-struct Achievement {
-    let title: String
-    let description: String
-    let icon: String
-    let earned: Bool
-    let earnedAt: Date?
-    let progress: Double?
 }
 
 enum ActivityType {
@@ -135,8 +122,8 @@ struct TeenProfile: View {
                 }
             }
         }
-        .sheet(isPresented: $showAchievements) { AchievementsView(achievements: ProfileData.sample.achievements) }
-        .sheet(isPresented: $showInvite) { InviteFamilyView() }
+        .sheet(isPresented: $showAchievements) { AchievementsModal(achievements: ProfileData.sample.achievements) }
+        .sheet(isPresented: $showInvite) { InviteFamilyModal() }
     }
 }
 
@@ -371,105 +358,14 @@ struct TeenProfileEmptyState: View {
         }.padding(theme.screenPadding)
     }
 }
-// MARK: - Modal Views
-
-struct AchievementsView: View {
-    let achievements: [Achievement]; @Environment(\.theme) var theme; @Environment(\.dismiss) var dismiss
-    var body: some View {
-        NavigationStack {
-            ScrollView { LazyVStack(spacing: 16) { ForEach(achievements, id: \.title) { achievement in ModalAchievementCard(achievement: achievement) } }.padding(theme.screenPadding) }.background(theme.backgroundColor).navigationTitle("Achievements").navigationBarTitleDisplayMode(.inline).toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("Done") { dismiss() }.foregroundColor(theme.accentColor) } }
-        }
-    }
-}
-
-struct ModalAchievementCard: View {
-    let achievement: Achievement; @Environment(\.theme) var theme
-    var body: some View {
-        HStack(spacing: 16) {
-            ZStack { Circle().fill(achievement.earned ? theme.accentColor.opacity(0.2) : Color.gray.opacity(0.1)).frame(width: 64, height: 64); Image(systemName: achievement.icon).font(.system(size: 28, weight: .semibold)).foregroundColor(achievement.earned ? theme.accentColor : .gray) }
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(achievement.title).font(.system(size: 18, weight: .bold)).foregroundColor(achievement.earned ? theme.textColor : .secondary)
-                    if achievement.earned { Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundColor(.green) }
-                }
-                Text(achievement.description).font(.system(size: 15)).foregroundColor(theme.secondaryTextColor).lineLimit(2)
-                if let progress = achievement.progress, !achievement.earned {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ProgressView(value: progress).tint(theme.accentColor)
-                        Text("\(Int(progress * 100))% Complete").font(.system(size: 13)).foregroundColor(theme.secondaryTextColor)
-                    }
-                } else if let earnedAt = achievement.earnedAt {
-                    Text("Earned \(earnedAt, style: .date)").font(.system(size: 13)).foregroundColor(theme.secondaryTextColor)
-                }
-            }
-            Spacer()
-        }.padding().background(RoundedRectangle(cornerRadius: 16).fill(theme.cardBackgroundColor))
-    }
-}
-
-struct InviteFamilyView: View {
-    @Environment(\.theme) var theme; @Environment(\.dismiss) var dismiss
-    @State private var email = ""; @State private var showSuccess = false
-    var body: some View {
-        ZStack {
-            theme.backgroundColor.ignoresSafeArea()
-            VStack(spacing: 32) {
-                Spacer()
-                if !showSuccess {
-                    VStack(spacing: 24) {
-                        Image(systemName: "person.badge.plus").font(.system(size: 64)).foregroundColor(theme.accentColor)
-                        VStack(spacing: 12) {
-                            Text("Invite Family Member").font(.system(size: 28, weight: .bold)).foregroundColor(theme.textColor)
-                            Text("Share your invite link\nto add someone new").font(.system(size: 16)).foregroundColor(theme.secondaryTextColor).multilineTextAlignment(.center)
-                        }
-                        TextField("", text: $email)
-                            .font(.system(size: 18))
-                            .padding(16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(theme.cardBackgroundColor)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(theme.accentColor, lineWidth: 2)
-                            )
-                            .overlay(
-                                Group {
-                                    if email.isEmpty {
-                                        Text("Enter email address")
-                                            .foregroundColor(theme.secondaryTextColor)
-                                            .padding(.leading, 20)
-                                    }
-                                },
-                                alignment: .leading
-                            )
-                        Button(action: { withAnimation { showSuccess = true } }) {
-                            Text("Send Invite").font(.system(size: 18, weight: .semibold)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: theme.buttonHeight).background(theme.accentColor).clipShape(RoundedRectangle(cornerRadius: 16))
-                        }.disabled(email.isEmpty).opacity(email.isEmpty ? 0.5 : 1.0)
-                    }
-                } else {
-                    VStack(spacing: 24) {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 80)).foregroundColor(.green)
-                        Text("Invite Sent!").font(.system(size: 28, weight: .bold)).foregroundColor(theme.textColor)
-                        Text("Check your email for invite link").font(.system(size: 16)).foregroundColor(theme.secondaryTextColor).multilineTextAlignment(.center)
-                    }
-                }
-                Spacer()
-                Button(action: { dismiss() }) {
-                    Text(showSuccess ? "Done" : "Cancel").font(.system(size: 18, weight: .semibold)).foregroundColor(theme.accentColor).frame(maxWidth: .infinity).frame(height: theme.buttonHeight).background(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.accentColor, lineWidth: 2))
-                }
-            }.padding(theme.screenPadding)
-        }
-    }
-}
 
 // MARK: - Preview
 
-struct ProfileView_Previews: PreviewProvider {
+struct FamilyView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            ProfileView().themed(DarkTheme()).previewDisplayName("dark Profile")
-            ProfileView().themed(LightTheme()).previewDisplayName("light Profile")
+            FamilyView().themed(DarkTheme()).previewDisplayName("dark Family")
+            FamilyView().themed(LightTheme()).previewDisplayName("light Family")
         }
     }
 }

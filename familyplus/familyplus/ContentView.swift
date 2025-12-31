@@ -74,12 +74,12 @@ struct MainNavigationFlow: View {
 
 enum MainTab: String, CaseIterable {
     case hub = "Hub"
-    case profile = "Profile"
+    case family = "Family"
 
     var icon: String {
         switch self {
         case .hub: return "house.fill"
-        case .profile: return "person.fill"
+        case .family: return "person.2.fill"
         }
     }
 }
@@ -100,11 +100,11 @@ struct MainTabView: View {
                 }
                 .tag(MainTab.hub)
 
-            ProfileView()
+            FamilyView()
                 .tabItem {
-                    Label("Profile", systemImage: MainTab.profile.icon)
+                    Label("Family", systemImage: MainTab.family.icon)
                 }
-                .tag(MainTab.profile)
+                .tag(MainTab.family)
         }
         .tint(theme.accentColor)
         .onAppear {

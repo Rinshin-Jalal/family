@@ -45,13 +45,13 @@ struct MainNavigation: View {
                 }
                 .tag(AppTab.home.rawValue)
 
-            ProfileView()
+            FamilyView()
                 .tabItem {
                     Label("Family", systemImage: "person.2.fill")
                 }
                 .tag(AppTab.family.rawValue)
 
-            ProfileView()
+            SettingsView()
                 .tabItem {
                     Label("Profile", systemImage: "person.fill")
                 }
