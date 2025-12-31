@@ -137,7 +137,7 @@ struct HubView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var loadingState: LoadingState<DashboardData> = .loading
     @State private var showCaptureSheet = false
-    @State private var showPerspectiveModal = false
+    @State private var showCreateStoryModal = false
     @State private var dailyPrompt: DailyPrompt?
     @State private var selectedPromptForCapture: PromptData?
 
@@ -148,8 +148,8 @@ struct HubView: View {
                 selectedPromptForCapture = prompt
                 showCaptureSheet = true
             },
-            onShowPerspective: {
-                showPerspectiveModal = true
+            onShowCreateStory: {
+                showCreateStoryModal = true
             },
             dailyPrompt: dailyPrompt
         )
@@ -160,8 +160,8 @@ struct HubView: View {
                     selectedPromptForCapture = nil
                 }
         }
-        .sheet(isPresented: $showPerspectiveModal) {
-            PerspectiveModal()
+        .sheet(isPresented: $showCreateStoryModal) {
+            CreateStoryModal()
         }
         .onAppear {
             loadDashboard()
@@ -277,7 +277,7 @@ struct DashboardData {
 struct UnifiedDashboard: View {
     let loadingState: LoadingState<DashboardData>
     let onShowCapture: (PromptData?) -> Void
-    let onShowPerspective: () -> Void
+    let onShowCreateStory: () -> Void
     let dailyPrompt: DailyPrompt?
     @Environment(\.theme) var theme
     @Environment(\.colorScheme) var colorScheme
@@ -294,7 +294,7 @@ struct UnifiedDashboard: View {
                     DashboardContent(
                         data: data,
                         onShowCapture: onShowCapture,
-                        onShowPerspective: onShowPerspective,
+                        onShowCreateStory: onShowCreateStory,
                         dailyPrompt: dailyPrompt
                     )
                 case .error(let message):
@@ -313,7 +313,7 @@ struct UnifiedDashboard: View {
 struct DashboardContent: View {
     let data: DashboardData
     let onShowCapture: (PromptData?) -> Void
-    let onShowPerspective: () -> Void
+    let onShowCreateStory: () -> Void
     let dailyPrompt: DailyPrompt?
     @Environment(\.theme) var theme
     @Environment(\.colorScheme) var colorScheme
@@ -323,7 +323,7 @@ struct DashboardContent: View {
             // Daily Prompt Section
             if let prompt = dailyPrompt {
                 Section {
-                    PromptHeroCard(prompt: prompt, onTap: onShowPerspective)
+                    PromptHeroCard(prompt: prompt, onTap: onShowCreateStory)
                 } header: {
                     HStack {
                         Image(systemName: "lightbulb.fill")
@@ -826,220 +826,352 @@ struct DashboardSkeleton: View {
     }
 }
 
-// MARK: - Perspective Modal
+// MARK: - Create Story Modal
 
-struct PerspectiveModal: View {
+struct CreateStoryModal: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) var colorScheme
-    @State private var selectedStory: Story?
-    @State private var perspectiveText = ""
+    @State private var selectedPrompt: Prompt?
+    @State private var customPrompt = ""
+    @State private var storyText = ""
     @State private var isRecording = false
-    @State private var inputMode: InputMode = .none
-    
-    enum InputMode {
-        case none
-        case text
-        case voice
+    @State private var inputMethod: InputMethod = .text
+    @State private var showStoryView = false
+
+    enum InputMethod: String, CaseIterable {
+        case text = "Text"
+        case voice = "Voice"
     }
 
-    let stories = Story.sampleStories
-    
-    private var hasInput: Bool {
-        inputMode == .voice || !perspectiveText.isEmpty
+    // Sample prompts for story creation
+    let samplePrompts = [
+        "What's your earliest memory?",
+        "Tell me about a family tradition that matters to you.",
+        "What was the happiest day of your life?",
+        "What's a lesson you've learned that you want to pass on?",
+        "Describe your childhood home.",
+        "What's a story your parents or grandparents told you?",
+        "Tell me about a challenge you overcame.",
+        "What was life like when you were young?"
+    ]
+
+    var canProceed: Bool {
+        if let prompt = selectedPrompt {
+            return true
+        }
+        return !customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(uiColor: .systemGroupedBackground)
-                    .ignoresSafeArea()
+        Group {
+            if showStoryView {
+                StoryCreationView(
+                    prompt: selectedPrompt?.text ?? customPrompt,
+                    storyText: $storyText,
+                    isRecording: $isRecording,
+                    inputMethod: $inputMethod,
+                    onBack: {
+                        showStoryView = false
+                        selectedPrompt = nil
+                        customPrompt = ""
+                    },
+                    onSubmit: submitStory
+                )
+            } else {
+                PromptSelectionView(
+                    prompts: samplePrompts,
+                    selectedPrompt: $selectedPrompt,
+                    customPrompt: $customPrompt,
+                    onContinue: {
+                        showStoryView = true
+                    },
+                    canProceed: canProceed
+                )
+            }
+        }
+        .preferredColorScheme(.light)
+    }
 
-                VStack(spacing: 0) {
-                    VStack(spacing: 12) {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(Color(uiColor: .label).opacity(0.8))
+    func submitStory() {
+        print("Creating story with prompt: \(selectedPrompt?.text ?? customPrompt)")
+        print("Method: \(inputMethod.rawValue)")
+        print("Content: \(storyText)")
+        dismiss()
+    }
 
-                        Text("Add Your Perspective")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(Color(uiColor: .label))
+    // MARK: - Prompt Selection View
 
-                        Text("Share how you remember this story")
-                            .font(.subheadline)
-                            .foregroundColor(Color(uiColor: .secondaryLabel))
-                    }
-                    .padding(.top, 40)
-                    .padding(.bottom, 24)
+    struct PromptSelectionView: View {
+        let prompts: [String]
+        @Binding var selectedPrompt: String?
+        @Binding var customPrompt: String
+        let onContinue: () -> Void
+        let canProceed: Bool
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            ForEach(stories) { story in
-                                StoryBubbleCard(
-                                    story: story,
-                                    isSelected: selectedStory?.id == story.id,
-                                    textColor: Color(uiColor: .label),
-                                    accentColor: .blue
+        var body: some View {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        // Header
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Create a Story")
+                                .font(.title)
+                                .fontWeight(.bold)
+                            Text("Choose a prompt or write your own to get started")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+
+                        // Prompts section
+                        Text("Choose a Prompt")
+                            .font(.headline)
+                            .padding(.horizontal)
+
+                        VStack(spacing: 12) {
+                            ForEach(prompts, id: \.self) { prompt in
+                                PromptButton(
+                                    prompt: prompt,
+                                    isSelected: selectedPrompt == prompt,
+                                    onSelect: {
+                                        selectedPrompt = prompt
+                                        customPrompt = ""
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        // Custom prompt section
+                        HStack {
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.3))
+                                .frame(height: 1)
+                            Text("or write your own")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.3))
+                                .frame(height: 1)
+                        }
+                        .padding(.horizontal)
+
+                        // Custom prompt input
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Your Prompt")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+
+                            TextEditor(text: $customPrompt)
+                                .frame(minHeight: 80)
+                                .padding(8)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(.systemGray4), lineWidth: 1)
                                 )
                                 .onTapGesture {
-                                    selectedStory = story
+                                    selectedPrompt = nil
                                 }
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                    }
 
-                    Spacer()
-
-                    if selectedStory != nil {
-                        VStack(spacing: 16) {
-                            if inputMode == .none {
-                                HStack(spacing: 16) {
-                                    Button(action: { inputMode = .text }) {
-                                        VStack(spacing: 8) {
-                                            Image(systemName: "keyboard")
-                                                .font(.system(size: 28))
-                                            Text("Type")
-                                                .font(.subheadline)
-                                                .fontWeight(.medium)
-                                        }
-                                        .foregroundColor(Color(uiColor: .label))
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 100)
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                                    }
-                                    
-                                    Button(action: {
-                                        inputMode = .voice
-                                        isRecording = true
-                                    }) {
-                                        VStack(spacing: 8) {
-                                            Image(systemName: "mic.fill")
-                                                .font(.system(size: 28))
-                                            Text("Record")
-                                                .font(.subheadline)
-                                                .fontWeight(.medium)
-                                        }
-                                        .foregroundColor(Color(uiColor: .label))
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 100)
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                            } else if inputMode == .text {
-                                VStack(spacing: 12) {
-                                    TextField("How do you remember this?", text: $perspectiveText, axis: .vertical)
-                                        .textFieldStyle(.plain)
-                                        .foregroundColor(Color(uiColor: .label))
-                                        .padding()
-                                        .frame(minHeight: 100)
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                                    
-                                    Button(action: { 
-                                        inputMode = .none
-                                        perspectiveText = ""
-                                    }) {
-                                        Text("Switch to Voice")
-                                            .font(.footnote)
-                                            .foregroundColor(.blue)
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                            } else if inputMode == .voice {
-                                VStack(spacing: 16) {
-                                    if isRecording {
-                                        VStack(spacing: 12) {
-                                            Image(systemName: "waveform")
-                                                .font(.system(size: 40))
-                                                .foregroundColor(.red)
-                                                .symbolEffect(.pulse)
-                                            
-                                            Text("Recording...")
-                                                .font(.headline)
-                                                .foregroundColor(Color(uiColor: .label))
-                                            
-                                            Button(action: { isRecording = false }) {
-                                                Text("Stop")
-                                                    .fontWeight(.semibold)
-                                                    .foregroundColor(.white)
-                                                    .padding(.horizontal, 32)
-                                                    .padding(.vertical, 12)
-                                                    .background(Color.red)
-                                                    .clipShape(Capsule())
-                                            }
-                                        }
-                                        .frame(height: 140)
-                                    } else {
-                                        VStack(spacing: 12) {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .font(.system(size: 40))
-                                                .foregroundColor(.green)
-                                            
-                                            Text("Recording saved")
-                                                .font(.headline)
-                                                .foregroundColor(Color(uiColor: .label))
-                                            
-                                            Button(action: {
-                                                inputMode = .none
-                                                isRecording = false
-                                            }) {
-                                                Text("Switch to Text")
-                                                    .font(.footnote)
-                                                    .foregroundColor(.blue)
-                                            }
-                                        }
-                                        .frame(height: 140)
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                            }
-
-                            Button(action: submitPerspective) {
-                                Text("Add Perspective")
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 56)
-                                    .background(Color.blue)
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                            }
-                            .disabled(!hasInput)
-                            .padding(.horizontal, 20)
-                            .opacity(hasInput ? 1.0 : 0.5)
+                            Text("Write your own story prompt")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
-                        .padding(.bottom, 40)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    } else {
-                        VStack(spacing: 16) {
-                            Image(systemName: "hand.tap")
-                                .font(.system(size: 40))
-                                .foregroundColor(Color(uiColor: .secondaryLabel))
-                            Text("Tap a story above to add your perspective")
-                                .font(.subheadline)
-                                .foregroundColor(Color(uiColor: .secondaryLabel))
-                        }
-                        .frame(maxHeight: .infinity)
+                        .padding(.horizontal)
+
+                        Spacer(minLength: 100)
                     }
                 }
-            }
-            .navigationTitle("Perspective")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
+                .navigationTitle("New Story")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: onContinue) {
+                            Text("Continue")
+                                .fontWeight(.semibold)
+                        }
+                        .disabled(!canProceed)
                     }
                 }
             }
         }
     }
 
-    private func submitPerspective() {
-        dismiss()
+    // MARK: - Prompt Button
+
+    struct PromptButton: View {
+        let prompt: String
+        let isSelected: Bool
+        let onSelect: () -> Void
+
+        var body: some View {
+            Button(action: onSelect) {
+                HStack(spacing: 12) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundColor(isSelected ? .blue : .secondary)
+
+                    Text(prompt)
+                        .font(.body)
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.leading)
+
+                    Spacer()
+                }
+                .padding()
+                .background(isSelected ? Color.blue.opacity(0.1) : Color(.systemGray6))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Story Creation View
+
+    struct StoryCreationView: View {
+        let prompt: String
+        @Binding var storyText: String
+        @Binding var isRecording: Bool
+        @Binding var inputMethod: InputMethod
+        let onBack: () -> Void
+        let onSubmit: () -> Void
+
+        var canSubmit: Bool {
+            switch inputMethod {
+            case .text:
+                return !storyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .voice:
+                return isRecording
+            }
+        }
+
+        var body: some View {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Prompt context
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Your Prompt")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+                                .textCase(.uppercase)
+
+                            Text(prompt)
+                                .font(.title3)
+                                .fontWeight(.medium)
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+
+                        Divider()
+                            .padding(.horizontal)
+
+                        // Input method picker
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("How would you like to tell your story?")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+
+                            Picker("Input Method", selection: $inputMethod) {
+                                ForEach(InputMethod.allCases, id: \.self) { method in
+                                    Text(method.rawValue).tag(method)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .padding(.horizontal)
+
+                        // Input area based on method
+                        Group {
+                            if inputMethod == .text {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Your Story")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+
+                                    TextEditor(text: $storyText)
+                                        .frame(minHeight: 200)
+                                        .padding(12)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(12)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color(.systemGray4), lineWidth: 1)
+                                        )
+
+                                    HStack {
+                                        Spacer()
+                                        Text("\(storyText.count) characters")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            } else {
+                                VStack(spacing: 20) {
+                                    Image(systemName: isRecording ? "waveform" : "mic.fill")
+                                        .font(.system(size: 64))
+                                        .foregroundColor(isRecording ? .red : .blue)
+                                        .symbolEffect(.pulse, isActive: isRecording)
+
+                                    Text(isRecording ? "Recording your story..." : "Tap to record")
+                                        .font(.headline)
+
+                                    Text("Tell your story naturally")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+
+                                    Button(action: {
+                                        isRecording.toggle()
+                                    }) {
+                                        Text(isRecording ? "Stop Recording" : "Start Recording")
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 16)
+                                            .background(isRecording ? Color.red : Color.blue)
+                                            .cornerRadius(12)
+                                    }
+                                    .disabled(false)
+                                }
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        Spacer(minLength: 100)
+                    }
+                }
+                .navigationTitle("Tell Your Story")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: onBack) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                Text("Back")
+                            }
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: onSubmit) {
+                            Text("Save Story")
+                                .fontWeight(.semibold)
+                        }
+                        .disabled(!canSubmit)
+                    }
+                }
+            }
+        }
     }
 }
 
