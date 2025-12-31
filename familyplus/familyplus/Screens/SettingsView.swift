@@ -291,14 +291,14 @@ struct FamilySettingsSheet: View {
     @State private var familyName: String = ""
     @State private var inviteSlug: String = ""
     @State private var isLoading = false
-    
+
     var body: some View {
         NavigationStack {
             List {
                 Section("Family Name") {
                     TextField("Family name", text: $familyName)
                 }
-                
+
                 Section("Invite Link") {
                     HStack {
                         Text("share.storyride.app/join/")
@@ -306,23 +306,45 @@ struct FamilySettingsSheet: View {
                         Text(inviteSlug)
                             .fontWeight(.medium)
                     }
-                    
+
                     Button("Copy Link") {
                         UIPasteboard.general.string = "https://share.storyride.app/join/\(inviteSlug)"
                     }
                 }
-                
+
                 Section("Members") {
-                    NavigationLink("Manage Members") {
-                        Text("Member management coming soon")
-                            .foregroundColor(theme.secondaryTextColor)
+                    Button {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NavigationCoordinator.shared.navigateToFamily(action: .showManageMembers)
+                        }
+                    } label: {
+                        HStack {
+                            Text("Manage Members")
+                                .foregroundColor(theme.textColor)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(theme.secondaryTextColor)
+                        }
                     }
                 }
-                
+
                 Section("Add Elder") {
-                    NavigationLink("Add Elder (Phone)") {
-                        Text("Elder onboarding coming soon")
-                            .foregroundColor(theme.secondaryTextColor)
+                    Button {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NavigationCoordinator.shared.navigateToFamily(action: .showAddElder)
+                        }
+                    } label: {
+                        HStack {
+                            Text("Add Elder (Phone)")
+                                .foregroundColor(theme.textColor)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(theme.secondaryTextColor)
+                        }
                     }
                 }
             }

@@ -41,7 +41,7 @@ open class ThemeManager: ObservableObject {
 
 struct MainNavigationFlow: View {
     @EnvironmentObject var themeManager: ThemeManager
-    @State private var selectedTab: MainTab = .hub
+    @StateObject private var navigationCoordinator = NavigationCoordinator.shared
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
 
     var theme: PersonaTheme {
@@ -59,7 +59,8 @@ struct MainNavigationFlow: View {
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                 })
             } else {
-                MainTabView(selectedTab: $selectedTab)
+                MainTabView(selectedTab: $navigationCoordinator.selectedTab)
+                    .environmentObject(navigationCoordinator)
             }
 
             // Theme toggle (for demo purposes)
@@ -90,6 +91,7 @@ enum MainTab: String, CaseIterable {
 
 struct MainTabView: View {
     @Binding var selectedTab: MainTab
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
     @Environment(\.theme) var theme
 
     var body: some View {
@@ -101,6 +103,7 @@ struct MainTabView: View {
                 .tag(MainTab.hub)
 
             FamilyView()
+                .environmentObject(navigationCoordinator)
                 .tabItem {
                     Label("Family", systemImage: MainTab.family.icon)
                 }

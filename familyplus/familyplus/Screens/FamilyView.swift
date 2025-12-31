@@ -84,9 +84,14 @@ struct Activity {
 struct TeenProfile: View {
     let loadingState: LoadingState<ProfileData>
     @Environment(\.theme) var theme
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
+
     @State private var showAchievements = false
     @State private var showInvite = false
-    
+    @State private var showAddElder = false
+    @State private var showManageMembers = false
+    @State private var showGovernance = false
+
     // TODO: Replace with actual family data from API
     @State private var familyData = FamilyData(
         id: "family-123",
@@ -108,7 +113,13 @@ struct TeenProfile: View {
                 case .empty:
                     TeenProfileEmptyState()
                 case .loaded(let data):
-                    TeenProfileContent(data: data, showAchievements: $showAchievements, showInvite: $showInvite, familyData: $familyData)
+                    TeenProfileContent(
+                        data: data,
+                        showAchievements: $showAchievements,
+                        showInvite: $showInvite,
+                        showGovernance: $showGovernance,
+                        familyData: $familyData
+                    )
                 case .error(let message):
                     ErrorStateView(message: message, onRetry: {})
                 }
@@ -124,6 +135,22 @@ struct TeenProfile: View {
         }
         .sheet(isPresented: $showAchievements) { AchievementsModal(achievements: ProfileData.sample.achievements) }
         .sheet(isPresented: $showInvite) { InviteFamilyModal() }
+        .sheet(isPresented: $showAddElder) { AddElderModal() }
+        .sheet(isPresented: $showManageMembers) { ManageMembersModal() }
+        .sheet(isPresented: $showGovernance) { FamilyGovernanceModal(familyData: familyData) }
+        .onChange(of: navigationCoordinator.pendingFamilyAction) { _, action in
+            switch action {
+            case .showAddElder:
+                showAddElder = true
+            case .showManageMembers:
+                showManageMembers = true
+            case .showGovernance:
+                showGovernance = true
+            case .none:
+                break
+            }
+            navigationCoordinator.clearPendingAction()
+        }
     }
 }
 
@@ -131,9 +158,9 @@ struct TeenProfileContent: View {
     let data: ProfileData
     @Binding var showAchievements: Bool
     @Binding var showInvite: Bool
+    @Binding var showGovernance: Bool
     @Binding var familyData: FamilyData
     @Environment(\.theme) var theme
-    @State private var showGovernance = false
 
     // TODO: Replace with actual user ownership status from API
     @State private var isOwner: Bool = true

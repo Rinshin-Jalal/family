@@ -3,6 +3,7 @@
 //  StoryRide
 //
 //  Living Memory Dashboard - Home screen showing what's alive in the family
+//  Redesigned following Apple HIG: clarity, deference, depth
 //
 
 import SwiftUI
@@ -15,7 +16,7 @@ struct DailyPrompt: Identifiable, Codable {
     let category: PromptCategory
     let icon: String
     let validUntil: Date
-    let responseCount: Int?  // How many family members answered
+    let responseCount: Int?
 
     enum PromptCategory: String, Codable {
         case memory = "Memory"
@@ -23,6 +24,16 @@ struct DailyPrompt: Identifiable, Codable {
         case milestone = "Milestone"
         case wisdom = "Wisdom"
         case fun = "Fun"
+
+        var color: Color {
+            switch self {
+            case .memory: return .blue
+            case .tradition: return .orange
+            case .milestone: return .purple
+            case .wisdom: return .teal
+            case .fun: return .yellow
+            }
+        }
     }
 }
 
@@ -33,13 +44,66 @@ struct RecentActivity: Identifiable {
     let subtitle: String
     let timestamp: Date
     let storyId: String?
-    let duration: TimeInterval?  // Duration in seconds for stories
-    let hasListened: Bool        // Whether user has listened to this
+    let duration: TimeInterval?
+    let hasListened: Bool
 
     enum ActivityType {
-        case newStory        // 🎙️
-        case newPerspective  // 🧵
-        case upcomingCall    // 📞
+        case newStory
+        case newPerspective
+        case upcomingCall
+
+        var icon: String {
+            switch self {
+            case .newStory: return "waveform"
+            case .newPerspective: return "bubble.left.and.bubble.right"
+            case .upcomingCall: return "phone"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .newStory: return .orange
+            case .newPerspective: return .blue
+            case .upcomingCall: return .purple
+            }
+        }
+    }
+
+    var timeAgoText: String {
+        let now = Date()
+        let interval = now.timeIntervalSince(timestamp)
+
+        if interval < 0 {
+            let futureInterval = -interval
+            if futureInterval < 3600 {
+                return "In \(Int(futureInterval / 60))m"
+            } else if futureInterval < 86400 {
+                return "In \(Int(futureInterval / 3600))h"
+            } else if futureInterval < 172800 {
+                return "Tomorrow"
+            } else {
+                return "In \(Int(futureInterval / 86400))d"
+            }
+        }
+
+        if interval < 3600 {
+            return "\(Int(interval / 60))m ago"
+        } else if interval < 86400 {
+            return "\(Int(interval / 3600))h ago"
+        } else if interval < 172800 {
+            return "Yesterday"
+        } else {
+            return "\(Int(interval / 86400))d ago"
+        }
+    }
+
+    var formattedDuration: String? {
+        guard let duration = duration else { return nil }
+        let minutes = Int(duration / 60)
+        if minutes == 0 {
+            return "\(Int(duration))s"
+        }
+        return "\(minutes) min"
     }
 }
 
@@ -47,9 +111,9 @@ struct ActiveStory: Identifiable {
     let id = UUID()
     let story: Story
     let lastActivity: Date
-    let isEvolving: Bool  // Still receiving new perspectives
-    let emotionalHint: String?  // Why should I open this story?
-    let freshnessText: String?  // When was it last updated
+    let isEvolving: Bool
+    let emotionalHint: String?
+    let freshnessText: String?
 }
 
 struct UnheardVoice: Identifiable {
@@ -59,14 +123,21 @@ struct UnheardVoice: Identifiable {
     let role: AppTheme
     let duration: TimeInterval
     let recordedDate: Date
+
+    var formattedDuration: String {
+        let minutes = Int(duration / 60)
+        return "\(minutes) min"
+    }
 }
 
 // MARK: - Hub View (Dashboard)
 
 struct HubView: View {
     @Environment(\.theme) var theme
+    @Environment(\.colorScheme) var colorScheme
     @State private var loadingState: LoadingState<DashboardData> = .loading
     @State private var showCaptureSheet = false
+    @State private var showPerspectiveModal = false
     @State private var dailyPrompt: DailyPrompt?
     @State private var selectedPromptForCapture: PromptData?
 
@@ -77,6 +148,9 @@ struct HubView: View {
                 selectedPromptForCapture = prompt
                 showCaptureSheet = true
             },
+            onShowPerspective: {
+                showPerspectiveModal = true
+            },
             dailyPrompt: dailyPrompt
         )
         .animation(theme.animation, value: theme.role)
@@ -86,6 +160,9 @@ struct HubView: View {
                     selectedPromptForCapture = nil
                 }
         }
+        .sheet(isPresented: $showPerspectiveModal) {
+            PerspectiveModal()
+        }
         .onAppear {
             loadDashboard()
             loadDailyPrompt()
@@ -94,7 +171,6 @@ struct HubView: View {
 
     private func loadDashboard() {
         loadingState = .loading
-
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             let data = DashboardData.mock
             loadingState = .loaded(data)
@@ -102,8 +178,6 @@ struct HubView: View {
     }
 
     private func loadDailyPrompt() {
-        // TODO: Replace with actual API call
-        // GET /api/prompts/daily
         dailyPrompt = DailyPrompt(
             id: UUID().uuidString,
             question: "What memory would you like to capture today?",
@@ -132,7 +206,7 @@ struct DashboardData {
                 subtitle: "The Summer of 1968",
                 timestamp: Date().addingTimeInterval(-86400),
                 storyId: "story-1",
-                duration: 180,  // 3 minutes
+                duration: 180,
                 hasListened: false
             ),
             RecentActivity(
@@ -141,7 +215,7 @@ struct DashboardData {
                 subtitle: "to 'Our First Home' by Mom",
                 timestamp: Date().addingTimeInterval(-172800),
                 storyId: "story-2",
-                duration: 120,  // 2 minutes
+                duration: 120,
                 hasListened: false
             ),
             RecentActivity(
@@ -157,21 +231,21 @@ struct DashboardData {
         activeStories: [
             ActiveStory(
                 story: Story.sampleStories[0],
-                lastActivity: Date().addingTimeInterval(-259200),  // 3 days ago
+                lastActivity: Date().addingTimeInterval(-259200),
                 isEvolving: true,
                 emotionalHint: "Remembered very differently by each person",
                 freshnessText: "New perspective 3 days ago"
             ),
             ActiveStory(
                 story: Story.sampleStories[1],
-                lastActivity: Date().addingTimeInterval(-604800),  // 1 week ago
+                lastActivity: Date().addingTimeInterval(-604800),
                 isEvolving: false,
                 emotionalHint: "A joyful memory for everyone",
                 freshnessText: "Last updated 1 week ago"
             ),
             ActiveStory(
                 story: Story.sampleStories[2],
-                lastActivity: Date().addingTimeInterval(-1209600),  // 2 weeks ago
+                lastActivity: Date().addingTimeInterval(-1209600),
                 isEvolving: true,
                 emotionalHint: "The last trip before everything changed",
                 freshnessText: "Still evolving"
@@ -198,184 +272,15 @@ struct DashboardData {
     )
 }
 
-// MARK: - Unified dark/light Dashboard
-
-struct UnifieddarklightDashboard: View {
-    let loadingState: LoadingState<DashboardData>
-    let onShowCapture: (PromptData?) -> Void
-    let dailyPrompt: DailyPrompt?
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                switch loadingState {
-                case .loading:
-                    DashboardSkeleton()
-                case .empty:
-                    UnifiedEmptyState(onCreateStory: { onShowCapture(nil) })
-                case .loaded(let data):
-                    UnifiedDashboardContent(data: data, onShowCapture: onShowCapture, dailyPrompt: dailyPrompt)
-                case .error(let message):
-                    ErrorStateView(message: message, onRetry: {})
-                }
-            }
-            .background(theme.backgroundColor.ignoresSafeArea())
-            .navigationTitle("Home")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
-
-
-struct UnifiedDashboardContent: View {
-    let data: DashboardData
-    let onShowCapture: (PromptData?) -> Void
-    let dailyPrompt: DailyPrompt?
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        ZStack {
-            // MARK: - StoryDetailView-Style Background
-            // Layer 1: Base
-            theme.backgroundColor.ignoresSafeArea()
-
-            // Layer 2: Hero-style diagonal gradient (StoryDetailView pattern)
-            LinearGradient(
-                colors: [
-                    theme.accentColor.opacity(0.35),
-                    complementaryColor.opacity(0.45),
-                    theme.backgroundColor.opacity(0.70),
-                    theme.backgroundColor
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            // Layer 3: Text visibility gradient (StoryDetailView pattern)
-            LinearGradient(
-                colors: [.clear, theme.backgroundColor.opacity(0.90)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 200)
-            .ignoresSafeArea(edges: .top)
-
-            // Layer 4: Sticky gradient overlay (StoryDetailView pattern)
-            VStack(spacing: 0) {
-                LinearGradient(
-                    colors: [
-                        theme.accentColor.opacity(theme.role == .dark ? 0.15 : 0.35),
-                        complementaryColor.opacity(theme.role == .dark ? 0.08 : 0.20),
-                        .clear
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 120)
-                .ignoresSafeArea(edges: .top)
-                Spacer()
-            }
-
-            // Layer 5: Content
-            ScrollView {
-                VStack(spacing: 24) {
-                    // MARK: - Daily Prompt Card
-                    if let prompt = dailyPrompt {
-                        PromptHeroCard(prompt: prompt, onTap: {
-                            let promptData = PromptData(
-                                id: prompt.id,
-                                text: prompt.question,
-                                category: prompt.category.rawValue.lowercased(),
-                                isCustom: false,
-                                createdAt: ISO8601DateFormatter().string(from: Date())
-                            )
-                            onShowCapture(promptData)
-                        })
-                    }
-
-                    // MARK: - Hero Section: What's New
-                    HeroSection(activities: data.recentActivities)
-
-                    // MARK: - Active Stories (Grid Layout)
-                    ActiveStoriesGridSection(stories: data.activeStories)
-
-                    // MARK: - Unheard Voices
-                    if !data.unheardVoices.isEmpty {
-                        UnheardVoicesSection(voices: data.unheardVoices)
-                    }
-
-                    // MARK: - Bottom padding for FAB
-                    Color.clear.frame(height: 100)
-                }
-                .padding(theme.screenPadding)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            CaptureMemoryButton(
-                action: { onShowCapture(nil) },
-                hasUnlistenedContent: !data.unheardVoices.isEmpty || data.recentActivities.contains(where: { !$0.hasListened })
-            )
-        }
-    }
-
-    private var complementaryColor: Color {
-        switch theme.role {
-        case .dark: return Color(red: 0.4, green: 0.7, blue: 1.0) // Sky blue
-        case .light: return Color.storytellerBlue
-        }
-    }
-
-    private var tertiaryColor: Color {
-        switch theme.role {
-        case .dark: return Color.storytellerBlue
-        case .light: return Color.storytellerOrange
-        }
-    }
-}
-
-// MARK: - Unified Empty State
-
-struct UnifiedEmptyState: View {
-    let onCreateStory: () -> Void
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 64))
-                .foregroundColor(theme.accentColor.opacity(0.6))
-            VStack(spacing: 12) {
-                Text("No Stories Yet")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(theme.textColor)
-                Text("Start capturing your family memories")
-                    .font(.system(size: 16))
-                    .foregroundColor(theme.secondaryTextColor)
-            }
-            Button(action: onCreateStory) {
-                Text("Record Your First Story")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Capsule().fill(theme.accentColor))
-            }
-            Spacer()
-        }
-        .padding(theme.screenPadding)
-    }
-}
-
-// MARK: - Unified Dashboard
+// MARK: - Unified Dashboard (Apple HIG Compliant)
 
 struct UnifiedDashboard: View {
     let loadingState: LoadingState<DashboardData>
     let onShowCapture: (PromptData?) -> Void
+    let onShowPerspective: () -> Void
     let dailyPrompt: DailyPrompt?
     @Environment(\.theme) var theme
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -386,347 +291,307 @@ struct UnifiedDashboard: View {
                 case .empty:
                     UnifiedEmptyState(onCreateStory: { onShowCapture(nil) })
                 case .loaded(let data):
-                    UnifiedDashboardContent(data: data, onShowCapture: onShowCapture, dailyPrompt: dailyPrompt)
+                    DashboardContent(
+                        data: data,
+                        onShowCapture: onShowCapture,
+                        onShowPerspective: onShowPerspective,
+                        dailyPrompt: dailyPrompt
+                    )
                 case .error(let message):
                     ErrorStateView(message: message, onRetry: {})
                 }
             }
-            .background(theme.backgroundColor.ignoresSafeArea())
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Home")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
         }
     }
 }
 
-// MARK: - Hero Section (What's New)
+// MARK: - Dashboard Content
 
-struct HeroSection: View {
-    let activities: [RecentActivity]
+struct DashboardContent: View {
+    let data: DashboardData
+    let onShowCapture: (PromptData?) -> Void
+    let onShowPerspective: () -> Void
+    let dailyPrompt: DailyPrompt?
     @Environment(\.theme) var theme
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Show only the most important activity (first one)
-            if let primaryActivity = activities.first {
-                ActivityCard(activity: primaryActivity, theme: theme, isPrimary: true)
-            }
-
-            // "See all updates" link if there are more activities
-            if activities.count > 1 {
-                Button(action: {
-                    // TODO: Navigate to all updates view
-                }) {
-                    HStack(spacing: 4) {
-                        Text("See all updates")
-                            .font(.system(size: 14, weight: .medium))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+        List {
+            // Daily Prompt Section
+            if let prompt = dailyPrompt {
+                Section {
+                    PromptHeroCard(prompt: prompt, onTap: onShowPerspective)
+                } header: {
+                    HStack {
+                        Image(systemName: "lightbulb.fill")
+                            .foregroundColor(.yellow)
+                        Text("Today's Question")
                     }
-                    .foregroundColor(theme.accentColor)
+                    .font(.subheadline)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
                 }
             }
+
+            // Recent Activity Section
+            Section {
+                ForEach(data.recentActivities) { activity in
+                    NavigationLink(destination: storyDetail(for: activity)) {
+                        ActivityRow(activity: activity)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text("Recent Activity")
+                    .font(.subheadline)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
+            }
+
+            // Stories Section
+            Section {
+                ForEach(data.activeStories) { activeStory in
+                    NavigationLink(destination: StoryDetailView(story: activeStory.story)) {
+                        StoryCardRow(story: activeStory)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text("Stories")
+                    .font(.subheadline)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
+            }
+
+            // Unheard Voices Section
+            if !data.unheardVoices.isEmpty {
+                Section {
+                    ForEach(data.unheardVoices) { voice in
+                        NavigationLink(destination: Text("Story Player")) {
+                            VoiceRow(voice: voice)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    HStack {
+                        Text("Unheard Voices")
+                        Spacer()
+                        Text("\(data.unheardVoices.count)")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Color.red)
+                            .clipShape(Capsule())
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
+                }
+            }
+
+            // Stats Summary
+            Section {
+                HStack(spacing: 32) {
+                    DashboardStatItem(value: "\(data.totalStories)", label: "Stories")
+                    DashboardStatItem(value: "\(data.totalVoices)", label: "Voices")
+                }
+                .padding(.vertical, 8)
+            } header: {
+                Text("Your Family")
+                    .font(.subheadline)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
+            }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+    }
+
+    private func storyDetail(for activity: RecentActivity) -> some View {
+        if let storyId = activity.storyId,
+           let story = Story.sampleStories.first(where: { $0.id.uuidString == storyId }) {
+            return AnyView(StoryDetailView(story: story))
+        }
+        return AnyView(Text("Story detail"))
     }
 }
 
-struct ActivityCard: View {
+// MARK: - Activity Row
+
+struct ActivityRow: View {
     let activity: RecentActivity
-    let theme: PersonaTheme
-    var isPrimary: Bool = false
 
     var body: some View {
-        HStack(spacing: 14) {
-            // Colored icon circle
+        HStack(spacing: 16) {
+            // Icon
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [activityColor, activityColor.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
+                    .fill(activity.type.color.opacity(0.15))
+                    .frame(width: 40, height: 40)
 
-                Image(systemName: activityIcon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
+                Image(systemName: activity.type.icon)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(activity.type.color)
             }
 
             // Content
             VStack(alignment: .leading, spacing: 4) {
                 Text(activity.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(theme.textColor)
+                    .font(.body)
+                    .foregroundColor(Color(UIColor.label))
 
-                Text(activity.subtitle)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.secondaryTextColor)
-
-                // Meta info
                 HStack(spacing: 8) {
-                    if let duration = activity.duration {
-                        Text(durationText(duration))
-                            .font(.system(size: 12))
-                            .foregroundColor(theme.secondaryTextColor.opacity(0.7))
+                    Text(activity.subtitle)
+                        .font(.footnote)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
+                        .lineLimit(1)
+
+                    if let duration = activity.formattedDuration {
+                        Text("·")
+                            .font(.footnote)
+                            .foregroundColor(Color(UIColor.tertiaryLabel))
+
+                        Text(duration)
+                            .font(.footnote)
+                            .foregroundColor(Color(UIColor.secondaryLabel))
                     }
 
-                    Text(timeAgoText)
-                        .font(.system(size: 12))
-                        .foregroundColor(theme.secondaryTextColor.opacity(0.7))
+                    Text("·")
+                        .font(.footnote)
+                        .foregroundColor(Color(UIColor.tertiaryLabel))
+
+                    Text(activity.timeAgoText)
+                        .font(.footnote)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
                 }
             }
 
             Spacer()
-
-            // Arrow
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(theme.secondaryTextColor.opacity(0.4))
         }
-        .padding(14)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
-    }
-
-    private var activityIcon: String {
-        switch activity.type {
-        case .newStory: return "waveform"
-        case .newPerspective: return "bubble.left.and.bubble.right"
-        case .upcomingCall: return "phone"
-        }
-    }
-
-    private var activityColor: Color {
-        switch activity.type {
-        case .newStory: return .storytellerOrange
-        case .newPerspective: return .storytellerBlue
-        case .upcomingCall: return .storytellerPurple
-        }
-    }
-
-    private var timeAgoText: String {
-        let now = Date()
-        let interval = now.timeIntervalSince(activity.timestamp)
-
-        if interval < 3600 {
-            let minutes = Int(interval / 60)
-            return "\(minutes)m ago"
-        } else if interval < 86400 {
-            let hours = Int(interval / 3600)
-            return "\(hours)h ago"
-        } else if interval < 172800 {
-            return "Yesterday"
-        } else {
-            let days = Int(interval / 86400)
-            return "\(days)d ago"
-        }
-    }
-
-    private func durationText(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration / 60)
-        if minutes == 0 {
-            return "\(Int(duration))s"
-        }
-        return "\(minutes) min"
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 }
 
-// MARK: - Active Stories Section
+// MARK: - Story Card Row
 
-struct ActiveStoriesSection: View {
-    let stories: [ActiveStory]
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Stories")
-                .font(theme.headlineFont)
-                .foregroundColor(theme.textColor)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(stories, id: \.story.id) { activeStory in
-                        NavigationLink(destination: StoryDetailView(story: activeStory.story)) {
-                            ActiveStoryCard(story: activeStory, theme: theme)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct ActiveStoryCard: View {
+struct StoryCardRow: View {
     let story: ActiveStory
-    let theme: PersonaTheme
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Gradient header - more prominent
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            .storytellerPurple,
-                            .storytellerPurple.opacity(0.6)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                ).clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 12,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: 12
-                    )
-                )
-                .frame(height: 50)
-                .overlay(alignment: .bottomLeading) {
-                    // Voice count badge
-                    if story.story.voiceCount > 1 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.2.fill")
-                                .font(.system(size: 10))
-                            Text("\(story.story.voiceCount)")
-                                .font(.system(size: 11, weight: .semibold))
-                        }
+        HStack(spacing: 16) {
+            // Color indicator
+            RoundedRectangle(cornerRadius: 8)
+                .fill(storyColor)
+                .frame(width: 48, height: 48)
+                .overlay(
+                    Image(systemName: "waveform")
+                        .font(.system(size: 20, weight: .medium))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .glassEffect()
-                        .padding(8)
-                    }
-                }
-
-            // Content
-            VStack(alignment: .leading, spacing: 6) {
-                Text(story.story.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.textColor)
-                    .lineLimit(2)
-
-                Text(story.story.storyteller)
-                    .font(.system(size: 12))
-                    .foregroundColor(.storytellerPurple)
-            }
-            .padding(12)
-        }
-        .frame(width: 160)
-        .glassEffect(.clear.interactive(), in: RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
-    }
-}
-
-// MARK: - Active Stories Grid Section
-
-struct ActiveStoriesGridSection: View {
-    let stories: [ActiveStory]
-    @Environment(\.theme) var theme
-
-    // Adaptive grid that adjusts columns based on screen width
-    let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Stories")
-                .font(theme.headlineFont)
-                .foregroundColor(theme.textColor)
-
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(stories, id: \.story.id) { activeStory in
-                    NavigationLink(destination: StoryDetailView(story: activeStory.story)) {
-                        ActiveStoryCard(story: activeStory, theme: theme)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Unheard Voices Section
-
-struct UnheardVoicesSection: View {
-    let voices: [UnheardVoice]
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Unheard")
-                .font(theme.headlineFont)
-                .foregroundColor(theme.textColor)
-
-            VStack(spacing: 8) {
-                ForEach(voices) { voice in
-                    UnheardVoiceCard(voice: voice, theme: theme)
-                }
-            }
-        }
-    }
-}
-
-struct UnheardVoiceCard: View {
-    let voice: UnheardVoice
-    let theme: PersonaTheme
-
-    var body: some View {
-        HStack(spacing: 14) {
-            // Colored initial circle
-            Text(String(voice.storyteller.prefix(1)).uppercased())
-                .font(.system(size: 17, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    storytellerColor,
-                                    storytellerColor.opacity(0.7)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
                 )
 
             // Content
             VStack(alignment: .leading, spacing: 4) {
-                Text(voice.storyTitle)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(theme.textColor)
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(story.story.title)
+                        .font(.body)
+                        .foregroundColor(Color(UIColor.label))
+                        .lineLimit(2)
+
+                    if story.isEvolving {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.blue)
+                    }
+                }
 
                 HStack(spacing: 8) {
-                    Text(voice.storyteller)
-                        .font(.system(size: 13))
-                        .foregroundColor(storytellerColor)
+                    Text(story.story.storyteller)
+                        .font(.footnote)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
 
-                    Text("·")
-                        .foregroundColor(theme.secondaryTextColor.opacity(0.5))
+                    if let freshness = story.freshnessText {
+                        Text("·")
+                            .font(.footnote)
+                            .foregroundColor(Color(UIColor.tertiaryLabel))
 
-                    Text(durationText)
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.secondaryTextColor)
+                        Text(freshness)
+                            .font(.footnote)
+                            .foregroundColor(Color(UIColor.secondaryLabel))
+                    }
                 }
             }
 
             Spacer()
 
-            // Arrow
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(theme.secondaryTextColor.opacity(0.4))
+            // Voice count
+            if story.story.voiceCount > 1 {
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 10))
+                    Text("\(story.story.voiceCount)")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundColor(.blue)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.blue.opacity(0.1))
+                .clipShape(Capsule())
+            }
         }
-        .padding(14)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+    }
+
+    private var storyColor: Color {
+        // Use role-based color from theme if available
+        .storytellerPurple
+    }
+}
+
+// MARK: - Voice Row
+
+struct VoiceRow: View {
+    let voice: UnheardVoice
+
+    var body: some View {
+        HStack(spacing: 16) {
+            // Avatar initial
+            Text(String(voice.storyteller.prefix(1)).uppercased())
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(storytellerColor))
+
+            // Content
+            VStack(alignment: .leading, spacing: 4) {
+                Text(voice.storyTitle)
+                    .font(.body)
+                    .foregroundColor(Color(UIColor.label))
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Text(voice.storyteller)
+                        .font(.footnote)
+                        .foregroundColor(storytellerColor)
+
+                    Text("·")
+                        .foregroundColor(Color(UIColor.tertiaryLabel))
+
+                    Text(voice.formattedDuration)
+                        .font(.footnote)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
+                }
+            }
+
+            Spacer()
+
+            Circle()
+                .fill(Color.blue)
+                .frame(width: 8, height: 8)
+        }
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
 
     private var storytellerColor: Color {
@@ -735,10 +600,26 @@ struct UnheardVoiceCard: View {
         case .dark: return .storytellerPurple
         }
     }
+}
 
-    private var durationText: String {
-        let minutes = Int(voice.duration / 60)
-        return "\(minutes) min"
+// MARK: - Dashboard Stat Item
+
+struct DashboardStatItem: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(Color(UIColor.label))
+
+            Text(label)
+                .font(.caption)
+                .foregroundColor(Color(UIColor.secondaryLabel))
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -747,127 +628,470 @@ struct UnheardVoiceCard: View {
 struct PromptHeroCard: View {
     let prompt: DailyPrompt
     let onTap: () -> Void
-    @Environment(\.theme) var theme
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 16) {
-                // Prompt question
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: prompt.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(prompt.category.color)
+
+                    Text(prompt.category.rawValue)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(prompt.category.color)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color(UIColor.tertiaryLabel))
+                }
+
                 Text(prompt.question)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
+                    .font(.headline)
+                    .foregroundColor(Color(UIColor.label))
+                    .multilineTextAlignment(.leading)
                     .lineLimit(3)
+
+                Text("Tap to share your story")
+                    .font(.caption)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
             }
-            .padding(24)
-            .frame(maxWidth: .infinity,minHeight: 200)
-
-            .glassEffect(.regular.tint(.accentColor), in: RoundedRectangle(cornerRadius: 20))
-            .shadow(color: theme.accentColor.opacity(0.3), radius: 20, y: 12)
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.systemBackground))
+                    .shadow(
+                        color: .black.opacity(colorScheme == .dark ? 0.3 : 0.1),
+                        radius: 8,
+                        x: 0,
+                        y: 4
+                    )
+            }
         }
-    }
-
-    private var complementaryColor: Color {
-        switch theme.role {
-        case .dark: return Color(red: 0.4, green: 0.7, blue: 1.0)
-        case .light: return Color.storytellerBlue
-        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 8)
     }
 }
 
-// MARK: - Capture Memory Button
+// MARK: - Unified Empty State
 
-struct CaptureMemoryButton: View {
-    let action: () -> Void
-    let hasUnlistenedContent: Bool
-    @Environment(\.theme) var theme
+struct UnifiedEmptyState: View {
+    let onCreateStory: () -> Void
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: hasUnlistenedContent ? "plus.circle" : "plus.circle.fill")
-                    .font(.system(size: hasUnlistenedContent ? 18 : 20))
+        VStack(spacing: 24) {
+            Spacer()
 
-                Text(buttonText)
-                    .font(.system(size: hasUnlistenedContent ? 15 : 16, weight: hasUnlistenedContent ? .medium : .semibold))
+            Image(systemName: "waveform.circle.fill")
+                .font(.system(size: 64))
+                .foregroundColor(.secondary)
+
+            VStack(spacing: 12) {
+                Text("No Stories Yet")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(Color(UIColor.label))
+
+                Text("Start capturing your family memories")
+                    .font(.body)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
+                    .multilineTextAlignment(.center)
             }
-            .foregroundColor(hasUnlistenedContent ? theme.accentColor : .white)
-            .padding(.horizontal, hasUnlistenedContent ? 18 : 20)
-            .padding(.vertical, hasUnlistenedContent ? 12 : 14)
-            .background(
-                Capsule()
-                    .fill(hasUnlistenedContent ? Color.clear : theme.accentColor)
-            )
-        }.buttonStyle(.glassProminent).tint(theme.accentColor.opacity(0.2))
-        .padding(.bottom, 24)
-    }
 
-    private var buttonText: String {
-        if hasUnlistenedContent {
-            return "Record when ready"
-        } else {
-            return "Capture a Memory"
+            Button(action: onCreateStory) {
+                Text("Record Your First Story")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Color.accentColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
         }
+        .padding(32)
+        .background(Color(uiColor: .systemGroupedBackground))
     }
 }
 
 // MARK: - Dashboard Skeleton
 
 struct DashboardSkeleton: View {
-    @Environment(\.theme) var theme
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Hero skeleton
-                VStack(alignment: .leading, spacing: 12) {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(theme.secondaryTextColor.opacity(0.1))
-                        .frame(height: 24)
-                        .frame(maxWidth: 200)
+        NavigationStack {
+            List {
+                // Prompt skeleton
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Circle()
+                                .fill(Color(.tertiaryLabel).opacity(0.3))
+                                .frame(width: 20, height: 20)
 
-                    VStack(spacing: 8) {
-                        ForEach(0..<2) { _ in
-                            HStack(spacing: 12) {
-                                Circle()
-                                    .fill(theme.secondaryTextColor.opacity(0.1))
-                                    .frame(width: 44, height: 44)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(theme.secondaryTextColor.opacity(0.1))
-                                        .frame(height: 14)
-                                        .frame(maxWidth: 180)
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(theme.secondaryTextColor.opacity(0.1))
-                                        .frame(height: 12)
-                                        .frame(maxWidth: 140)
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color(.tertiaryLabel).opacity(0.3))
+                                .frame(width: 60, height: 12)
+
+                            Spacer()
+
+                            Circle()
+                                .fill(Color(.tertiaryLabel).opacity(0.3))
+                                .frame(width: 14, height: 14)
+                        }
+
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(.tertiaryLabel).opacity(0.3))
+                            .frame(height: 24)
+                            .frame(maxWidth: .infinity)
+
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(.tertiaryLabel).opacity(0.3))
+                            .frame(width: 150, height: 12)
+                    }
+                    .padding(.vertical, 8)
+                } header: {
+                    Text("Today's Question")
+                        .font(.subheadline)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
+                }
+
+                // Activity skeleton
+                Section {
+                    ForEach(0..<3, id: \.self) { _ in
+                        HStack(spacing: 16) {
+                            Circle()
+                                .fill(Color(.tertiaryLabel).opacity(0.3))
+                                .frame(width: 40, height: 40)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color(.tertiaryLabel).opacity(0.3))
+                                    .frame(width: 180, height: 16)
+
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color(.tertiaryLabel).opacity(0.3))
+                                    .frame(width: 120, height: 12)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                    }
+                } header: {
+                    Text("Recent Activity")
+                        .font(.subheadline)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
+                }
+
+                // Stories skeleton
+                Section {
+                    ForEach(0..<2, id: \.self) { _ in
+                        HStack(spacing: 16) {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(.tertiaryLabel).opacity(0.3))
+                                .frame(width: 48, height: 48)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color(.tertiaryLabel).opacity(0.3))
+                                    .frame(width: 160, height: 16)
+
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color(.tertiaryLabel).opacity(0.3))
+                                    .frame(width: 100, height: 12)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                    }
+                } header: {
+                    Text("Stories")
+                        .font(.subheadline)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
+                }
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+        }
+    }
+}
+
+// MARK: - Perspective Modal
+
+struct PerspectiveModal: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    @State private var selectedStory: Story?
+    @State private var perspectiveText = ""
+    @State private var isRecording = false
+    @State private var inputMode: InputMode = .none
+    
+    enum InputMode {
+        case none
+        case text
+        case voice
+    }
+
+    let stories = Story.sampleStories
+    
+    private var hasInput: Bool {
+        inputMode == .voice || !perspectiveText.isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(uiColor: .systemGroupedBackground)
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    VStack(spacing: 12) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(Color(uiColor: .label).opacity(0.8))
+
+                        Text("Add Your Perspective")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color(uiColor: .label))
+
+                        Text("Share how you remember this story")
+                            .font(.subheadline)
+                            .foregroundColor(Color(uiColor: .secondaryLabel))
+                    }
+                    .padding(.top, 40)
+                    .padding(.bottom, 24)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 16) {
+                            ForEach(stories) { story in
+                                StoryBubbleCard(
+                                    story: story,
+                                    isSelected: selectedStory?.id == story.id,
+                                    textColor: Color(uiColor: .label),
+                                    accentColor: .blue
+                                )
+                                .onTapGesture {
+                                    selectedStory = story
                                 }
-                                Spacer()
                             }
                         }
+                        .padding(.horizontal, 20)
                     }
-                }
-                .padding(theme.screenPadding)
 
-                // Active stories skeleton
-                VStack(alignment: .leading, spacing: 12) {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(theme.secondaryTextColor.opacity(0.1))
-                        .frame(height: 24)
-                        .frame(maxWidth: 150)
+                    Spacer()
 
-                    HStack(spacing: 12) {
-                        ForEach(0..<2) { _ in
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(theme.secondaryTextColor.opacity(0.1))
-                                .frame(width: 200, height: 260)
+                    if selectedStory != nil {
+                        VStack(spacing: 16) {
+                            if inputMode == .none {
+                                HStack(spacing: 16) {
+                                    Button(action: { inputMode = .text }) {
+                                        VStack(spacing: 8) {
+                                            Image(systemName: "keyboard")
+                                                .font(.system(size: 28))
+                                            Text("Type")
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                        }
+                                        .foregroundColor(Color(uiColor: .label))
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 100)
+                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    }
+                                    
+                                    Button(action: {
+                                        inputMode = .voice
+                                        isRecording = true
+                                    }) {
+                                        VStack(spacing: 8) {
+                                            Image(systemName: "mic.fill")
+                                                .font(.system(size: 28))
+                                            Text("Record")
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                        }
+                                        .foregroundColor(Color(uiColor: .label))
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 100)
+                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            } else if inputMode == .text {
+                                VStack(spacing: 12) {
+                                    TextField("How do you remember this?", text: $perspectiveText, axis: .vertical)
+                                        .textFieldStyle(.plain)
+                                        .foregroundColor(Color(uiColor: .label))
+                                        .padding()
+                                        .frame(minHeight: 100)
+                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    
+                                    Button(action: { 
+                                        inputMode = .none
+                                        perspectiveText = ""
+                                    }) {
+                                        Text("Switch to Voice")
+                                            .font(.footnote)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            } else if inputMode == .voice {
+                                VStack(spacing: 16) {
+                                    if isRecording {
+                                        VStack(spacing: 12) {
+                                            Image(systemName: "waveform")
+                                                .font(.system(size: 40))
+                                                .foregroundColor(.red)
+                                                .symbolEffect(.pulse)
+                                            
+                                            Text("Recording...")
+                                                .font(.headline)
+                                                .foregroundColor(Color(uiColor: .label))
+                                            
+                                            Button(action: { isRecording = false }) {
+                                                Text("Stop")
+                                                    .fontWeight(.semibold)
+                                                    .foregroundColor(.white)
+                                                    .padding(.horizontal, 32)
+                                                    .padding(.vertical, 12)
+                                                    .background(Color.red)
+                                                    .clipShape(Capsule())
+                                            }
+                                        }
+                                        .frame(height: 140)
+                                    } else {
+                                        VStack(spacing: 12) {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 40))
+                                                .foregroundColor(.green)
+                                            
+                                            Text("Recording saved")
+                                                .font(.headline)
+                                                .foregroundColor(Color(uiColor: .label))
+                                            
+                                            Button(action: {
+                                                inputMode = .none
+                                                isRecording = false
+                                            }) {
+                                                Text("Switch to Text")
+                                                    .font(.footnote)
+                                                    .foregroundColor(.blue)
+                                            }
+                                        }
+                                        .frame(height: 140)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            }
+
+                            Button(action: submitPerspective) {
+                                Text("Add Perspective")
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 56)
+                                    .background(Color.blue)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            }
+                            .disabled(!hasInput)
+                            .padding(.horizontal, 20)
+                            .opacity(hasInput ? 1.0 : 0.5)
                         }
+                        .padding(.bottom, 40)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "hand.tap")
+                                .font(.system(size: 40))
+                                .foregroundColor(Color(uiColor: .secondaryLabel))
+                            Text("Tap a story above to add your perspective")
+                                .font(.subheadline)
+                                .foregroundColor(Color(uiColor: .secondaryLabel))
+                        }
+                        .frame(maxHeight: .infinity)
                     }
                 }
-                .padding(theme.screenPadding)
+            }
+            .navigationTitle("Perspective")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
             }
         }
-        .background(theme.backgroundColor.ignoresSafeArea())
+    }
+
+    private func submitPerspective() {
+        dismiss()
+    }
+}
+
+// MARK: - Story Bubble Card
+
+struct StoryBubbleCard: View {
+    let story: Story
+    let isSelected: Bool
+    let textColor: Color
+    let accentColor: Color
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Bubble indicator
+            ZStack {
+                Circle()
+                    .fill(isSelected ? accentColor : Color.clear)
+                    .frame(width: 12, height: 12)
+                    .overlay(
+                        Circle()
+                            .stroke(isSelected ? accentColor : Color.gray.opacity(0.3), lineWidth: 2)
+                            .frame(width: 16, height: 16)
+                    )
+                    .offset(y: -30)
+            }
+
+            // Story card
+            VStack(alignment: .leading, spacing: 6) {
+                Text(story.title)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(textColor)
+                    .lineLimit(2)
+
+                HStack(spacing: 4) {
+                    Text(story.storyteller)
+                        .font(.caption2)
+                        .foregroundColor(textColor.opacity(0.7))
+                }
+            }
+            .padding(12)
+            .frame(width: 140)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white.opacity(isSelected ? 0.2 : 0.1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(isSelected ? accentColor : Color.clear, lineWidth: 2)
+                    )
+            )
+        }
+        .animation(.spring(response: 0.3), value: isSelected)
     }
 }
 
@@ -877,12 +1101,12 @@ struct HubView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             HubView()
-                .themed(DarkTheme())
-                .previewDisplayName("dark Dashboard")
+                .preferredColorScheme(.light)
+                .previewDisplayName("Light Theme")
 
             HubView()
-                .themed(LightTheme())
-                .previewDisplayName("light Dashboard")
+                .preferredColorScheme(.dark)
+                .previewDisplayName("Dark Theme")
         }
     }
 }
