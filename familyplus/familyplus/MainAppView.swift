@@ -53,7 +53,7 @@ struct MainNavigation: View {
 
             SettingsView()
                 .tabItem {
-                    Label("Profile", systemImage: "person.fill")
+                    Label("Settings", systemImage: "person.fill")
                 }
                 .tag(AppTab.profile.rawValue)
         }

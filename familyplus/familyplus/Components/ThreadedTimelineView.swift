@@ -325,6 +325,7 @@ struct ThreadNodeView: View {
 
 struct ResponseCard: View {
     @Environment(\.theme) var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let response: StorySegmentData
     let isThreaded: Bool
@@ -561,7 +562,7 @@ struct ResponseCard: View {
     }
 
     private func startPulseAnimation() {
-        withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+        withAnimation(reduceMotion ? .none : .easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
             pulseAnimation = true
         }
     }
@@ -583,25 +584,24 @@ struct ChronologicalThreadedTimelineView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(sortedResponses) { response in
-                    ChronologicalResponseCard(
-                        response: response,
-                        allResponses: responses,
-                        onReply: onReplyToResponse,
-                        onPlay: onPlayResponse,
-                        onShowMemoryContext: onShowMemoryContext
-                    )
-                }
+        LazyVStack(spacing: 0) {
+            ForEach(sortedResponses) { response in
+                ChronologicalResponseCard(
+                    response: response,
+                    allResponses: responses,
+                    onReply: onReplyToResponse,
+                    onPlay: onPlayResponse,
+                    onShowMemoryContext: onShowMemoryContext
+                )
             }
-            .padding(.vertical, 16)
         }
+        .padding(.vertical, 16)
     }
 }
 
 struct ChronologicalResponseCard: View {
     @Environment(\.theme) var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let response: StorySegmentData
     let allResponses: [StorySegmentData]
@@ -720,12 +720,19 @@ struct ChronologicalResponseCard: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
         .onTapGesture {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? .none : .spring(response: 0.3, dampingFraction: 0.8)) {
                 isExpanded.toggle()
                 if !isExpanded {
                     textExpanded = false
                 }
             }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("\(response.fullName)")
+        .accessibilityValue(response.transcriptionText?.prefix(100) ?? "No transcription")
+        .accessibilityHint(isExpanded ? "Double tap to collapse" : "Double tap to view full perspective")
+        .accessibilityAction(.default) {
+            isExpanded.toggle()
         }
     }
 
@@ -740,6 +747,7 @@ struct ChronologicalResponseCard: View {
 
 struct CollapsedContent: View {
     @Environment(\.theme) var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let response: StorySegmentData
     let parentResponse: StorySegmentData?
@@ -844,7 +852,7 @@ struct CollapsedContent: View {
     }
 
     private func startPulseAnimation() {
-        withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+        withAnimation(reduceMotion ? .none : .easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
             pulseAnimation = true
         }
     }
@@ -860,6 +868,7 @@ struct CollapsedContent: View {
 
 struct ExpandedContent: View {
     @Environment(\.theme) var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let response: StorySegmentData
     let parentResponse: StorySegmentData?
@@ -974,9 +983,16 @@ struct ExpandedContent: View {
                     .foregroundColor(theme.textColor)
                     .lineLimit(textExpanded ? nil : 3)
                     .onTapGesture {
-                        withAnimation {
+                        withAnimation(reduceMotion ? .none : .spring(response: 0.3, dampingFraction: 0.8)) {
                             textExpanded.toggle()
                         }
+                    }
+                    .accessibilityElement()
+                    .accessibilityLabel("Transcription from \(response.fullName)")
+                    .accessibilityValue(textExpanded ? "Expanded" : "Collapsed, \(transcription.prefix(50))...")
+                    .accessibilityHint(textExpanded ? "Double tap to collapse" : "Double tap to expand full transcription")
+                    .accessibilityAction(.default) {
+                        textExpanded.toggle()
                     }
             }
 
@@ -1032,7 +1048,7 @@ struct ExpandedContent: View {
     }
 
     private func startPulseAnimation() {
-        withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+        withAnimation(reduceMotion ? .none : .easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
             pulseAnimation = true
         }
     }

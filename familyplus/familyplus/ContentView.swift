@@ -108,6 +108,11 @@ struct MainTabView: View {
                     Label("Family", systemImage: MainTab.family.icon)
                 }
                 .tag(MainTab.family)
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "person.fill")
+                }
+                .tag(AppTab.profile.rawValue)
         }
         .tint(theme.accentColor)
         .onAppear {

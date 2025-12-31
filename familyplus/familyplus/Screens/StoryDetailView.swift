@@ -41,6 +41,7 @@ struct WaveformBar: View {
     let phase: Double
 
     @State private var height: CGFloat = 0.3
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         RoundedRectangle(cornerRadius: 2)
@@ -48,10 +49,10 @@ struct WaveformBar: View {
             .frame(width: 3, height: isPlaying ? height * 40 : 8)
             .animation(
                 isPlaying ?
-                    .easeInOut(duration: 0.3 + phase * 0.3)
-                    .repeatForever(autoreverses: true)
-                    .delay(phase * 0.1)
-                : .easeOut(duration: 0.3),
+                    (reduceMotion ? .none : .easeInOut(duration: 0.25)
+                        .repeatForever(autoreverses: true)
+                        .delay(phase * 0.05))
+                : .easeOut(duration: 0.25),
                 value: isPlaying
             )
             .onAppear {
@@ -59,7 +60,7 @@ struct WaveformBar: View {
             }
             .onChange(of: isPlaying) { playing in
                 if playing {
-                    withAnimation(.easeInOut(duration: 0.3).repeatForever(autoreverses: true)) {
+                    withAnimation(reduceMotion ? .none : .easeInOut(duration: 0.25).repeatForever(autoreverses: true)) {
                         height = CGFloat.random(in: 0.3...1.0)
                     }
                 }
@@ -116,57 +117,30 @@ enum Reaction: String, CaseIterable {
     }
 }
 
-// MARK: - Inline Reaction Picker
+// MARK: - Reaction Picker Sheet
 
-struct InlineReactionPicker: View {
+struct ReactionPickerSheet: View {
     @Environment(\.theme) var theme
     @Binding var selectedReaction: Reaction?
     let onReactionSelected: (Reaction) -> Void
-    let onDismiss: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            ForEach(Reaction.allCases, id: \.self) { reaction in
-                Button(action: { onReactionSelected(reaction) }) {
-                    Text(reaction.rawValue)
-                        .font(.system(size: 32))
-                        .frame(width: 50, height: 50)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(selectedReaction == reaction ?
-                                    theme.accentColor.opacity(0.2) :
-                                    theme.cardBackgroundColor
-                                )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(selectedReaction == reaction ?
-                                    theme.accentColor : Color.clear,
-                                    lineWidth: 2)
-                        )
+        VStack(spacing: 20) {
+            Text("Add Reaction")
+                .font(.headline)
+
+            HStack(spacing: 20) {
+                ForEach(Reaction.allCases, id: \.self) { reaction in
+                    Button(action: { onReactionSelected(reaction) }) {
+                        Text(reaction.rawValue)
+                            .font(.system(size: 40))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(reaction.accessibilityLabel)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(reaction.accessibilityLabel)
             }
-
-            Spacer()
-
-            Button(action: onDismiss) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(theme.secondaryTextColor)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(theme.cardBackgroundColor)
-                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
-        )
-        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -211,6 +185,7 @@ struct StoryDetailView: View {
 struct FullStoryDetail: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let story: Story
     let segments: [StorySegment]
@@ -236,6 +211,14 @@ struct FullStoryDetail: View {
     // Memory context panel state
     @State private var showMemoryContext = false
     @State private var contextForResponse: StorySegmentData?
+
+    // MARK: - Haptic Feedback Helper
+    private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        if theme.enableHaptics {
+            let impact = UIImpactFeedbackGenerator(style: style)
+            impact.impactOccurred()
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -294,10 +277,10 @@ struct FullStoryDetail: View {
                                 }
                             }.padding(8).glassEffect(.regular.tint(story.storytellerColor.opacity(0.2)))
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, theme.screenPadding)
                         .padding(.bottom, 60)
                     }
-                    .safeAreaPadding([.top, .bottom])
 
                     // Perspectives Section
                     VStack(alignment: .leading, spacing: 24) {
@@ -483,7 +466,13 @@ struct FullStoryDetail: View {
             // Custom back button (below status bar in safe area)
             VStack {
                 HStack {
-                    Button(action: { dismiss() }) {
+                    Button(action: {
+                        if theme.enableHaptics {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                        }
+                        dismiss()
+                    }) {
                         ZStack {
                             Circle()
                                 .fill(.ultraThinMaterial)
@@ -860,6 +849,14 @@ struct StoryPlayerControls: View {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
+    // MARK: - Haptic Feedback Helper
+    private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        if theme.enableHaptics {
+            let impact = UIImpactFeedbackGenerator(style: style)
+            impact.impactOccurred()
+        }
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             // Current speaker indicator + duration + speed (compact inline layout)
@@ -965,76 +962,85 @@ struct StoryPlayerControls: View {
                 .accessibilityValue("\(formatTime(currentTime)) of \(formatTime(totalDuration))")
             }
 
-            // Controls (compact layout with reduced spacing and sizes)
+            // Controls (compact layout with reduced spacing and sizes) - All buttons 44x44 minimum per Apple HIG
             HStack(spacing: 16) {
-                // Reaction button
-                Button(action: { showReactionPicker = true }) {
+                // Reaction button - 44x44 touch target
+                Button(action: {
+                    triggerHaptic()
+                    showReactionPicker = true
+                }) {
                     Image(systemName: "face.smiling")
                         .font(.system(size: 22))
                         .foregroundStyle(theme.secondaryTextColor)
                         .symbolRenderingMode(.hierarchical)
                 }
+                .frame(width: 44, height: 44)
                 .accessibilityLabel("Add reaction")
+                .accessibilityHint("Tap to select an emoji reaction")
 
                 Spacer()
 
-                // Skip backward 15s
+                // Skip backward 15s - 44x44 touch target
                 Button(action: {
+                    triggerHaptic()
                     currentTime = max(0, currentTime - 15)
                 }) {
                     Image(systemName: "gobackward.15")
                         .font(.title3)
                         .foregroundColor(theme.textColor)
                 }
+                .frame(width: 44, height: 44)
                 .accessibilityLabel("Skip back 15 seconds")
 
-                // Play/Pause (reduced size)
-                Button(action: { isPlaying.toggle() }) {
+                // Play/Pause - 44x44 touch target
+                Button(action: {
+                    triggerHaptic()
+                    isPlaying.toggle()
+                }) {
                     Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: 44))
                         .foregroundColor(theme.accentColor)
                 }
+                .frame(width: 44, height: 44)
                 .accessibilityLabel(isPlaying ? "Pause" : "Play")
 
-                // Skip forward 15s
+                // Skip forward 15s - 44x44 touch target
                 Button(action: {
+                    triggerHaptic()
                     currentTime = min(totalDuration, currentTime + 15)
                 }) {
                     Image(systemName: "goforward.15")
                         .font(.title3)
                         .foregroundColor(theme.textColor)
                 }
+                .frame(width: 44, height: 44)
                 .accessibilityLabel("Skip forward 15 seconds")
 
                 Spacer()
 
-                // Share button
-                Button(action: {}) {
+                // Share button - 44x44 touch target
+                Button(action: {
+                    triggerHaptic()
+                }) {
                     Image(systemName: "square.and.arrow.up")
                         .font(.title3)
                         .foregroundColor(theme.textColor)
                 }
+                .frame(width: 44, height: 44)
                 .accessibilityLabel("Share story")
             }
 
-            // Inline Reaction Picker
-            if showReactionPicker {
-                InlineReactionPicker(
-                    selectedReaction: $selectedReaction,
-                    onReactionSelected: { reaction in
-                        selectedReaction = reaction
-                        withAnimation {
-                            showReactionPicker = false
-                        }
-                    },
-                    onDismiss: {
-                        withAnimation {
-                            showReactionPicker = false
-                        }
-                    }
-                )
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+        }
+        .sheet(isPresented: $showReactionPicker) {
+            ReactionPickerSheet(
+                selectedReaction: $selectedReaction,
+                onReactionSelected: { reaction in
+                    selectedReaction = reaction
+                    showReactionPicker = false
+                }
+            )
+            .presentationDetents([.height(200)])
+            .presentationDragIndicator(.visible)
         }
     }
 }
@@ -1043,6 +1049,7 @@ struct StoryPlayerControls: View {
 
 struct RecordingModePlayer: View {
     @Environment(\.theme) var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let duration: TimeInterval
     @Binding var isPlaying: Bool
     let onStop: () -> Void
@@ -1116,6 +1123,7 @@ struct RecordingModePlayer: View {
 struct ChildStoryDetail: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let story: Story
     let segments: [StorySegment]
@@ -1145,7 +1153,13 @@ struct ChildStoryDetail: View {
             VStack(spacing: 32) {
                 // Back button
                 HStack {
-                    Button(action: { dismiss() }) {
+                    Button(action: {
+                        if theme.enableHaptics {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                        }
+                        dismiss()
+                    }) {
                         Image(systemName: "arrow.left.circle.fill")
                             .font(.system(size: 56))
                             .foregroundColor(theme.accentColor)
@@ -1316,6 +1330,7 @@ struct ChildStoryDetail: View {
 struct ElderStoryDetail: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let story: Story
 
     @State private var isPlaying = false
@@ -1328,7 +1343,13 @@ struct ElderStoryDetail: View {
             VStack(spacing: 32) {
                 // Large back button
                 HStack {
-                    Button(action: { dismiss() }) {
+                    Button(action: {
+                        if theme.enableHaptics {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                        }
+                        dismiss()
+                    }) {
                         HStack(spacing: 12) {
                             Image(systemName: "arrow.left.circle.fill")
                                 .font(.system(size: 40))
