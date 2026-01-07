@@ -13,6 +13,7 @@ import {
 export interface QwenTurboConfig {
   openaiApiKey: string;
   modelId?: string;
+  bedrockRegion?: string;
 }
 
 export interface SynthesizeStoryInput {
@@ -33,12 +34,24 @@ export class QwenTurboClient {
   private modelId: string;
 
   constructor(config: QwenTurboConfig) {
+    // Validate API key is provided
+    if (!config.openaiApiKey || config.openaiApiKey.includes('placeholder')) {
+      throw new AIServiceError(
+        'OPENAI_API_KEY is required. Set in .dev.vars for local dev or via `wrangler secret put` for production.',
+        'qwen-turbo'
+      );
+    }
+
     this.modelId = config.modelId || 'openai.gpt-oss-safeguard-120b';
+
+    // Construct Bedrock endpoint URL
+    const region = config.bedrockRegion || 'us-west-2';
+    const bedrockEndpoint = `https://bedrock-runtime.${region}.amazonaws.com/openai/v1`;
 
     // Use OpenAI SDK to call AWS Bedrock (OpenAI-compatible endpoint)
     this.client = new OpenAI({
       apiKey: config.openaiApiKey,
-      baseURL: `https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1`,
+      baseURL: bedrockEndpoint,
       defaultQuery: undefined,
     });
   }

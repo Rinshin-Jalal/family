@@ -13,14 +13,12 @@
 
 import { client } from '@trigger.dev/sdk'
 import { createAudioProcessor, DEFAULT_AUDIO_PROCESSOR_CONFIG } from '../ai/audio-processor'
-import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../types'
+import { getSupabaseFromEnv } from '../utils/supabase'
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-type SupabaseClient = ReturnType<typeof createClient<Database>>
 
 interface GeneratePodcastJobPayload {
   storyId: string
@@ -38,23 +36,13 @@ interface RegeneratePodcastJobPayload {
 // SUPABASE HELPERS
 // ============================================================================
 
-/**
- * Create Supabase client for Trigger.dev jobs
- */
-function createSupabaseClientForJob(): SupabaseClient {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_KEY!,
-    {
-      auth: { persistSession: false },
-    }
-  )
-}
+// Global Supabase client (initialized once for the job)
+const supabase = getSupabaseFromEnv()
 
 /**
  * Fetch story with all responses
  */
-async function fetchStoryWithResponses(supabase: SupabaseClient, storyId: string) {
+async function fetchStoryWithResponses(storyId: string) {
   const { data, error } = await supabase
     .from('stories')
     .select(`
@@ -87,7 +75,6 @@ async function fetchStoryWithResponses(supabase: SupabaseClient, storyId: string
  * Update story podcast status
  */
 async function updateStoryStatus(
-  supabase: SupabaseClient,
   storyId: string,
   updates: {
     podcast_status: 'generating' | 'ready' | 'failed' | 'regenerating'
@@ -125,16 +112,14 @@ client.defineJob({
     event: 'story.ready.for.podcast',
   },
   run: async (payload: GeneratePodcastJobPayload, { ctx }) => {
-    const supabase = createSupabaseClientForJob()
-
     // Step 1: Update story status to 'generating'
-    await updateStoryStatus(supabase, payload.storyId, {
+    await updateStoryStatus(payload.storyId, {
       podcast_status: 'generating',
     })
 
     try {
       // Step 2: Fetch story and all responses
-      const story = await fetchStoryWithResponses(supabase, payload.storyId)
+      const story = await fetchStoryWithResponses(payload.storyId)
 
       // Step 3: Prepare audio clips
       const audioClips = story.responses
@@ -219,16 +204,14 @@ client.defineJob({
     event: 'story.podcast.regenerating',
   },
   run: async (payload: RegeneratePodcastJobPayload, { ctx }) => {
-    const supabase = createSupabaseClientForJob()
-
     // Step 1: Update story status to 'regenerating'
-    await updateStoryStatus(supabase, payload.storyId, {
+    await updateStoryStatus(payload.storyId, {
       podcast_status: 'regenerating',
     })
 
     try {
       // Step 2: Fetch story and all responses
-      const story = await fetchStoryWithResponses(supabase, payload.storyId)
+      const story = await fetchStoryWithResponses(payload.storyId)
 
       // Step 3: Prepare audio clips (including new one)
       const audioClips = story.responses

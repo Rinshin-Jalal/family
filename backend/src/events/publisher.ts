@@ -232,6 +232,85 @@ export class DomainEventPublisher {
   }): Promise<string> {
     return this.publisher.publish('notification.story.completed', data)
   }
+
+  // Wisdom events
+  async publishWisdomStoryTagRequested(data: {
+    storyId: string
+    triggeredBy: 'story_completion' | 'manual_request'
+  }): Promise<string> {
+    return this.publisher.publish('wisdom.story.tag.requested', data)
+  }
+
+  async publishWisdomStoryTagCompleted(data: {
+    storyId: string
+    emotionTags: string[]
+    situationTags: string[]
+    lessonTags: string[]
+    guidanceTags: string[]
+    questionKeywords: string[]
+    confidence: number
+  }): Promise<string> {
+    return this.publisher.publish('wisdom.story.tag.completed', data)
+  }
+
+  async publishWisdomStoryTagFailed(data: {
+    storyId: string
+    error: string
+    retryable: boolean
+    attemptNumber: number
+  }): Promise<string> {
+    return this.publisher.publish('wisdom.story.tag.failed', data)
+  }
+
+  async publishWisdomRequestCreated(data: {
+    requestId: string
+    question: string
+    requesterId: string
+    requesterName: string
+    targetProfileIds: string[]
+    relatedStoryId?: string
+  }): Promise<string> {
+    return this.publisher.publish('wisdom.request.created', data, {
+      userId: data.requesterId,
+    })
+  }
+
+  async publishWisdomRequestNotificationSent(data: {
+    requestId: string
+    eldersNotified: number
+    appUsersNotified: number
+  }): Promise<string> {
+    return this.publisher.publish('wisdom.request.notification.sent', data)
+  }
+
+  async publishWisdomSummaryRequested(data: {
+    storyIds: string[]
+    question: string
+    userId: string
+  }): Promise<string> {
+    return this.publisher.publish('wisdom.summary.requested', data, {
+      userId: data.userId,
+    })
+  }
+
+  async publishWisdomSummaryCompleted(data: {
+    primaryStoryId: string
+    summary: string
+    whatHappened: string[]
+    whatLearned: string[]
+    guidance: string[]
+    generation?: string
+  }): Promise<string> {
+    return this.publisher.publish('wisdom.summary.completed', data)
+  }
+
+  async publishWisdomSummaryFailed(data: {
+    primaryStoryId: string
+    error: string
+    retryable: boolean
+  }): Promise<string> {
+    return this.publisher.publish('wisdom.summary.failed', data)
+  }
 }
 
 /**

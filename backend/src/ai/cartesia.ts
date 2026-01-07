@@ -1,30 +1,38 @@
-   // src/ai/cartesia.ts
+// src/ai/cartesia.ts
 
-   import {
-    TranscribeResult,
-    AIServiceError
-  } from './types';
+import {
+  TranscribeResult,
+  AIServiceError
+} from './types';
 
-  // ============================================================================
-  // CARTESIA INK CLIENT (REST API - No WebSocket Needed)
-  // ============================================================================
+// ============================================================================
+// CARTESIA INK CLIENT (REST API - No WebSocket Needed)
+// ============================================================================
 
-  export interface CartesiaConfig {
-    apiKey: string;
-    baseUrl?: string;
-  }
+export interface CartesiaConfig {
+  apiKey: string;
+  baseUrl?: string;
+}
 
-  export class CartesiaClient {
-    private config: CartesiaConfig;
-    private baseUrl: string;
+export class CartesiaClient {
+  private config: CartesiaConfig;
+  private baseUrl: string;
 
-    constructor(config: CartesiaConfig) {
-      this.config = {
-        baseUrl: 'https://api.cartesia.ai',
-        ...config
-      };
-      this.baseUrl = this.config.baseUrl!;
+  constructor(config: CartesiaConfig) {
+    // Validate API key is provided
+    if (!config.apiKey || config.apiKey.includes('placeholder')) {
+      throw new AIServiceError(
+        'CARTESIA_API_KEY is required. Set in .dev.vars for local dev or via `wrangler secret put` for production.',
+        'cartesia'
+      );
     }
+
+    this.config = {
+      baseUrl: 'https://api.cartesia.ai',
+      ...config
+    };
+    this.baseUrl = this.config.baseUrl!;
+  }
 
     /**
      * Transcribe audio buffer using Cartesia Ink (REST API)

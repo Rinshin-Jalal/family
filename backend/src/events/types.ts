@@ -72,6 +72,16 @@ export type EventType =
   | 'notification.story.completed'
   | 'notification.response.received'
 
+  // Wisdom events
+  | 'wisdom.story.tag.requested'
+  | 'wisdom.story.tag.completed'
+  | 'wisdom.story.tag.failed'
+  | 'wisdom.request.created'
+  | 'wisdom.request.notification.sent'
+  | 'wisdom.summary.requested'
+  | 'wisdom.summary.completed'
+  | 'wisdom.summary.failed'
+
 // ----------------------------------------------------------------------------
 // STORY EVENTS
 // ----------------------------------------------------------------------------
@@ -228,6 +238,68 @@ export interface NotificationResponseReceivedEvent {
   familyId: string
   responderName: string
   recipientUserIds: string[]
+}
+
+// ============================================================================
+// WISDOM EVENTS
+// ============================================================================
+
+export interface WisdomStoryTagRequestedEvent {
+  storyId: string
+  triggeredBy: 'story_completion' | 'manual_request'
+}
+
+export interface WisdomStoryTagCompletedEvent {
+  storyId: string
+  emotionTags: string[]
+  situationTags: string[]
+  lessonTags: string[]
+  guidanceTags: string[]
+  questionKeywords: string[]
+  confidence: number
+}
+
+export interface WisdomStoryTagFailedEvent {
+  storyId: string
+  error: string
+  retryable: boolean
+  attemptNumber: number
+}
+
+export interface WisdomRequestCreatedEvent {
+  requestId: string
+  question: string
+  requesterId: string
+  requesterName: string
+  targetProfileIds: string[]
+  relatedStoryId?: string
+}
+
+export interface WisdomRequestNotificationSentEvent {
+  requestId: string
+  eldersNotified: number
+  appUsersNotified: number
+}
+
+export interface WisdomSummaryRequestedEvent {
+  storyIds: string[]
+  question: string
+  userId: string
+}
+
+export interface WisdomSummaryCompletedEvent {
+  primaryStoryId: string
+  summary: string
+  whatHappened: string[]
+  whatLearned: string[]
+  guidance: string[]
+  generation?: string
+}
+
+export interface WisdomSummaryFailedEvent {
+  primaryStoryId: string
+  error: string
+  retryable: boolean
 }
 
 // ----------------------------------------------------------------------------

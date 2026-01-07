@@ -11,16 +11,24 @@
 
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { createClient } from '@supabase/supabase-js'
 import stories from './routes/stories'
 import prompts from './routes/prompts'
 import responses from './routes/responses'
 import profiles from './routes/profiles'
 import reactions from './routes/reactions'
+import quotes from './routes/quotes'
+import links from './routes/links'
+import polls from './routes/polls'
+import analytics from './routes/analytics'
+import trivia from './routes/trivia'
 import ai from './routes/ai'
+import wisdom from './routes/wisdom'
 import { createQwenTurboClient } from './ai/llm'
 import { createCartesiaClient } from './ai/cartesia'
+import { createWisdomTaggerClient } from './ai/wisdom-tagger'
+import { createWisdomSummarizerClient } from './ai/wisdom-summarizer'
 import { handleQueueBatch, type HandlerContext } from './events/handlers'
+import { getSupabaseFromContext, getSupabaseFromEnv } from './utils/supabase'
 
 // ----------------------------------------------------------------------------
 // TYPES & BINDINGS
@@ -31,6 +39,11 @@ type Bindings = {
   SUPABASE_KEY: string
   AUDIO_BUCKET: R2Bucket
   OPENAI_API_KEY: string
+  BEDROCK_REGION: string
+  // Twilio for elder notifications
+  TWILIO_ACCOUNT_SID: string
+  TWILIO_AUTH_TOKEN: string
+  TWILIO_PHONE_NUMBER: string
   // Cartesia (Transcription)
   CARTESIA_API_KEY: string
   // Event queue (Cloudflare Queue)
@@ -54,13 +67,7 @@ app.use('*', cors({
 // Middleware: Initialize services and attach to context
 app.use('*', async (c, next) => {
   // Initialize Supabase client
-  const supabase = createClient(
-    c.env.SUPABASE_URL,
-    c.env.SUPABASE_KEY,
-    {
-      auth: { persistSession: false },
-    }
-  )
+  const supabase = getSupabaseFromContext(c)
   c.set('supabase', supabase)
 
   // Make queue available to routes
@@ -75,7 +82,12 @@ app.route('/', prompts)
 app.route('/', responses)
 app.route('/', profiles)
 app.route('/', reactions)
+app.route('/', quotes)
+app.route('/', links)
+app.route('/', polls)
+app.route('/', analytics)
 app.route('/', ai)
+app.route('/', wisdom)
 
 // Health check
 app.get('/health', (c) => {
@@ -102,9 +114,7 @@ export default {
   // Queue message handler
   queue: async (batch: MessageBatch<any>, env: Env, ctx: ExecutionContext): Promise<void> => {
     // Initialize services
-    const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY, {
-      auth: { persistSession: false },
-    })
+    const supabase = getSupabaseFromEnv()
 
     const llm = createQwenTurboClient({
       openaiApiKey: env.OPENAI_API_KEY,
@@ -114,11 +124,23 @@ export default {
       apiKey: env.CARTESIA_API_KEY,
     })
 
+    const wisdomTagger = createWisdomTaggerClient({
+      openaiApiKey: env.OPENAI_API_KEY,
+      bedrockRegion: env.BEDROCK_REGION,
+    })
+
+    const wisdomSummarizer = createWisdomSummarizerClient({
+      openaiApiKey: env.OPENAI_API_KEY,
+      bedrockRegion: env.BEDROCK_REGION,
+    })
+
     // Build handler context
     const handlerContext: HandlerContext = {
       supabase,
       llm,
       cartesia,
+      wisdomTagger,
+      wisdomSummarizer,
       env,
     }
 

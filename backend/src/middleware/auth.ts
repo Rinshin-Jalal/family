@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabaseFromContext } from '../utils/supabase'
 
 type Bindings = {
   SUPABASE_URL: string
@@ -14,10 +14,6 @@ type Variables = {
   profile: any
 }
 
-const getSupabase = (c: any) => {
-  return createClient(c.env.SUPABASE_URL, c.env.SUPABASE_KEY)
-}
-
 const verifyAuth = async (authHeader: string, supabase: any) => {
   const token = authHeader.replace('Bearer ', '')
   const { data: { user }, error } = await supabase.auth.getUser(token)
@@ -28,7 +24,7 @@ const verifyAuth = async (authHeader: string, supabase: any) => {
 }
 
 export const authMiddleware = async (c: any, next: any) => {
-  const supabase = getSupabase(c)
+  const supabase = getSupabaseFromContext(c)
   const authHeader = c.req.header('Authorization')
 
   if (!authHeader) {
