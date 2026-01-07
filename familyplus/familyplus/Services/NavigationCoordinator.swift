@@ -8,6 +8,22 @@
 import SwiftUI
 import Combine
 
+// MARK: - Main Tab
+
+enum MainTab: String, CaseIterable {
+    case hub
+    case family
+    case settings
+    
+    var icon: String {
+        switch self {
+        case .hub: return "house.fill"
+        case .family: return "person.2.fill"
+        case .settings: return "person.fill"
+        }
+    }
+}
+
 // MARK: - Family Tab Action
 
 /// Actions that can be triggered on the Family tab from other parts of the app
@@ -37,11 +53,19 @@ class NavigationCoordinator: ObservableObject {
     /// - Parameter action: The action to trigger on the Family tab
     func navigateToFamily(action: FamilyTabAction) {
         pendingFamilyAction = action
-        selectedTab = .family
+        selectedTab = .hub
     }
 
     /// Clear pending action after it's been handled
     func clearPendingAction() {
         pendingFamilyAction = .none
+    }
+}
+
+// MARK: - Preview Helper
+
+extension NavigationCoordinator {
+    static var preview: NavigationCoordinator {
+        NavigationCoordinator.shared
     }
 }

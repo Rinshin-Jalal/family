@@ -66,12 +66,12 @@ public protocol PersonaTheme {
 struct DarkTheme: PersonaTheme {
     let role: AppTheme = .dark
 
-    // Colors - Dark mode aesthetic
-    let backgroundColor = Color.inkBlack
-    let textColor = Color.white
-    let secondaryTextColor = Color.white.opacity(0.7)
-    let accentColor = Color.brandIndigo
-    let cardBackgroundColor = Color.darkGrey
+    // Colors - Dark mode aesthetic (#000000, #5856D6, #1C1C1E)
+    let backgroundColor = Color(red: 0.0, green: 0.0, blue: 0.0)
+    let textColor = Color(red: 1.0, green: 1.0, blue: 1.0)
+    let secondaryTextColor = Color(red: 1.0, green: 1.0, blue: 1.0).opacity(0.7)
+    let accentColor = Color(red: 0.345, green: 0.337, blue: 0.839)
+    let cardBackgroundColor = Color(red: 0.110, green: 0.110, blue: 0.118)
 
     // Typography - Trendy, tight spacing
     let headlineFont = Font.custom("SF Pro Display", size: 16).weight(.bold)
@@ -99,12 +99,12 @@ struct DarkTheme: PersonaTheme {
 struct LightTheme: PersonaTheme {
     let role: AppTheme = .light
 
-    // Colors - Light mode, clean
-    let backgroundColor = Color.paperWhite
-    let textColor = Color.black
+    // Colors - Light mode, clean (#FFFFFF, #5856D6, #F2F2F7)
+    let backgroundColor = Color(red: 1.0, green: 1.0, blue: 1.0)
+    let textColor = Color(red: 0.0, green: 0.0, blue: 0.0)
     let secondaryTextColor = Color.gray
-    let accentColor = Color.brandIndigo
-    let cardBackgroundColor = Color.surfaceGrey
+    let accentColor = Color(red: 0.345, green: 0.337, blue: 0.839)
+    let cardBackgroundColor = Color(red: 0.949, green: 0.949, blue: 0.969)
 
     // Typography - Clear, trustworthy
     let headlineFont = Font.system(size: 16, weight: .semibold, design: .default)
@@ -167,7 +167,6 @@ struct ThemedView: ViewModifier {
     }
 
     private func colorScheme(for theme: PersonaTheme) -> ColorScheme {
-        // Dark theme uses dark color scheme, Light theme uses light
         switch theme.role {
         case .dark:
             return .dark

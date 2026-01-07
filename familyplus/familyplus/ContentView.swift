@@ -71,22 +71,6 @@ struct MainNavigationFlow: View {
     }
 }
 
-// MARK: - Main Tabs
-
-enum MainTab: String, CaseIterable {
-    case hub = "Hub"
-    case family = "Family"
-
-    var icon: String {
-        switch self {
-        case .hub: return "house.fill"
-        case .family: return "person.2.fill"
-        }
-    }
-}
-
-
-
 // MARK: - Main Tab View
 
 struct MainTabView: View {
@@ -110,9 +94,9 @@ struct MainTabView: View {
                 .tag(MainTab.family)
             SettingsView()
                 .tabItem {
-                    Label("Settings", systemImage: "person.fill")
+                    Label("Settings", systemImage: MainTab.settings.icon)
                 }
-                .tag(AppTab.profile.rawValue)
+                .tag(MainTab.settings)
         }
         .tint(theme.accentColor)
         .onAppear {

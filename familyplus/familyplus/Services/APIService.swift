@@ -13,12 +13,27 @@ import SwiftUI
 final class APIService {
     static let shared = APIService()
     
-    // TODO: Replace with actual backend URL when deployed
-    private let baseURL = "http://localhost:8787"
+    /// Backend API base URL
+    /// - For local dev: http://localhost:8787
+    /// - For production: Set your deployed Cloudflare Worker URL
+    /// - Can be overridden via App Configuration or Environment
+    private let baseURL: String
     
     private let session: URLSession
     
     private init() {
+        // Detect environment and set appropriate URL
+        #if DEBUG
+        // Local development
+        self.baseURL = "http://localhost:8787"
+        #else
+        // Production - REPLACE with your deployed Worker URL
+        // Get from: wrangler deploy output or Cloudflare Dashboard
+        // Example: https://family-plus-backend.your-subdomain.workers.dev
+        self.baseURL = ProcessInfo.processInfo.environment["API_BASE_URL"]
+            ?? "https://family-plus-backend.your-subdomain.workers.dev"
+        #endif
+        
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60
@@ -36,8 +51,8 @@ final class APIService {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        // Add user ID from Supabase auth for backend validation
-        if let userId = try? await SupabaseService.shared.getCurrentUserId() {
+        // Add user ID from auth token for backend validation
+        if let userId = UserDefaults.standard.string(forKey: "auth_user_id") {
             request.setValue(userId, forHTTPHeaderField: "X-User-ID")
         }
 
@@ -67,6 +82,26 @@ final class APIService {
         request.httpBody = try JSONEncoder().encode(body)
         let (data, _) = try await session.data(for: request)
         return try JSONDecoder().decode(StoryData.self, from: data)
+    }
+    
+    // MARK: - Family API
+    
+    /// Create a new family
+    func createFamily(name: String) async throws -> FamilyResponse {
+        let body = CreateFamilyRequest(name: name)
+        var request = await createRequest(endpoint: "/api/families", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(FamilyResponse.self, from: data)
+    }
+    
+    /// Join an existing family with invite code
+    func joinFamily(inviteCode: String) async throws -> FamilyResponse {
+        let body = JoinFamilyRequest(invite_code: inviteCode)
+        var request = await createRequest(endpoint: "/api/families/join", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(FamilyResponse.self, from: data)
     }
     
     /// Complete story with AI-generated content
@@ -273,6 +308,153 @@ final class APIService {
             throw APIError.deleteFailed
         }
     }
+    
+    // MARK: - Wisdom API
+    
+    /// Tag a story with wisdom categories using AI
+    func tagStory(storyId: UUID) async throws -> WisdomTagsResponse {
+        let request = await createRequest(endpoint: "/api/wisdom/tag/\(storyId.uuidString)", method: "POST")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(WisdomTagsResponse.self, from: data)
+    }
+    
+    /// Search stories by wisdom question
+    func searchWisdom(query: String, limit: Int = 10) async throws -> WisdomSearchResponse {
+        let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        let request = await createRequest(endpoint: "/api/wisdom/search?q=\(encodedQuery)&limit=\(limit)")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(WisdomSearchResponse.self, from: data)
+    }
+    
+    /// Request a story from family members
+    func createWisdomRequest(question: String, targetProfileIds: [UUID], relatedStoryId: UUID?) async throws -> WisdomRequestResponse {
+        let body = CreateWisdomRequest(
+            question: question,
+            target_profile_ids: targetProfileIds.map { $0.uuidString },
+            related_story_id: relatedStoryId?.uuidString
+        )
+        var request = await createRequest(endpoint: "/api/wisdom/request", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(WisdomRequestResponse.self, from: data)
+    }
+    
+    /// Get pending wisdom requests for current user
+    func getPendingWisdomRequests() async throws -> PendingWisdomRequestsResponse {
+        let request = await createRequest(endpoint: "/api/wisdom/requests/pending")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(PendingWisdomRequestsResponse.self, from: data)
+    }
+    
+    /// Respond to a wisdom request (accept/decline)
+    func respondToWisdomRequest(requestId: UUID, action: String) async throws {
+        let body = RespondToRequestRequest(action: action)
+        var request = await createRequest(endpoint: "/api/wisdom/request/\(requestId.uuidString)/respond", method: "PATCH")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.updateFailed
+        }
+    }
+    
+    /// Get tags for a story
+    func getStoryTags(storyId: UUID) async throws -> WisdomTagsResponse {
+        let request = await createRequest(endpoint: "/api/wisdom/tags/\(storyId.uuidString)")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(WisdomTagsResponse.self, from: data)
+    }
+    
+    /// Update tags manually for a story
+    func updateStoryTags(
+        storyId: UUID,
+        emotionTags: [String]?,
+        situationTags: [String]?,
+        lessonTags: [String]?,
+        guidanceTags: [String]?
+    ) async throws {
+        let body = UpdateWisdomTagsRequest(
+            emotion_tags: emotionTags,
+            situation_tags: situationTags,
+            lesson_tags: lessonTags,
+            guidance_tags: guidanceTags
+        )
+        var request = await createRequest(endpoint: "/api/wisdom/tags/\(storyId.uuidString)", method: "PUT")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.updateFailed
+        }
+    }
+    
+    // MARK: - Quote Cards API
+    
+    /// Generate a quote card from a story response
+    func generateQuoteCard(
+        storyId: UUID,
+        responseId: UUID,
+        theme: String? = nil,
+        backgroundColor: String? = nil,
+        textColor: String? = nil
+    ) async throws -> QuoteCardResponse {
+        let body = GenerateQuoteRequest(
+            story_id: storyId.uuidString,
+            response_id: responseId.uuidString,
+            theme: theme,
+            background_color: backgroundColor,
+            text_color: textColor
+        )
+        var request = await createRequest(endpoint: "/api/quotes/generate", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(QuoteCardResponse.self, from: data)
+    }
+    
+    /// Get popular quote cards for the user's family
+    func getPopularQuoteCards(limit: Int = 10) async throws -> QuoteCardsResponse {
+        let request = await createRequest(endpoint: "/api/quotes/popular?limit=\(limit)")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(QuoteCardsResponse.self, from: data)
+    }
+    
+    /// Get a specific quote card
+    func getQuoteCard(id: UUID) async throws -> QuoteCardDetailResponse {
+        let request = await createRequest(endpoint: "/api/quotes/\(id.uuidString)")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(QuoteCardDetailResponse.self, from: data)
+    }
+    
+    /// Share a quote card and get shareable URL
+    func shareQuoteCard(id: UUID) async throws -> ShareQuoteResponse {
+        var request = await createRequest(endpoint: "/api/quotes/\(id.uuidString)/share", method: "POST")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(ShareQuoteResponse.self, from: data)
+    }
+    
+    /// Save/bookmark a quote card
+    func saveQuoteCard(id: UUID) async throws {
+        let request = await createRequest(endpoint: "/api/quotes/\(id.uuidString)/save", method: "POST")
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.updateFailed
+        }
+    }
+    
+    /// Delete a quote card (owner only)
+    func deleteQuoteCard(id: UUID) async throws {
+        var request = await createRequest(endpoint: "/api/quotes/\(id.uuidString)", method: "DELETE")
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.deleteFailed
+        }
+    }
 }
 
 // MARK: - API Errors
@@ -351,7 +533,7 @@ struct PreferenceSettingsRequest: Codable {
     let default_prompt_category: String
 }
 
-// MARK: - Response Models (reused from SupabaseService for consistency)
+// MARK: - Response Models
 
 struct PromptData: Identifiable, Codable {
     let id: String
@@ -398,5 +580,259 @@ struct ReactionData: Identifiable, Codable {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: createdAt) ?? Date()
+    }
+}
+
+struct FamilyMemberData: Identifiable, Codable {
+    let id: String
+    let authUserId: String?
+    let familyId: String
+    let fullName: String?
+    let avatarUrl: String?
+    let role: String
+    let phoneNumber: String?
+}
+
+struct StoryData: Identifiable, Codable {
+    let id: String
+    let promptId: String?
+    let familyId: String
+    let title: String?
+    let summaryText: String?
+    let coverImageUrl: String?
+    let voiceCount: Int
+    let isCompleted: Bool
+    let createdAt: String
+    let promptText: String?
+    let promptCategory: String?
+    
+    var storytellerColorName: String {
+        guard let promptCategory = promptCategory else { return "blue" }
+        switch promptCategory.lowercased() {
+        case "childhood": return "orange"
+        case "holidays": return "green"
+        case "funny": return "purple"
+        default: return "blue"
+        }
+    }
+    
+    var createdAtDate: Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: createdAt) ?? Date()
+    }
+}
+
+struct StoryDetailData: Codable {
+    let story: StoryData
+    let responses: [StorySegmentData]
+}
+
+struct StorySegmentData: Identifiable, Codable {
+    let id: String
+    let userId: String
+    let source: String
+    let mediaUrl: String?
+    let transcriptionText: String?
+    let durationSeconds: Int?
+    let createdAt: String
+    let fullName: String
+    let role: String
+    let avatarUrl: String?
+    let replyToResponseId: String?
+    
+    var storytellerColorName: String {
+        switch role {
+        case "dark": return "purple"
+        case "light", "organizer": return "blue"
+        case "child": return "green"
+        case "elder": return "orange"
+        default: return "blue"
+        }
+    }
+    
+    var storytellerColor: Color {
+        switch role {
+        case "dark": return .storytellerPurple
+        case "light", "organizer": return .storytellerBlue
+        case "child": return .storytellerGreen
+        case "elder": return .storytellerOrange
+        default: return .storytellerBlue
+        }
+    }
+    
+    var createdAtDate: Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: createdAt) ?? Date()
+    }
+    
+    var isRootResponse: Bool {
+        replyToResponseId == nil
+    }
+    
+    var isReply: Bool {
+        replyToResponseId != nil
+    }
+}
+
+struct FamilyResponse: Codable {
+    let id: String
+    let name: String
+    let inviteSlug: String?
+}
+
+struct CreateFamilyRequest: Codable {
+    let name: String
+}
+
+struct JoinFamilyRequest: Codable {
+    let invite_code: String
+}
+
+// MARK: - Wisdom API Models
+
+struct WisdomTagsResponse: Codable {
+    let success: Bool?
+    let storyId: String?
+    let tags: WisdomTags?
+    let confidence: Double?
+    let message: String?
+}
+
+struct WisdomTags: Codable {
+    let emotions: [String]?
+    let situations: [String]?
+    let lessons: [String]?
+    let guidance: [String]?
+    let keywords: [String]?
+}
+
+struct WisdomSearchResponse: Codable {
+    let query: String
+    let stories: [WisdomSearchResult]
+    let count: Int
+}
+
+struct WisdomSearchResult: Codable {
+    let storyId: String
+    let title: String?
+    let summaryText: String?
+    let coverImageUrl: String?
+    let promptText: String?
+    let emotionTags: [String]?
+    let situationTags: [String]?
+    let lessonTags: [String]?
+    let matchScore: Double?
+}
+
+struct WisdomRequestResponse: Codable {
+    let success: Bool
+    let request: WisdomRequestDetail
+}
+
+struct WisdomRequestDetail: Codable {
+    let id: String
+    let question: String
+    let targets: [WisdomRequestTarget]
+    let status: String
+    let createdAt: String
+}
+
+struct WisdomRequestTarget: Codable {
+    let id: String
+    let name: String
+}
+
+struct PendingWisdomRequestsResponse: Codable {
+    let requests: [PendingWisdomRequest]
+    let count: Int
+}
+
+struct PendingWisdomRequest: Codable {
+    let id: String
+    let question: String
+    let requester: RequesterInfo?
+    let createdAt: String
+    let expiresAt: String
+}
+
+struct RequesterInfo: Codable {
+    let fullName: String?
+    let avatarUrl: String?
+}
+
+struct CreateWisdomRequest: Codable {
+    let question: String
+    let target_profile_ids: [String]
+    let related_story_id: String?
+}
+
+struct RespondToRequestRequest: Codable {
+    let action: String
+}
+
+struct UpdateWisdomTagsRequest: Codable {
+    let emotion_tags: [String]?
+    let situation_tags: [String]?
+    let lesson_tags: [String]?
+    let guidance_tags: [String]?
+}
+
+// MARK: - Quote Cards Models
+
+struct GenerateQuoteRequest: Codable {
+    let story_id: String
+    let response_id: String
+    let theme: String?
+    let background_color: String?
+    let text_color: String?
+}
+
+struct QuoteCardResponse: Codable {
+    let id: String
+    let quote: String
+    let author: String
+    let role: String?
+    let theme: String
+}
+
+struct QuoteCardsResponse: Codable {
+    let quotes: [QuoteCardData]
+    let count: Int
+}
+
+struct QuoteCardDetailResponse: Codable {
+    let quote: QuoteCardData
+}
+
+struct ShareQuoteResponse: Codable {
+    let url: String
+    let quote: String
+    let author: String
+    let imageUrl: String?
+}
+
+struct QuoteCardData: Identifiable, Codable {
+    let id: String
+    let quoteText: String
+    let authorName: String
+    let authorRole: String?
+    let theme: String
+    let imageUrl: String?
+    let viewsCount: Int
+    let sharesCount: Int
+    let savesCount: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case quoteText = "quote_text"
+        case authorName = "author_name"
+        case authorRole = "author_role"
+        case theme
+        case imageUrl = "image_url"
+        case viewsCount = "views_count"
+        case sharesCount = "shares_count"
+        case savesCount = "saves_count"
     }
 }

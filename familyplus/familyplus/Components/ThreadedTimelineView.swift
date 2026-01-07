@@ -264,7 +264,7 @@ struct ThreadNodeView: View {
                 // Indentation for threading with hierarchy
                 if effectiveDepth > 0 {
                     HStack(spacing: 0) {
-                        ForEach(0..<effectiveDepth, id: \.self) { level in
+                        ForEach(Array(0..<effectiveDepth), id: \.self) { level in
                             // Use different styles for different depths
                             if level >= effectiveDepth - 1 && isDeepReply {
                                 // Deep thread: very soft, dotted effect
@@ -666,7 +666,7 @@ struct ChronologicalResponseCard: View {
                 // Threading indicators with hierarchy-based styling
                 if effectiveDepth > 0 {
                     HStack(spacing: 0) {
-                        ForEach(0..<effectiveDepth, id: \.self) { level in
+                        ForEach(Array(0..<effectiveDepth), id: \.self) { level in
                             // Use different styles for different depths
                             if level >= effectiveDepth - 1 && isDeepReply {
                                 // Deep thread: very soft, gradient effect

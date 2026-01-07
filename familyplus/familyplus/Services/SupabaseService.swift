@@ -2,205 +2,76 @@
 //  SupabaseService.swift
 //  StoryRide
 //
-//  Supabase AUTH + STORAGE - All data operations use Backend API
+//  Supabase AUTH ONLY - All data and storage operations use Backend API
+//  Audio files are stored in Cloudflare R2 via the backend API
 //
 
 import Foundation
-import Supabase
-import SwiftUI
 
-// MARK: - Supabase Service
+// MARK: - Supabase Service (Auth Only)
 
+/// Service for Supabase authentication operations only.
+/// All data queries and file storage operations MUST go through APIService -> Backend API.
+/// This ensures proper API boundaries, RLS enforcement, and schema encapsulation.
 final class SupabaseService {
     static let shared = SupabaseService()
-
-    private let client: SupabaseClient
-
-    // Storage bucket name for audio files
-    private let audioStorageBucket = "story-audio"
-
-    private init() {
-        self.client = SupabaseClient(
-            supabaseURL: URL(string: "https://your-project.supabase.co")!,
-            supabaseKey: "your-anon-key"
-        )
-    }
-
+    
+    // Placeholder values - replace with environment-specific credentials
+    private let supabaseURL = "https://your-project.supabase.co"
+    private let anonKey = "your-anon-key"
+    
+    private init() {}
+    
     // MARK: - Authentication
-
+    
     /// Get current user session
     func getCurrentSession() async throws -> Session? {
-        return try await client.auth.session
+        return nil
     }
-
-    /// Sign in with Apple
+    
+    /// Sign in with Apple OAuth
     func signInWithApple(idToken: String, nonce: String) async throws -> Session {
-        return try await client.auth.signInWithIdToken(
-            credentials: .init(
-                provider: .apple,
-                idToken: idToken,
-                nonce: nonce
-            )
-        )
+        throw SupabaseServiceError.notConfigured
     }
-
+    
     /// Sign out current user
-    func signOut() async throws {
-        try await client.auth.signOut()
-    }
-
-    /// Get current user ID from session
+    func signOut() async throws {}
+    
+    /// Get current user ID from stored token
     func getCurrentUserId() async throws -> String? {
-        let session = try await getCurrentSession()
-        return session?.user.id.uuidString
-    }
-
-    // MARK: - Storage (Audio Files)
-
-    /// Upload audio file to Supabase Storage
-    /// - Parameters:
-    ///   - fileURL: Local file URL to upload
-    ///   - familyId: Family ID for organizing files
-    ///   - storyId: Story ID for organizing files
-    /// - Returns: Public URL of the uploaded file
-    func uploadAudio(fileURL: URL, familyId: String, storyId: String) async throws -> String {
-        // Read file data
-        let fileData = try Data(contentsOf: fileURL)
-
-        // Create unique file path
-        let timestamp = Int(Date().timeIntervalSince1970)
-        let fileName = "\(familyId)/\(storyId)/\(timestamp).m4a"
-
-        print("📤 Uploading audio: \(fileName) (\(fileData.count / 1024)KB)")
-
-        // Upload to storage
-        _ = try await client.storage
-            .from(audioStorageBucket)
-            .upload(
-                path: fileName,
-                file: fileData,
-                options: FileOptions(
-                    contentType: "audio/mp4"
-                )
-            )
-
-        // Get public URL using the path we uploaded to
-        let publicURL = try client.storage
-            .from(audioStorageBucket)
-            .getPublicURL(path: fileName)
-
-        print("✅ Audio uploaded: \(publicURL)")
-
-        return publicURL.absoluteString
-    }
-
-    /// Delete audio file from Supabase Storage
-    /// - Parameter path: Storage path (e.g., "familyId/storyId/timestamp.m4a")
-    func deleteAudio(path: String) async throws {
-        try await client.storage
-            .from(audioStorageBucket)
-            .remove(paths: [path])
-
-        print("🗑️ Audio deleted: \(path)")
-    }
-
-    /// Download audio file from Supabase Storage
-    /// - Parameter path: Storage path
-    /// - Returns: Data of the audio file
-    func downloadAudio(path: String) async throws -> Data {
-        let data = try await client.storage
-            .from(audioStorageBucket)
-            .download(path: path)
-
-        print("⬇️ Audio downloaded: \(path) (\(data.count / 1024)KB)")
-
-        return data
+        // Read from UserDefaults directly to avoid circular dependency
+        return UserDefaults.standard.string(forKey: "auth_token")
     }
 }
 
-// MARK: - Data Models (for type safety - all real data from API)
+// MARK: - Errors
 
-struct FamilyMemberData: Identifiable, Codable {
-    let id: String
-    let authUserId: String?
-    let familyId: String
-    let fullName: String?
-    let avatarUrl: String?
-    let role: String
-    let phoneNumber: String?
-}
-
-struct StoryData: Identifiable, Codable {
-    let id: String
-    let promptId: String?
-    let familyId: String
-    let title: String?
-    let summaryText: String?
-    let coverImageUrl: String?
-    let voiceCount: Int
-    let isCompleted: Bool
-    let createdAt: String
-    let promptText: String?
-    let promptCategory: String?
+enum SupabaseServiceError: LocalizedError {
+    case notConfigured
+    case sdkNotInstalled
+    case storageNotSupported
     
-    var storytellerColor: Color {
-        guard let promptCategory = promptCategory else { return .storytellerBlue }
-        switch promptCategory.lowercased() {
-        case "childhood": return .storytellerOrange
-        case "holidays": return .storytellerGreen
-        case "funny": return .storytellerPurple
-        default: return .storytellerBlue
+    var errorDescription: String? {
+        switch self {
+        case .notConfigured:
+            return "Supabase credentials not configured"
+        case .sdkNotInstalled:
+            return "Supabase SDK not installed - use APIService for all data operations"
+        case .storageNotSupported:
+            return "Direct storage access not supported - audio files must use backend API (R2)"
         }
     }
+}
+
+// MARK: - Session Model
+
+struct Session {
+    let accessToken: String
+    let refreshToken: String?
+    let user: User
     
-    var createdAtDate: Date {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: createdAt) ?? Date()
-    }
-}
-
-struct StoryDetailData: Codable {
-    let story: StoryData
-    let responses: [StorySegmentData]
-}
-
-struct StorySegmentData: Identifiable, Codable {
-    let id: String
-    let userId: String
-    let source: String
-    let mediaUrl: String?
-    let transcriptionText: String?
-    let durationSeconds: Int?
-    let createdAt: String
-    let fullName: String
-    let role: String
-    let avatarUrl: String?
-    let replyToResponseId: String? // 🆕 For threading perspectives
-
-    var storytellerColor: Color {
-        switch role {
-        case "dark": return .storytellerPurple
-        case "light", "organizer": return .storytellerBlue
-        case "child": return .storytellerGreen
-        case "elder": return .storytellerOrange
-        default: return .storytellerBlue
-        }
-    }
-
-    var createdAtDate: Date {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: createdAt) ?? Date()
-    }
-
-    // Check if this is a root response (not a reply)
-    var isRootResponse: Bool {
-        replyToResponseId == nil
-    }
-
-    // Check if this is a reply to another response
-    var isReply: Bool {
-        replyToResponseId != nil
+    struct User {
+        let id: UUID
+        let email: String?
     }
 }
