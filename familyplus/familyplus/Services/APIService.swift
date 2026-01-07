@@ -77,7 +77,7 @@ final class APIService {
     
     /// Create new story
     func createStory(promptId: UUID) async throws -> StoryData {
-        let body = CreateStoryRequest(prompt_id: promptId.uuidString)
+        let body = CreateStoryAPIRequest(prompt_id: promptId.uuidString)
         var request = await createRequest(endpoint: "/api/stories", method: "POST")
         request.httpBody = try JSONEncoder().encode(body)
         let (data, _) = try await session.data(for: request)
@@ -447,7 +447,7 @@ final class APIService {
     
     /// Delete a quote card (owner only)
     func deleteQuoteCard(id: UUID) async throws {
-        var request = await createRequest(endpoint: "/api/quotes/\(id.uuidString)", method: "DELETE")
+        let request = await createRequest(endpoint: "/api/quotes/\(id.uuidString)", method: "DELETE")
         let (_, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse,
@@ -455,6 +455,191 @@ final class APIService {
             throw APIError.deleteFailed
         }
     }
+    
+    // MARK: - AI Wisdom Summary API
+    
+    /// Get wisdom summary for a question across family stories
+    func getWisdomSummary(question: String, storyIds: [UUID]? = nil, maxStories: Int = 10) async throws -> WisdomSummaryResponse {
+        let body = WisdomSummaryRequest(
+            question: question,
+            storyIds: storyIds?.map { $0.uuidString },
+            maxStories: maxStories
+        )
+        var request = await createRequest(endpoint: "/api/wisdom/summary", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(WisdomSummaryResponse.self, from: data)
+    }
+    
+    /// Get follow-up wisdom insights
+    func getWisdomFollowUp(summaryId: UUID, followUpQuestion: String) async throws -> WisdomSummaryResponse {
+        let body = FollowUpRequest(summary_id: summaryId.uuidString, question: followUpQuestion)
+        var request = await createRequest(endpoint: "/api/wisdom/summary/follow-up", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(WisdomSummaryResponse.self, from: data)
+    }
+    
+    // MARK: - Trivia Game API
+    
+    /// Get trivia questions for a category
+    func getTriviaQuestions(category: String, count: Int = 5) async throws -> TriviaQuestionsResponse {
+        let request = await createRequest(endpoint: "/api/trivia/questions?category=\(category)&count=\(count)")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(TriviaQuestionsResponse.self, from: data)
+    }
+    
+    /// Submit trivia answer
+    func submitTriviaAnswer(questionId: UUID, selectedOptionId: UUID) async throws -> TriviaAnswerResponse {
+        let body = TriviaAnswerRequest(question_id: questionId.uuidString, selected_option_id: selectedOptionId.uuidString)
+        var request = await createRequest(endpoint: "/api/trivia/answer", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(TriviaAnswerResponse.self, from: data)
+    }
+    
+    /// Submit completed trivia game
+    func submitTriviaGame(sessionId: UUID, score: Int, answers: [String: String]) async throws {
+        let body = TriviaGameSubmit(session_id: sessionId.uuidString, score: score, answers: answers)
+        var request = await createRequest(endpoint: "/api/trivia/complete", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.updateFailed
+        }
+    }
+    
+    /// Get trivia leaderboard
+    func getTriviaLeaderboard(limit: Int = 10) async throws -> TriviaLeaderboardResponse {
+        let request = await createRequest(endpoint: "/api/trivia/leaderboard?limit=\(limit)")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(TriviaLeaderboardResponse.self, from: data)
+    }
+    
+    // MARK: - Me vs Family API
+    
+    /// Get available comparison topics
+    func getComparisonTopics() async throws -> ComparisonTopicsResponse {
+        let request = await createRequest(endpoint: "/api/comparison/topics")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(ComparisonTopicsResponse.self, from: data)
+    }
+    
+    /// Create a new comparison
+    func createComparison(topicId: UUID, userResponse: String, source: String) async throws -> ComparisonResponse {
+        let body = CreateComparisonRequest(topic_id: topicId.uuidString, user_response: userResponse, source: source)
+        var request = await createRequest(endpoint: "/api/comparison/create", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(ComparisonResponse.self, from: data)
+    }
+    
+    /// Get comparison by ID
+    func getComparison(comparisonId: UUID) async throws -> ComparisonResponse {
+        let request = await createRequest(endpoint: "/api/comparison/\(comparisonId.uuidString)")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(ComparisonResponse.self, from: data)
+    }
+    
+    /// Share comparison result
+    func shareComparison(comparisonId: UUID, platform: String) async throws -> ShareComparisonResponse {
+        let body = ShareRequest(comparison_id: comparisonId.uuidString, platform: platform)
+        var request = await createRequest(endpoint: "/api/comparison/share", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(ShareComparisonResponse.self, from: data)
+    }
+
+    // MARK: - Diary Upload API
+
+    /// Get all diary uploads for the current family
+    func getDiaryUploads() async throws -> [DiaryUploadListItem] {
+        let request = await createRequest(endpoint: "/api/diary")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode([DiaryUploadListItem].self, from: data)
+    }
+
+    /// Get OCR status for a diary upload
+    func getDiaryStatus(uploadId: String) async throws -> DiaryStatusResponse {
+        let request = await createRequest(endpoint: "/api/diary/\(uploadId)/status")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(DiaryStatusResponse.self, from: data)
+    }
+
+    /// Delete a diary upload
+    func deleteDiaryUpload(uploadId: String) async throws {
+        let request = await createRequest(endpoint: "/api/diary/\(uploadId)", method: "DELETE")
+        let (_, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.deleteFailed
+        }
+    }
+}
+
+// MARK: - Diary API Models
+
+struct DiaryUploadListItem: Codable, Identifiable {
+    let id: String
+    let source: String
+    let title: String?
+    let processingStatus: String
+    let pageCount: Int
+    let createdAt: String
+    let storyId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case source
+        case title
+        case processingStatus = "processing_status"
+        case pageCount = "page_count"
+        case createdAt = "created_at"
+        case storyId = "story_id"
+    }
+}
+
+struct DiaryStatusResponse: Codable {
+    let uploadId: String
+    let status: String
+    let pageCount: Int?
+    let pages: [DiaryPageStatus]?
+    let combinedText: String?
+    let confidence: Double?
+    let progress: DiaryProgress?
+
+    enum CodingKeys: String, CodingKey {
+        case uploadId = "upload_id"
+        case status
+        case pageCount = "page_count"
+        case pages
+        case combinedText = "combined_text"
+        case confidence
+        case progress
+    }
+}
+
+struct DiaryPageStatus: Codable {
+    let pageIndex: Int
+    let imageUrl: String
+    let extractedText: String?
+    let confidence: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case pageIndex = "page_index"
+        case imageUrl = "image_url"
+        case extractedText = "extracted_text"
+        case confidence
+    }
+}
+
+struct DiaryProgress: Codable {
+    let completed: Int
+    let total: Int
+    let percentage: Int
 }
 
 // MARK: - API Errors
@@ -478,7 +663,7 @@ enum APIError: LocalizedError {
 
 // MARK: - Request Models
 
-struct CreateStoryRequest: Codable {
+struct CreateStoryAPIRequest: Codable {
     let prompt_id: String
 }
 
@@ -535,33 +720,54 @@ struct PreferenceSettingsRequest: Codable {
 
 // MARK: - Response Models
 
-struct PromptData: Identifiable, Codable {
-    let id: String
-    let text: String
-    let category: String?
-    let isCustom: Bool
-    let createdAt: String
+public struct PromptData: Identifiable, Codable {
+    public var id: String
+    public var text: String
+    public var category: String?
+    public var isCustom: Bool
+    public var createdAt: String
 
-    var createdAtDate: Date {
+    public init(id: String, text: String, category: String?, isCustom: Bool, createdAt: String) {
+        self.id = id
+        self.text = text
+        self.category = category
+        self.isCustom = isCustom
+        self.createdAt = createdAt
+    }
+
+    public var createdAtDate: Date {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: createdAt) ?? Date()
     }
 }
 
-struct ResponseData: Identifiable, Codable {
-    let id: String
-    let promptId: String
-    let storyId: String?
-    let userId: String
-    let source: String
-    let mediaUrl: String?
-    let transcriptionText: String?
-    let durationSeconds: Int?
-    let processingStatus: String
-    let createdAt: String
+public struct ResponseData: Identifiable, Codable {
+    public var id: String
+    public var promptId: String
+    public var storyId: String?
+    public var userId: String
+    public var source: String
+    public var mediaUrl: String?
+    public var transcriptionText: String?
+    public var durationSeconds: Int?
+    public var processingStatus: String
+    public var createdAt: String
     
-    var createdAtDate: Date {
+    public init(id: String, promptId: String, storyId: String?, userId: String, source: String, mediaUrl: String?, transcriptionText: String?, durationSeconds: Int?, processingStatus: String, createdAt: String) {
+        self.id = id
+        self.promptId = promptId
+        self.storyId = storyId
+        self.userId = userId
+        self.source = source
+        self.mediaUrl = mediaUrl
+        self.transcriptionText = transcriptionText
+        self.durationSeconds = durationSeconds
+        self.processingStatus = processingStatus
+        self.createdAt = createdAt
+    }
+    
+    public var createdAtDate: Date {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: createdAt) ?? Date()
@@ -653,11 +859,11 @@ struct StorySegmentData: Identifiable, Codable {
     
     var storytellerColor: Color {
         switch role {
-        case "dark": return .storytellerPurple
-        case "light", "organizer": return .storytellerBlue
-        case "child": return .storytellerGreen
-        case "elder": return .storytellerOrange
-        default: return .storytellerBlue
+        case "dark": return .storytellerTeen
+        case "light", "organizer": return .storytellerParent
+        case "child": return .storytellerChild
+        case "elder": return .storytellerElder
+        default: return .storytellerParent
         }
     }
     
@@ -714,7 +920,9 @@ struct WisdomSearchResponse: Codable {
     let count: Int
 }
 
-struct WisdomSearchResult: Codable {
+struct WisdomSearchResult: Codable, Identifiable {
+    var id: String { storyId }
+    
     let storyId: String
     let title: String?
     let summaryText: String?
@@ -835,4 +1043,137 @@ struct QuoteCardData: Identifiable, Codable {
         case sharesCount = "shares_count"
         case savesCount = "saves_count"
     }
+}
+
+// MARK: - AI Wisdom Summary Models
+
+
+struct RelatedStoryData: Codable {
+    let id: String
+    let title: String
+    let storyteller: String
+    let year: Int?
+}
+
+struct FollowUpRequest: Codable {
+    let summary_id: String
+    let question: String
+}
+
+// MARK: - Trivia Game Models
+
+struct TriviaQuestionsResponse: Codable {
+    let questions: [TriviaQuestionData]
+    let sessionId: String
+}
+
+struct TriviaQuestionData: Codable {
+    let id: String
+    let question: String
+    let options: [TriviaOptionData]
+    let correctOptionId: String
+    let explanation: String
+    let category: String
+    let difficulty: String
+    let points: Int
+}
+
+struct TriviaOptionData: Codable {
+    let id: String
+    let text: String
+    let label: String
+    let generation: String?
+}
+
+struct TriviaAnswerRequest: Codable {
+    let question_id: String
+    let selected_option_id: String
+}
+
+struct TriviaAnswerResponse: Codable {
+    let isCorrect: Bool
+    let correctOptionId: String
+    let explanation: String
+    let pointsEarned: Int
+}
+
+struct TriviaGameSubmit: Codable {
+    let session_id: String
+    let score: Int
+    let answers: [String: String]
+}
+
+struct TriviaLeaderboardResponse: Codable {
+    let entries: [TriviaLeaderboardEntryData]
+}
+
+struct TriviaLeaderboardEntryData: Codable {
+    let id: String
+    let memberName: String
+    let score: Int
+    let correctAnswers: Int
+    let streak: Int
+    let avatarEmoji: String?
+}
+
+// MARK: - Me vs Family Models
+
+struct ComparisonTopicsResponse: Codable {
+    let topics: [ComparisonTopicData]
+}
+
+struct ComparisonTopicData: Codable {
+    let id: String
+    let title: String
+    let description: String
+    let icon: String
+    let category: String
+    let questionPrompt: String
+    let familyQuestion: String
+    let isAvailable: Bool
+}
+
+struct CreateComparisonRequest: Codable {
+    let topic_id: String
+    let user_response: String
+    let source: String
+}
+
+struct ComparisonResponse: Codable {
+    let comparison: ComparisonData
+    let userResponse: UserResponseData
+    let familyResponses: [FamilyResponseData]
+    let aiInsight: String
+}
+
+struct ComparisonData: Codable {
+    let id: String
+    let topic: String
+    let question: String
+}
+
+struct UserResponseData: Codable {
+    let id: String
+    let text: String
+    let source: String
+    let timestamp: String
+}
+
+struct FamilyResponseData: Codable {
+    let id: String
+    let text: String
+    let storyteller: String
+    let generation: String
+    let year: Int?
+    let timestamp: String
+}
+
+struct ShareRequest: Codable {
+    let comparison_id: String
+    let platform: String
+}
+
+struct ShareComparisonResponse: Codable {
+    let shareUrl: String
+    let imageUrl: String?
 }

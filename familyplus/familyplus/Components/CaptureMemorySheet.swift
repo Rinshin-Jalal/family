@@ -2,58 +2,111 @@
 //  CaptureMemorySheet.swift
 //  StoryRide
 //
-//  Sheet for capturing new memories with inline recording or typing
+//  Complete frictionless story capture with 4 input methods
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
+import PDFKit
+import Combine
+
+// Import Services for APIService and PromptData
+import Foundation
+
+// MARK: - Input Mode
+
+enum InputMode {
+    case recording
+    case audioUpload
+    case documentUpload
+    case typing
+    
+    var icon: String {
+        switch self {
+        case .recording: return "mic.fill"
+        case .audioUpload: return "folder.fill"
+        case .documentUpload: return "doc.fill"
+        case .typing: return "text.bubble.fill"
+        }
+    }
+    
+    var title: String {
+        switch self {
+        case .recording: return "Record"
+        case .audioUpload: return "Audio"
+        case .documentUpload: return "Document"
+        case .typing: return "Type"
+        }
+    }
+}
 
 // MARK: - Capture Memory Sheet
 
 struct CaptureMemorySheet: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
-
+    
     var initialPrompt: PromptData? = nil
-
+    var storyId: UUID? = nil
+    
+    // Prompt state
     @State private var selectedPrompt: PromptData?
     @State private var customPromptText = ""
     @State private var isLoadingPrompts = false
-
-    // Input mode: recording or typing
+    
+    // Input mode
     @State private var inputMode: InputMode = .recording
-
+    
     // Recording state
-    @State private var isRecording = false
-    @State private var recordingDuration: TimeInterval = 0
+    @StateObject private var audioRecorder = AudioRecorderService()
+    @State private var recordingVisualLevel: Float = 0
     @State private var recordingTimer: Timer?
-
+    
+    // Audio upload state
+    @State private var showAudioPicker = false
+    @State private var selectedAudioFile: URL?
+    @State private var selectedAudioFileName: String?
+    
+    // Document upload state
+    @State private var showDocumentPicker = false
+    @State private var selectedDocument: URL?
+    @State private var selectedDocumentName: String?
+    @State private var extractedText: String?
+    @State private var isExtracting = false
+    
     // Text input state
     @State private var memoryText = ""
-
-    // Sample prompts - in production, fetch from API
+    
+    // Upload state
+    @State private var isUploading = false
+    @State private var uploadProgress: Double = 0
+    @State private var uploadError: String?
+    @State private var uploadSuccess = false
+    
+    // Sample prompts
     @State private var suggestedPrompts: [PromptData] = [
-        PromptData(id: "1", text: "What's your favorite childhood memory?", category: "story", isCustom: false, createdAt: ""),
-        PromptData(id: "2", text: "Tell me about a holiday tradition", category: "story", isCustom: false, createdAt: ""),
-        PromptData(id: "3", text: "What's something you're grateful for today?", category: "reflection", isCustom: false, createdAt: ""),
-        PromptData(id: "4", text: "Describe a moment that changed your life", category: "voiceMemory", isCustom: false, createdAt: ""),
-        PromptData(id: "5", text: "What's a lesson you learned the hard way?", category: "reflection", isCustom: false, createdAt: ""),
-        PromptData(id: "6", text: "Tell me about your first job", category: "story", isCustom: false, createdAt: "")
+        PromptData(id: UUID().uuidString, text: "What's your favorite childhood memory?", category: "story", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
+        PromptData(id: UUID().uuidString, text: "Tell me about a holiday tradition", category: "story", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
+        PromptData(id: UUID().uuidString, text: "What's something you're grateful for today?", category: "reflection", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
+        PromptData(id: UUID().uuidString, text: "Describe a moment that changed your life", category: "voiceMemory", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
+        PromptData(id: UUID().uuidString, text: "What's a lesson you learned the hard way?", category: "reflection", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
+        PromptData(id: UUID().uuidString, text: "Tell me about your first job", category: "story", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date()))
     ]
-
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header
             header
-
+            
             ScrollView {
                 VStack(spacing: 24) {
                     // Prompt selection
                     promptSection
-
-                    // Input mode toggle
-                    inputModeToggle
-
-                    // Recording or typing section (one at a time)
+                    
+                    // Input mode selector (4 buttons)
+                    inputModeSelector
+                    
+                    // Dynamic input section based on mode
                     inputSection
                 }
                 .padding(.horizontal, theme.screenPadding)
@@ -63,25 +116,60 @@ struct CaptureMemorySheet: View {
         .background(theme.backgroundColor)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .fileImporter(
+            isPresented: $showAudioPicker,
+            allowedContentTypes: [.audio, .mpeg4Audio, .mp3],
+            allowsMultipleSelection: false
+        ) { result in
+            handleAudioFileSelection(result)
+        }
+        .fileImporter(
+            isPresented: $showDocumentPicker,
+            allowedContentTypes: [.pdf, .plainText, .rtf],
+            allowsMultipleSelection: false
+        ) { result in
+            handleDocumentFileSelection(result)
+        }
+        .alert("Upload Error", isPresented: .constant(uploadError != nil), actions: {
+            Button("OK") { uploadError = nil }
+        }, message: {
+            Text(uploadError ?? "")
+        })
+        .alert("Success!", isPresented: $uploadSuccess, actions: {
+            Button("OK") {
+                dismiss()
+            }
+        }, message: {
+            Text("Your memory has been saved!")
+        })
         .onAppear {
             if let initialPrompt = initialPrompt {
                 selectedPrompt = initialPrompt
             }
         }
+        .onDisappear {
+            // Cleanup
+            if audioRecorder.isRecording {
+                audioRecorder.cancelRecording()
+            }
+            recordingTimer?.invalidate()
+        }
     }
-
+    
     // MARK: - Header
-
+    
     private var header: some View {
         HStack {
             Text("Share a Memory")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(theme.textColor)
-
+            
             Spacer()
-
+            
             Button("Cancel") {
-                stopRecording()
+                if audioRecorder.isRecording {
+                    audioRecorder.cancelRecording()
+                }
                 dismiss()
             }
             .foregroundColor(theme.accentColor)
@@ -91,16 +179,16 @@ struct CaptureMemorySheet: View {
         .padding(.vertical, 16)
         .background(theme.backgroundColor)
     }
-
+    
     // MARK: - Prompt Section
-
+    
     private var promptSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Prompt")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(theme.textColor)
-
-            if selectedPrompt == nil {
+            
+            if selectedPrompt == nil && customPromptText.isEmpty {
                 // Suggested prompts grid
                 LazyVGrid(columns: [
                     GridItem(.flexible()),
@@ -125,9 +213,9 @@ struct CaptureMemorySheet: View {
                         Text(selectedPrompt?.text ?? customPromptText)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(theme.textColor)
-
+                        
                         Spacer()
-
+                        
                         Button("Change") {
                             withAnimation(.spring(response: 0.3)) {
                                 selectedPrompt = nil
@@ -144,7 +232,7 @@ struct CaptureMemorySheet: View {
                         .fill(theme.cardBackgroundColor)
                 )
             }
-
+            
             // Custom prompt input
             TextField("Or type your own prompt...", text: $customPromptText)
                 .textFieldStyle(.plain)
@@ -158,60 +246,45 @@ struct CaptureMemorySheet: View {
                         .stroke(customPromptText.isEmpty ? Color.clear : theme.accentColor, lineWidth: 2)
                 )
                 .onChange(of: customPromptText) { _, _ in
-                    selectedPrompt = nil
+                    if !customPromptText.isEmpty {
+                        selectedPrompt = nil
+                    }
                 }
         }
     }
-
-    // MARK: - Input Mode Toggle
-
-    private var inputModeToggle: some View {
-        HStack(spacing: 0) {
-            // Record option
-            Button(action: {
-                withAnimation(.spring(response: 0.3)) {
-                    inputMode = .recording
+    
+    // MARK: - Input Mode Selector
+    
+    private var inputModeSelector: some View {
+        HStack(spacing: 8) {
+            ForEach([InputMode.recording, .audioUpload, .documentUpload, .typing], id: \.self) { mode in
+                Button(action: {
+                    withAnimation(.spring(response: 0.3)) {
+                        // Stop recording if switching away from recording mode
+                        if inputMode == .recording && audioRecorder.isRecording {
+                            audioRecorder.stopRecording()
+                        }
+                        inputMode = mode
+                    }
+                }) {
+                    VStack(spacing: 6) {
+                        Image(systemName: mode.icon)
+                            .font(.system(size: 18))
+                        Text(mode.title)
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(inputMode == mode ? .white : theme.accentColor)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(inputMode == mode ? theme.accentColor : Color.clear)
+                    )
                 }
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 16))
-                    Text("Record")
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                .foregroundColor(inputMode == .recording ? .white : theme.accentColor)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(inputMode == .recording ? theme.accentColor : Color.clear)
-                )
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-
-            // Type option
-            Button(action: {
-                withAnimation(.spring(response: 0.3)) {
-                    inputMode = .typing
-                }
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "text.bubble.fill")
-                        .font(.system(size: 16))
-                    Text("Type")
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                .foregroundColor(inputMode == .typing ? .white : theme.accentColor)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(inputMode == .typing ? theme.accentColor : Color.clear)
-                )
-            }
-            .buttonStyle(.plain)
         }
-        .padding(4)
+        .padding(6)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(theme.cardBackgroundColor)
@@ -221,69 +294,316 @@ struct CaptureMemorySheet: View {
                 )
         )
     }
-
+    
     // MARK: - Input Section
-
+    
     @ViewBuilder
     private var inputSection: some View {
         switch inputMode {
         case .recording:
             recordingSection
+        case .audioUpload:
+            audioUploadSection
+        case .documentUpload:
+            documentUploadSection
         case .typing:
             typingSection
         }
     }
-
+    
     // MARK: - Recording Section
-
+    
     private var recordingSection: some View {
-        HStack(spacing: 16) {
-            // Record button
-            Button(action: toggleRecording) {
-                ZStack {
+        VStack(spacing: 16) {
+            // Recording visualization
+            ZStack {
+                // Pulsing circle when recording
+                if audioRecorder.isRecording {
                     Circle()
-                        .fill(isRecording ? Color.red : theme.accentColor)
-                        .frame(width: 60, height: 60)
-                        .shadow(color: isRecording ? Color.red.opacity(0.3) : theme.accentColor.opacity(0.25), radius: 12, y: 6)
-
-                    Image(systemName: isRecording ? "stop.fill" : "mic.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
+                        .fill(Color.red.opacity(0.2))
+                        .frame(width: 100 + CGFloat(recordingVisualLevel * 40), height: 100 + CGFloat(recordingVisualLevel * 40))
+                        .animation(.easeInOut(duration: 0.1), value: recordingVisualLevel)
                 }
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(durationText)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textColor)
-
-                Text(isRecording ? "Recording..." : "Tap to record")
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.secondaryTextColor)
-            }
-
-            Spacer()
-
-            // Save button (only when has recording)
-            if !isRecording && recordingDuration > 0 {
-                Button(action: saveAndDismiss) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundColor(.green)
+                
+                // Record button
+                Button(action: toggleRecording) {
+                    ZStack {
+                        Circle()
+                            .fill(audioRecorder.isRecording ? Color.red : theme.accentColor)
+                            .frame(width: 80, height: 80)
+                            .shadow(color: (audioRecorder.isRecording ? Color.red : theme.accentColor).opacity(0.3), radius: 12, y: 6)
+                        
+                        Image(systemName: audioRecorder.isRecording ? "stop.fill" : "mic.fill")
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
                 }
                 .buttonStyle(.plain)
             }
+            .frame(height: 140)
+            
+            // Duration
+            Text(durationText)
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textColor)
+            
+            // Status text
+            Text(audioRecorder.isRecording ? "Recording..." : audioRecorder.recordingDuration > 0 ? "Recording complete" : "Tap to record")
+                .font(.system(size: 14))
+                .foregroundColor(theme.secondaryTextColor)
+            
+            // Save button (only when has recording)
+            if audioRecorder.recordingDuration > 0 && !audioRecorder.isRecording {
+                saveRecordingButton
+            }
+            
+            // Upload progress
+            if isUploading {
+                uploadProgressView
+            }
         }
-        .padding(16)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.cardBackgroundColor)
+        )
+        .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
+            if audioRecorder.isRecording {
+                recordingVisualLevel = audioRecorder.getCurrentLevel()
+            }
+        }
+    }
+    
+    private var saveRecordingButton: some View {
+        Button(action: uploadRecording) {
+            HStack(spacing: 8) {
+                if isUploading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                }
+                Text(isUploading ? "Uploading..." : "Save Recording")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.accentColor)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isUploading)
+    }
+    
+    // MARK: - Audio Upload Section
+    
+    private var audioUploadSection: some View {
+        VStack(spacing: 16) {
+            // Upload button
+            Button(action: { showAudioPicker = true }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 24))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Choose Audio File")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("M4A, MP3, WAV")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.secondaryTextColor)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(theme.secondaryTextColor)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(theme.accentColor.opacity(0.1))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isUploading)
+            
+            // Selected file display
+            if let fileName = selectedAudioFileName {
+                HStack {
+                    Image(systemName: "waveform")
+                        .foregroundColor(theme.accentColor)
+                    Text(fileName)
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textColor)
+                        .lineLimit(1)
+                    Spacer()
+                    Button(action: {
+                        selectedAudioFile = nil
+                        selectedAudioFileName = nil
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(theme.secondaryTextColor)
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(theme.cardBackgroundColor)
+                )
+                
+                // Save button
+                Button(action: uploadAudioFile) {
+                    HStack(spacing: 8) {
+                        if isUploading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: "arrow.up.circle.fill")
+                        }
+                        Text(isUploading ? "Uploading..." : "Upload & Save")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(theme.accentColor)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isUploading || selectedAudioFile == nil)
+            }
+            
+            // Upload progress
+            if isUploading {
+                uploadProgressView
+            }
+        }
+        .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(theme.cardBackgroundColor)
         )
     }
-
+    
+    // MARK: - Document Upload Section
+    
+    private var documentUploadSection: some View {
+        VStack(spacing: 16) {
+            // Upload button
+            Button(action: { showDocumentPicker = true }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "doc.fill")
+                        .font(.system(size: 24))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Choose Document")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("PDF, TXT, RTF")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.secondaryTextColor)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(theme.secondaryTextColor)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(theme.accentColor.opacity(0.1))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isUploading)
+            
+            // Selected document display
+            if let docName = selectedDocumentName {
+                HStack {
+                    Image(systemName: "doc.text.fill")
+                        .foregroundColor(theme.accentColor)
+                    Text(docName)
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textColor)
+                        .lineLimit(1)
+                    Spacer()
+                    if isExtracting {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Button(action: {
+                            selectedDocument = nil
+                            selectedDocumentName = nil
+                            extractedText = nil
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(theme.secondaryTextColor)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(theme.cardBackgroundColor)
+                )
+                
+                // Extracted text preview
+                if let text = extractedText {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Extracted Text (\(text.count) characters)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.secondaryTextColor)
+                        
+                        Text(text)
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textColor)
+                            .lineLimit(4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(theme.backgroundColor)
+                    )
+                    
+                    // Save button
+                    Button(action: uploadDocument) {
+                        HStack(spacing: 8) {
+                            if isUploading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Image(systemName: "arrow.up.circle.fill")
+                            }
+                            Text(isUploading ? "Uploading..." : "Save Document")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(theme.accentColor)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isUploading)
+                }
+            }
+            
+            // Upload progress
+            if isUploading {
+                uploadProgressView
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.cardBackgroundColor)
+        )
+    }
+    
     // MARK: - Typing Section
-
+    
     private var typingSection: some View {
         VStack(spacing: 16) {
             // Text editor
@@ -294,7 +614,7 @@ struct CaptureMemorySheet: View {
                         .font(.system(size: 16))
                         .padding(16)
                 }
-
+                
                 TextEditor(text: $memoryText)
                     .font(.system(size: 16))
                     .foregroundColor(theme.textColor)
@@ -308,13 +628,26 @@ struct CaptureMemorySheet: View {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(theme.cardBackgroundColor)
             )
-
+            
+            // Character count
+            HStack {
+                Text("\(memoryText.count) characters")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.secondaryTextColor)
+                Spacer()
+            }
+            
             // Save button (only when has text)
             if !memoryText.isEmpty {
-                Button(action: saveAndDismiss) {
+                Button(action: uploadText) {
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("Save")
+                        if isUploading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                        }
+                        Text(isUploading ? "Saving..." : "Save")
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -322,60 +655,317 @@ struct CaptureMemorySheet: View {
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.green)
+                            .fill(theme.accentColor)
                     )
                 }
                 .buttonStyle(.plain)
+                .disabled(isUploading)
+            }
+            
+            // Upload progress
+            if isUploading {
+                uploadProgressView
             }
         }
     }
-
-    // MARK: - Duration Text
-
+    
+    // MARK: - Upload Progress View
+    
+    private var uploadProgressView: some View {
+        VStack(spacing: 8) {
+            ProgressView(value: uploadProgress)
+                .progressViewStyle(LinearProgressViewStyle(tint: theme.accentColor))
+            
+            Text("\(Int(uploadProgress * 100))%")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(theme.secondaryTextColor)
+        }
+        .padding()
+    }
+    
+    // MARK: - Helpers
+    
     private var durationText: String {
-        let minutes = Int(recordingDuration) / 60
-        let seconds = Int(recordingDuration) % 60
+        let minutes = Int(audioRecorder.recordingDuration) / 60
+        let seconds = Int(audioRecorder.recordingDuration) % 60
         return String(format: "%02d:%02d", minutes, seconds)
     }
-
+    
+    private func hasValidPrompt() -> Bool {
+        return selectedPrompt != nil || !customPromptText.isEmpty
+    }
+    
+    private func getPromptId() -> UUID {
+        if let prompt = selectedPrompt {
+            return UUID(uuidString: prompt.id) ?? UUID()
+        }
+        // Create a temporary prompt for custom text
+        return UUID()
+    }
+    
     // MARK: - Actions
-
+    
     private func toggleRecording() {
-        withAnimation {
-            isRecording.toggle()
-
-            if isRecording {
-                startRecording()
+        Task { @MainActor in
+            if audioRecorder.isRecording {
+                // Stop recording
+                audioRecorder.stopRecording()
+                recordingTimer?.invalidate()
+                recordingTimer = nil
             } else {
-                stopRecording()
+                // Start recording
+                do {
+                    try await audioRecorder.startRecording()
+                    // Start visualizer timer
+                    recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                        recordingVisualLevel = audioRecorder.getCurrentLevel()
+                    }
+                } catch {
+                    uploadError = "Failed to start recording: \(error.localizedDescription)"
+                }
             }
         }
     }
-
-    private func startRecording() {
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            recordingDuration += 0.1
+    
+    private func uploadRecording() {
+        guard hasValidPrompt() else {
+            uploadError = "Please select or enter a prompt first"
+            return
         }
-        // TODO: Integrate with AudioRecorderService
+        
+        guard let audioURL = audioRecorder.currentRecordingURL else {
+            uploadError = "No recording found"
+            return
+        }
+        
+        Task { @MainActor in
+            isUploading = true
+            uploadProgress = 0
+            
+            do {
+                let audioData = try Data(contentsOf: audioURL)
+                let filename = audioURL.lastPathComponent
+                let promptId = getPromptId()
+                
+                _ = try await APIService.shared.uploadResponse(
+                    promptId: promptId,
+                    storyId: storyId,
+                    audioData: audioData,
+                    filename: filename,
+                    source: "app_audio"
+                )
+                
+                uploadProgress = 1.0
+                uploadSuccess = true
+            } catch {
+                uploadError = "Upload failed: \(error.localizedDescription)"
+            }
+            
+            isUploading = false
+        }
     }
-
-    private func stopRecording() {
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-        // TODO: Stop AudioRecorderService
+    
+    private func handleAudioFileSelection(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            if let url = urls.first {
+                // Start accessing the security-scoped resource
+                guard url.startAccessingSecurityScopedResource() else {
+                    uploadError = "Cannot access this file"
+                    return
+                }
+                
+                selectedAudioFile = url
+                selectedAudioFileName = url.lastPathComponent
+                
+                // Schedule cleanup
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+        case .failure(let error):
+            uploadError = "Failed to select file: \(error.localizedDescription)"
+        }
     }
-
-    private func saveAndDismiss() {
-        // TODO: Save to backend
-        dismiss()
+    
+    private func uploadAudioFile() {
+        guard hasValidPrompt() else {
+            uploadError = "Please select or enter a prompt first"
+            return
+        }
+        
+        guard let audioURL = selectedAudioFile else {
+            uploadError = "No audio file selected"
+            return
+        }
+        
+        Task { @MainActor in
+            isUploading = true
+            uploadProgress = 0
+            
+            do {
+                let audioData = try Data(contentsOf: audioURL)
+                let filename = audioURL.lastPathComponent
+                let promptId = getPromptId()
+                
+                _ = try await APIService.shared.uploadResponse(
+                    promptId: promptId,
+                    storyId: storyId,
+                    audioData: audioData,
+                    filename: filename,
+                    source: "app_audio"
+                )
+                
+                uploadProgress = 1.0
+                uploadSuccess = true
+            } catch {
+                uploadError = "Upload failed: \(error.localizedDescription)"
+            }
+            
+            isUploading = false
+        }
     }
-}
-
-// MARK: - Input Mode
-
-enum InputMode {
-    case recording
-    case typing
+    
+    private func handleDocumentFileSelection(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            if let url = urls.first {
+                guard url.startAccessingSecurityScopedResource() else {
+                    uploadError = "Cannot access this file"
+                    return
+                }
+                
+                selectedDocument = url
+                selectedDocumentName = url.lastPathComponent
+                
+                // Start text extraction
+                extractTextFromDocument(url: url)
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+        case .failure(let error):
+            uploadError = "Failed to select document: \(error.localizedDescription)"
+        }
+    }
+    
+    private func extractTextFromDocument(url: URL) {
+        isExtracting = true
+        extractedText = nil
+        
+        Task { @MainActor in
+            do {
+                let fileExtension = url.pathExtension.lowercased()
+                
+                if fileExtension == "pdf" {
+                    // Extract from PDF
+                    if let pdfDocument = PDFDocument(url: url) {
+                        var fullText = ""
+                        let pageCount = pdfDocument.pageCount
+                        
+                        for i in 0..<pageCount {
+                            if let page = pdfDocument.page(at: i) {
+                                if let pageText = page.string {
+                                    fullText += pageText + "\n\n"
+                                }
+                            }
+                        }
+                        
+                        extractedText = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else {
+                        uploadError = "Could not read PDF document"
+                    }
+                } else {
+                    // Extract from text files
+                    let text = try String(contentsOf: url, encoding: .utf8)
+                    extractedText = text
+                }
+            } catch {
+                uploadError = "Failed to extract text: \(error.localizedDescription)"
+            }
+            
+            isExtracting = false
+        }
+    }
+    
+    private func uploadDocument() {
+        guard hasValidPrompt() else {
+            uploadError = "Please select or enter a prompt first"
+            return
+        }
+        
+        guard let text = extractedText, !text.isEmpty else {
+            uploadError = "No text extracted from document"
+            return
+        }
+        
+        Task { @MainActor in
+            isUploading = true
+            uploadProgress = 0
+            
+            do {
+                // Convert text to audio using text-to-speech or upload as text
+                // For now, upload as text response
+                let textData = text.data(using: .utf8)!
+                let filename = "extracted_\(UUID().uuidString).txt"
+                let promptId = getPromptId()
+                
+                _ = try await APIService.shared.uploadResponse(
+                    promptId: promptId,
+                    storyId: storyId,
+                    audioData: textData,
+                    filename: filename,
+                    source: "app_text"
+                )
+                
+                uploadProgress = 1.0
+                uploadSuccess = true
+            } catch {
+                uploadError = "Upload failed: \(error.localizedDescription)"
+            }
+            
+            isUploading = false
+        }
+    }
+    
+    private func uploadText() {
+        guard hasValidPrompt() else {
+            uploadError = "Please select or enter a prompt first"
+            return
+        }
+        
+        guard !memoryText.isEmpty else {
+            uploadError = "Please enter some text"
+            return
+        }
+        
+        Task { @MainActor in
+            isUploading = true
+            uploadProgress = 0
+            
+            do {
+                let textData = memoryText.data(using: .utf8)!
+                let filename = "text_\(UUID().uuidString).txt"
+                let promptId = getPromptId()
+                
+                _ = try await APIService.shared.uploadResponse(
+                    promptId: promptId,
+                    storyId: storyId,
+                    audioData: textData,
+                    filename: filename,
+                    source: "app_text"
+                )
+                
+                uploadProgress = 1.0
+                uploadSuccess = true
+            } catch {
+                uploadError = "Upload failed: \(error.localizedDescription)"
+            }
+            
+            isUploading = false
+        }
+    }
 }
 
 // MARK: - Prompt Suggestion Card
@@ -384,7 +974,7 @@ struct PromptSuggestionCard: View {
     let prompt: PromptData
     let theme: PersonaTheme
     let onTap: () -> Void
-
+    
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 8) {
@@ -416,12 +1006,11 @@ struct CaptureMemorySheet_Previews: PreviewProvider {
         Group {
             CaptureMemorySheet()
                 .themed(DarkTheme())
-                .previewDisplayName("dark")
-
+                .previewDisplayName("Dark Mode")
+            
             CaptureMemorySheet()
                 .themed(LightTheme())
-                .previewDisplayName("light")
-
+                .previewDisplayName("Light Mode")
         }
     }
 }
