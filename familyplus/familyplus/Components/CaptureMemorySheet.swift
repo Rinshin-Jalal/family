@@ -83,16 +83,6 @@ struct CaptureMemorySheet: View {
     @State private var uploadError: String?
     @State private var uploadSuccess = false
     
-    // Sample prompts
-    @State private var suggestedPrompts: [PromptData] = [
-        PromptData(id: UUID().uuidString, text: "What's your favorite childhood memory?", category: "story", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
-        PromptData(id: UUID().uuidString, text: "Tell me about a holiday tradition", category: "story", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
-        PromptData(id: UUID().uuidString, text: "What's something you're grateful for today?", category: "reflection", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
-        PromptData(id: UUID().uuidString, text: "Describe a moment that changed your life", category: "voiceMemory", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
-        PromptData(id: UUID().uuidString, text: "What's a lesson you learned the hard way?", category: "reflection", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date())),
-        PromptData(id: UUID().uuidString, text: "Tell me about your first job", category: "story", isCustom: false, createdAt: ISO8601DateFormatter().string(from: Date()))
-    ]
-    
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -183,67 +173,39 @@ struct CaptureMemorySheet: View {
     // MARK: - Prompt Section
     
     private var promptSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Prompt")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(theme.textColor)
             
-            if selectedPrompt == nil && customPromptText.isEmpty {
-                // Suggested prompts grid
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 12) {
-                    ForEach(suggestedPrompts) { prompt in
-                        PromptSuggestionCard(
-                            prompt: prompt,
-                            theme: theme,
-                            onTap: {
-                                withAnimation(.spring(response: 0.3)) {
-                                    selectedPrompt = prompt
-                                }
-                            }
-                        )
-                    }
-                }
-            } else {
+            if let prompt = selectedPrompt {
                 // Selected prompt display
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text(selectedPrompt?.text ?? customPromptText)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(theme.textColor)
-                        
-                        Spacer()
-                        
-                        Button("Change") {
-                            withAnimation(.spring(response: 0.3)) {
-                                selectedPrompt = nil
-                                customPromptText = ""
-                            }
-                        }
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(theme.accentColor)
+                HStack {
+                    Text(prompt.text)
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.textColor)
+                    Spacer()
+                    Button("Change") {
+                        selectedPrompt = nil
+                        customPromptText = ""
                     }
+                    .font(.system(size: 15))
+                    .foregroundColor(theme.accentColor)
                 }
-                .padding(16)
+                .padding(12)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 8)
                         .fill(theme.cardBackgroundColor)
                 )
             }
             
             // Custom prompt input
-            TextField("Or type your own prompt...", text: $customPromptText)
+            TextField("Type a prompt or question...", text: $customPromptText)
                 .textFieldStyle(.plain)
                 .padding(12)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 8)
                         .fill(theme.cardBackgroundColor)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(customPromptText.isEmpty ? Color.clear : theme.accentColor, lineWidth: 2)
                 )
                 .onChange(of: customPromptText) { _, _ in
                     if !customPromptText.isEmpty {
@@ -256,42 +218,32 @@ struct CaptureMemorySheet: View {
     // MARK: - Input Mode Selector
     
     private var inputModeSelector: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 4) {
             ForEach([InputMode.recording, .audioUpload, .documentUpload, .typing], id: \.self) { mode in
                 Button(action: {
-                    withAnimation(.spring(response: 0.3)) {
-                        // Stop recording if switching away from recording mode
-                        if inputMode == .recording && audioRecorder.isRecording {
-                            audioRecorder.stopRecording()
-                        }
-                        inputMode = mode
+                    // Stop recording if switching away from recording mode
+                    if inputMode == .recording && audioRecorder.isRecording {
+                        audioRecorder.stopRecording()
                     }
+                    inputMode = mode
                 }) {
-                    VStack(spacing: 6) {
-                        Image(systemName: mode.icon)
-                            .font(.system(size: 18))
-                        Text(mode.title)
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(inputMode == mode ? .white : theme.accentColor)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(inputMode == mode ? theme.accentColor : Color.clear)
-                    )
+                    Text(mode.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(inputMode == mode ? .white : theme.accentColor)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(inputMode == mode ? theme.accentColor : Color.clear)
+                        )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(6)
+        .padding(4)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(theme.cardBackgroundColor)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(theme.accentColor.opacity(0.3), lineWidth: 1)
-                )
         )
     }
     
@@ -315,32 +267,18 @@ struct CaptureMemorySheet: View {
     
     private var recordingSection: some View {
         VStack(spacing: 16) {
-            // Recording visualization
-            ZStack {
-                // Pulsing circle when recording
-                if audioRecorder.isRecording {
-                    Circle()
-                        .fill(Color.red.opacity(0.2))
-                        .frame(width: 100 + CGFloat(recordingVisualLevel * 40), height: 100 + CGFloat(recordingVisualLevel * 40))
-                        .animation(.easeInOut(duration: 0.1), value: recordingVisualLevel)
-                }
-                
-                // Record button
-                Button(action: toggleRecording) {
-                    ZStack {
+            // Record button
+            Button(action: toggleRecording) {
+                Image(systemName: audioRecorder.isRecording ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 80, height: 80)
+                    .background(
                         Circle()
                             .fill(audioRecorder.isRecording ? Color.red : theme.accentColor)
-                            .frame(width: 80, height: 80)
-                            .shadow(color: (audioRecorder.isRecording ? Color.red : theme.accentColor).opacity(0.3), radius: 12, y: 6)
-                        
-                        Image(systemName: audioRecorder.isRecording ? "stop.fill" : "mic.fill")
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .buttonStyle(.plain)
+                    )
             }
-            .frame(height: 140)
+            .buttonStyle(.plain)
             
             // Duration
             Text(durationText)
@@ -401,88 +339,50 @@ struct CaptureMemorySheet: View {
     // MARK: - Audio Upload Section
     
     private var audioUploadSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             // Upload button
             Button(action: { showAudioPicker = true }) {
-                HStack(spacing: 12) {
+                HStack {
                     Image(systemName: "folder.fill")
-                        .font(.system(size: 24))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Choose Audio File")
-                            .font(.system(size: 16, weight: .semibold))
-                        Text("M4A, MP3, WAV")
-                            .font(.system(size: 12))
-                            .foregroundColor(theme.secondaryTextColor)
-                    }
+                    Text("Choose Audio File")
                     Spacer()
-                    Image(systemName: "chevron.right")
+                    Text("M4A, MP3, WAV")
                         .foregroundColor(theme.secondaryTextColor)
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(theme.accentColor.opacity(0.1))
-                )
+                .padding(12)
             }
             .buttonStyle(.plain)
             .disabled(isUploading)
             
-            // Selected file display
+            // Selected file
             if let fileName = selectedAudioFileName {
                 HStack {
-                    Image(systemName: "waveform")
-                        .foregroundColor(theme.accentColor)
                     Text(fileName)
                         .font(.system(size: 14))
                         .foregroundColor(theme.textColor)
                         .lineLimit(1)
                     Spacer()
-                    Button(action: {
+                    Button("Clear") {
                         selectedAudioFile = nil
                         selectedAudioFileName = nil
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(theme.secondaryTextColor)
                     }
+                    .font(.system(size: 13))
                 }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(theme.cardBackgroundColor)
-                )
+                .padding(8)
+                .background(Color.clear)
                 
                 // Save button
                 Button(action: uploadAudioFile) {
-                    HStack(spacing: 8) {
-                        if isUploading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Image(systemName: "arrow.up.circle.fill")
-                        }
-                        Text(isUploading ? "Uploading..." : "Upload & Save")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(theme.accentColor)
-                    )
+                    Text(isUploading ? "Uploading..." : "Upload")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
                 .disabled(isUploading || selectedAudioFile == nil)
             }
-            
-            // Upload progress
-            if isUploading {
-                uploadProgressView
-            }
         }
-        .padding(20)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 8)
                 .fill(theme.cardBackgroundColor)
         )
     }
@@ -605,7 +505,7 @@ struct CaptureMemorySheet: View {
     // MARK: - Typing Section
     
     private var typingSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             // Text editor
             ZStack(alignment: .topLeading) {
                 if memoryText.isEmpty {
@@ -622,10 +522,10 @@ struct CaptureMemorySheet: View {
                     .background(Color.clear)
                     .scrollContentBackground(.hidden)
             }
-            .frame(minHeight: 150)
-            .padding(16)
+            .frame(minHeight: 120)
+            .padding(12)
             .background(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(theme.cardBackgroundColor)
             )
             
@@ -637,34 +537,14 @@ struct CaptureMemorySheet: View {
                 Spacer()
             }
             
-            // Save button (only when has text)
+            // Save button
             if !memoryText.isEmpty {
                 Button(action: uploadText) {
-                    HStack(spacing: 8) {
-                        if isUploading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Image(systemName: "checkmark.circle.fill")
-                        }
-                        Text(isUploading ? "Saving..." : "Save")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(theme.accentColor)
-                    )
+                    Text(isUploading ? "Saving..." : "Save")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
                 .disabled(isUploading)
-            }
-            
-            // Upload progress
-            if isUploading {
-                uploadProgressView
             }
         }
     }
@@ -672,15 +552,14 @@ struct CaptureMemorySheet: View {
     // MARK: - Upload Progress View
     
     private var uploadProgressView: some View {
-        VStack(spacing: 8) {
+        HStack {
             ProgressView(value: uploadProgress)
                 .progressViewStyle(LinearProgressViewStyle(tint: theme.accentColor))
-            
             Text("\(Int(uploadProgress * 100))%")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12))
                 .foregroundColor(theme.secondaryTextColor)
+                .frame(width: 40, alignment: .leading)
         }
-        .padding()
     }
     
     // MARK: - Helpers
@@ -965,37 +844,6 @@ struct CaptureMemorySheet: View {
             
             isUploading = false
         }
-    }
-}
-
-// MARK: - Prompt Suggestion Card
-
-struct PromptSuggestionCard: View {
-    let prompt: PromptData
-    let theme: PersonaTheme
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(prompt.text)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(theme.textColor)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(theme.cardBackgroundColor)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(theme.accentColor.opacity(0.3), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
     }
 }
 
