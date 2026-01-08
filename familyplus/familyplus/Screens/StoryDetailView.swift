@@ -154,7 +154,7 @@ struct StoryDetailView: View {
     @State private var segments: [StorySegment] = StorySegment.sampleSegments
     @State private var currentTime: TimeInterval = 0
     @State private var isPlaying = false
-    @State private var selectedReaction: Reaction?
+    // selectedReaction REMOVED - social feature de-emphasized
 
     var totalDuration: TimeInterval {
         (segments.last?.startTime ?? 0) + (segments.last?.duration ?? 0)
@@ -174,7 +174,6 @@ struct StoryDetailView: View {
             segments: segments,
             currentTime: $currentTime,
             isPlaying: $isPlaying,
-            selectedReaction: $selectedReaction,
             currentSegment: currentSegment
         )
     }
@@ -191,7 +190,7 @@ struct FullStoryDetail: View {
     let segments: [StorySegment]
     @Binding var currentTime: TimeInterval
     @Binding var isPlaying: Bool
-    @Binding var selectedReaction: Reaction?
+    // selectedReaction binding REMOVED - social feature de-emphasized
     let currentSegment: StorySegment?
 
     // MARK: - Audio Player Service
@@ -211,6 +210,12 @@ struct FullStoryDetail: View {
     // Memory context panel state
     @State private var showMemoryContext = false
     @State private var contextForResponse: StorySegmentData?
+
+    // Export modal state (Phase 3: Export Engine - unified export for all formats)
+    @State private var showExportModal = false
+
+    // REACTION STATE REMOVED - social feature de-emphasized
+    // showReactionPicker REMOVED
 
     // MARK: - Haptic Feedback Helper
     private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
@@ -284,6 +289,103 @@ struct FullStoryDetail: View {
                         .padding(.horizontal, theme.screenPadding)
                         .padding(.bottom, 60)
                     }
+
+                    // Podcast/Export Button (PRIMARY FEATURE - value extraction)
+                    // Now uses unified ExportOptionsModal with audio format
+                    Button(action: {
+                        showExportModal = true
+                    }) {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [currentSegment?.color ?? .purple, currentSegment?.color.opacity(0.7) ?? .blue],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 50, height: 50)
+
+                                Image(systemName: "waveform.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Export Podcast")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(theme.textColor)
+
+                                Text("AI-created audio from this story")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(theme.secondaryTextColor)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(theme.secondaryTextColor)
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(theme.cardBackgroundColor)
+                                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, theme.screenPadding)
+                    .padding(.bottom, 12)
+
+                    // Export Button (Phase 3: Export Engine - value extraction)
+                    Button(action: {
+                        showExportModal = true
+                    }) {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.green, .green.opacity(0.7)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 50, height: 50)
+
+                                Image(systemName: "square.and.arrow.up.fill")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.white)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Export Story")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(theme.textColor)
+
+                                Text("PDF, Audio, Video, JSON, EPUB")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(theme.secondaryTextColor)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(theme.secondaryTextColor)
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(theme.cardBackgroundColor)
+                                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, theme.screenPadding)
+                    .padding(.bottom, 24)
 
                     // Perspectives Section
                     VStack(alignment: .leading, spacing: 24) {
@@ -373,7 +475,12 @@ struct FullStoryDetail: View {
                             inputText: $inputText,
                             isRecording: $inlineInputIsRecording,
                             onSend: { text in
-                                // TODO: Submit text response
+                                // TODO: Submit text response via API
+                                // Requires:
+                                // 1. Add AudioRecorderService to this view
+                                // 2. Get prompt_id from story (needs StoryData instead of Story model)
+                                // 3. Call APIService.shared.uploadResponse() with text
+                                // 4. Handle success/error and refresh responses
                                 print("Text submitted: \(text)")
                                 inputText = ""
                             },
@@ -393,8 +500,14 @@ struct FullStoryDetail: View {
                                     inlineInputIsRecording = false
                                     recordingDuration = 0
                                 }
-                                // TODO: Handle recording completion
-                                print("Recording completed: \(duration)s")
+                                // TODO: Handle audio recording completion
+                                // Requires:
+                                // 1. AudioRecorderService to be integrated in this view
+                                // 2. Get recording URL from AudioRecorderService.shared.currentRecordingURL
+                                // 3. Load audio data as Data
+                                // 4. Call APIService.shared.uploadResponse() with audio data
+                                // 5. Poll for transcription status
+                                print("Recording completed: \(duration)s - requires AudioRecorderService integration")
                             },
                             onCancel: {
                                 withAnimation {
@@ -434,8 +547,8 @@ struct FullStoryDetail: View {
                         StoryPlayerControls(
                             segments: segments,
                             currentTime: $currentTime,
-                            isPlaying: $isPlaying,
-                            selectedReaction: $selectedReaction
+                            isPlaying: $isPlaying
+                            // selectedReaction REMOVED - social feature de-emphasized
                         )
                     }
                 }
@@ -503,6 +616,14 @@ struct FullStoryDetail: View {
                 )
             }
         }
+        .sheet(isPresented: $showExportModal) {
+            ExportOptionsModal(
+                storyId: story.id.uuidString,
+                storyTitle: story.title,
+                collectionId: nil,
+                collectionTitle: nil
+            )
+        }
         .onAppear {
             loadResponses()
         }
@@ -530,7 +651,9 @@ struct FullStoryDetail: View {
         Task {
             do {
                 // TODO: Replace with actual API call when backend ready
-                // let detail = try await APIService.shared.getStoryDetail(storyId: story.id)
+                // Need to change story: Story -> story: StoryData to get prompt_id
+                // Then call:
+                // let detail = try await APIService.shared.getStory(id: story.id)
                 // responses = detail.responses
 
                 let mockResponses = createMockResponses()
@@ -788,6 +911,7 @@ struct FullStoryDetail: View {
 
         return threadResponses
     }
+
 }
 
 // MARK: - Playback Speed
@@ -824,12 +948,12 @@ struct StoryPlayerControls: View {
     let segments: [StorySegment]
     @Binding var currentTime: TimeInterval
     @Binding var isPlaying: Bool
-    @Binding var selectedReaction: Reaction?
+    // selectedReaction binding REMOVED - social feature de-emphasized
 
     @State private var playbackSpeed: PlaybackSpeed = .normal
     @State private var isDragging = false
     @GestureState private var dragOffset: CGFloat = 0
-    @State private var showReactionPicker = false
+    // showReactionPicker REMOVED - social feature de-emphasized
 
     var totalDuration: TimeInterval {
         let last = segments.last
@@ -967,19 +1091,8 @@ struct StoryPlayerControls: View {
 
             // Controls (compact layout with reduced spacing and sizes) - All buttons 44x44 minimum per Apple HIG
             HStack(spacing: 16) {
-                // Reaction button - 44x44 touch target
-                Button(action: {
-                    triggerHaptic()
-                    showReactionPicker = true
-                }) {
-                    Image(systemName: "face.smiling")
-                        .font(.system(size: 22))
-                        .foregroundStyle(theme.secondaryTextColor)
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .frame(width: 44, height: 44)
-                .accessibilityLabel("Add reaction")
-                .accessibilityHint("Tap to select an emoji reaction")
+                // REACTION BUTTON REMOVED - social feature de-emphasized in favor of value extraction
+                // Users can now export/share stories instead of reacting
 
                 Spacer()
 
@@ -1034,17 +1147,7 @@ struct StoryPlayerControls: View {
             }
 
         }
-        .sheet(isPresented: $showReactionPicker) {
-            ReactionPickerSheet(
-                selectedReaction: $selectedReaction,
-                onReactionSelected: { reaction in
-                    selectedReaction = reaction
-                    showReactionPicker = false
-                }
-            )
-            .presentationDetents([.height(200)])
-            .presentationDragIndicator(.visible)
-        }
+        // REACTION PICKER SHEET REMOVED - social feature de-emphasized
     }
 }
 
@@ -1601,12 +1704,7 @@ struct PromptMemoryHeader: View {
         return "Recorded in \(formatter.string(from: oldest))"
     }
 
-    // Mock heard count (TODO: Replace with real data from backend)
-    private var heardCount: Int {
-        // Mock: random count between 0 and 100
-        // In production, this would come from analytics backend
-        return Int.random(in: 0...100)
-    }
+    // HEARD COUNT REMOVED - social proof feature de-emphasized in favor of value extraction
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -1666,10 +1764,10 @@ struct PromptMemoryHeader: View {
                         .foregroundColor(theme.secondaryTextColor)
                 }
             } else {
-                // Legacy signals showing memory engagement
+                // Legacy signals showing memory engagement (without heard count)
                 LegacySignalsView(
                     voiceCount: responses.count,
-                    heardCount: heardCount,
+                    heardCount: nil,  // REMOVED - social proof de-emphasized
                     lastAdded: lastAddedDate,
                     theme: theme
                 )

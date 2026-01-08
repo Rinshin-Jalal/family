@@ -2,7 +2,7 @@
 //  PersonaTheme.swift
 //  StoryRide
 //
-//  Adaptive theme system with Dark/Light mode support
+//  Simple theme system - Dark/Light mode support
 //  Owl Library Aesthetic - Scholarly warmth meets cozy storytelling
 //
 

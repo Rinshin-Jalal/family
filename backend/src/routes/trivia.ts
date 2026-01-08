@@ -357,26 +357,7 @@ app.get('/api/trivia/session/:sessionId/results', authMiddleware, async (c) => {
   })
 })
 
-/**
- * GET /api/trivia/:id/leaderboard
- * Get quiz leaderboard
- */
-app.get('/api/trivia/:id/leaderboard', authMiddleware, async (c) => {
-  const supabase = c.get('supabase')
-  const quizId = c.req.param('id')
-  const limit = parseInt(c.req.query('limit') || '10')
-
-  const { data: leaderboard, error } = await supabase
-    .rpc('get_quiz_leaderboard', {
-      p_quiz_id: quizId,
-      p_limit: limit,
-    })
-
-  if (error) {
-    return c.json({ error: 'Failed to fetch leaderboard' }, 500)
-  }
-
-  return c.json({ leaderboard: leaderboard || [] })
-})
+// LEADERBOARD REMOVED: Leaderboards promoted toxic competition in family dynamics.
+// The app should focus on value extraction (learning family stories) not social comparison.
 
 export default app

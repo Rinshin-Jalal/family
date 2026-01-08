@@ -52,12 +52,12 @@ struct MainNavigationFlow: View {
         ZStack {
             // Main navigation content
             if showOnboarding {
-                OnboardingView(onComplete: {
+                SimpleOnboardingContainerView {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         showOnboarding = false
                     }
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                })
+                }
             } else {
                 MainTabView(selectedTab: $navigationCoordinator.selectedTab)
                     .environmentObject(navigationCoordinator)
@@ -144,154 +144,6 @@ struct ThemeToggleView: View {
             }
             .padding()
         }
-    }
-}
-
-// MARK: - Onboarding View
-
-struct OnboardingView: View {
-    let onComplete: () -> Void
-    @Environment(\.theme) var theme
-    @State private var currentPage = 0
-
-    private let pages: [OnboardingPage] = [
-        OnboardingPage(
-            icon: "waveform.badge.mic",
-            title: "Capture Family Stories",
-            subtitle: "Record and preserve your family's most precious memories with ease"
-        ),
-        OnboardingPage(
-            icon: "person.3.fill",
-            title: "Connect Generations",
-            subtitle: "Bring together your whole family, from grandlights to kids"
-        ),
-        OnboardingPage(
-            icon: "sparkles",
-            title: "Create Lasting Memories",
-            subtitle: "Build a treasure trove of stories that will last forever"
-        )
-    ]
-
-    var body: some View {
-        ZStack {
-            // Background gradient
-            LinearGradient(
-                colors: [theme.accentColor.opacity(0.2), theme.backgroundColor],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Skip button
-                HStack {
-                    Spacer()
-                    Button(action: onComplete) {
-                        Text("Skip")
-                            .font(.headline)
-                            .foregroundColor(theme.secondaryTextColor)
-                    }
-                }
-                .padding()
-
-                Spacer()
-
-                // Onboarding content
-                TabView(selection: $currentPage) {
-                    ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                        OnboardingPageView(page: page)
-                            .tag(index)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(maxHeight: 400)
-
-                // Page indicators
-                HStack(spacing: 8) {
-                    ForEach(0..<pages.count, id: \.self) { index in
-                        Circle()
-                            .fill(index == currentPage ? theme.accentColor : theme.secondaryTextColor.opacity(0.4))
-                            .frame(width: index == currentPage ? 24 : 8, height: 8)
-                            .animation(.spring(response: 0.3), value: currentPage)
-                    }
-                }
-                .padding(.bottom, 40)
-
-                // Action button
-                Button(action: {
-                    if currentPage < pages.count - 1 {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            currentPage += 1
-                        }
-                    } else {
-                        onComplete()
-                    }
-                }) {
-                    HStack {
-                        Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
-                            .font(.headline)
-                        if currentPage < pages.count - 1 {
-                            Image(systemName: "arrow.right")
-                                .font(.headline)
-                        }
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 60)
-                    .background(theme.accentColor)
-                    .clipShape(Capsule())
-                    .shadow(color: theme.accentColor.opacity(0.4), radius: 12, y: 6)
-                }
-                .padding(.horizontal, 32)
-                .padding(.bottom, 60)
-            }
-        }
-    }
-}
-
-struct OnboardingPage {
-    let icon: String
-    let title: String
-    let subtitle: String
-}
-
-struct OnboardingPageView: View {
-    let page: OnboardingPage
-    @Environment(\.theme) var theme
-
-    var body: some View {
-        VStack(spacing: 32) {
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(theme.accentColor.opacity(0.15))
-                    .frame(width: 180, height: 180)
-
-                Circle()
-                    .fill(theme.accentColor.opacity(0.1))
-                    .frame(width: 140, height: 140)
-
-                Image(systemName: page.icon)
-                    .font(.system(size: 64))
-                    .foregroundColor(theme.accentColor)
-            }
-            .padding(.top, 60)
-
-            // Text
-            VStack(spacing: 16) {
-                Text(page.title)
-                    .font(.title.bold())
-                    .foregroundColor(theme.textColor)
-                    .multilineTextAlignment(.center)
-
-                Text(page.subtitle)
-                    .font(.title3)
-                    .foregroundColor(theme.secondaryTextColor)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

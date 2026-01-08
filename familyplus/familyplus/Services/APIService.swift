@@ -85,7 +85,21 @@ final class APIService {
     }
     
     // MARK: - Family API
-    
+
+    /// Get current family info with invite slug
+    func getFamily() async throws -> FamilyInfo {
+        let request = await createRequest(endpoint: "/api/families")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(FamilyInfo.self, from: data)
+    }
+
+    /// Get family members
+    func getFamilyMembers(familyId: String) async throws -> [FamilyMemberData] {
+        let request = await createRequest(endpoint: "/api/families/\(familyId)/members")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode([FamilyMemberData].self, from: data)
+    }
+
     /// Create a new family
     func createFamily(name: String) async throws -> FamilyResponse {
         let body = CreateFamilyRequest(name: name)
@@ -117,7 +131,14 @@ final class APIService {
         let (data, _) = try await session.data(for: request)
         return try JSONDecoder().decode(StoryData.self, from: data)
     }
-    
+
+    /// Generate AI cover image for a story
+    func generateStoryCover(id: UUID) async throws -> CoverGenerationResponse {
+        var request = await createRequest(endpoint: "/api/stories/\(id.uuidString)/generate-cover", method: "POST")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(CoverGenerationResponse.self, from: data)
+    }
+
     // MARK: - Prompts API
     
     /// Get family prompts
@@ -233,24 +254,22 @@ final class APIService {
     }
     
     /// Update notification settings
+    /// REMOVED: storyReminders, familyUpdates, weeklyDigest (engagement spam)
     func updateNotificationSettings(
         pushEnabled: Bool,
-        emailEnabled: Bool,
-        storyReminders: Bool,
-        familyUpdates: Bool,
-        weeklyDigest: Bool
+        emailEnabled: Bool
     ) async throws {
         let body = NotificationSettingsRequest(
             push_enabled: pushEnabled,
             email_enabled: emailEnabled,
-            story_reminders: storyReminders,
-            family_updates: familyUpdates,
-            weekly_digest: weeklyDigest
+            story_reminders: false,  // Deprecated
+            family_updates: false,   // Deprecated
+            weekly_digest: false     // Deprecated
         )
         var request = await createRequest(endpoint: "/api/settings/notifications", method: "PATCH")
         request.httpBody = try JSONEncoder().encode(body)
         let (_, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             throw APIError.updateFailed
@@ -864,12 +883,30 @@ struct FamilyResponse: Codable {
     let inviteSlug: String?
 }
 
+struct FamilyInfo: Codable {
+    let id: String
+    let name: String
+    let invite_slug: String
+    let plan_tier: String?
+    let created_at: String?
+
+    var inviteUrl: String {
+        return "https://storyrd.app/join/\(invite_slug)"
+    }
+}
+
 struct CreateFamilyRequest: Codable {
     let name: String
 }
 
 struct JoinFamilyRequest: Codable {
     let invite_code: String
+}
+
+struct CoverGenerationResponse: Codable {
+    let success: Bool
+    let coverImageUrl: String?
+    let revisedPrompt: String?
 }
 
 // MARK: - Wisdom API Models

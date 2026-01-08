@@ -32,7 +32,6 @@ struct FamilyView: View {
 // MARK: - Profile Data Model
 
 struct ProfileData {
-    let weekStreak: Int
     let totalStories: Int
     let nextMilestone: Int
     let familyMembers: [FamilyMember]
@@ -42,27 +41,24 @@ struct ProfileData {
     let recentActivity: [Activity]
 
     static let sample = ProfileData(
-        weekStreak: 4,
         totalStories: 42,
         nextMilestone: 50,
         familyMembers: [
-            FamilyMember(name: "Grandma Rose", avatarEmoji: "❤️", storyCount: 15, weeksStreak: 3, status: .offline),
-            FamilyMember(name: "Dad",  avatarEmoji: "👨", storyCount: 12, weeksStreak: 4, status: .online),
-            FamilyMember(name: "Leo",  avatarEmoji: "🎸", storyCount: 8, weeksStreak: 2, status: .away),
-            FamilyMember(name: "Mia", avatarEmoji: "🌟", storyCount: 7, weeksStreak: 3, status: .online)
+            FamilyMember(name: "Grandma Rose", avatarEmoji: "❤️", storyCount: 15, status: .offline, isElder: true),
+            FamilyMember(name: "Dad",  avatarEmoji: "👨", storyCount: 12, status: .online),
+            FamilyMember(name: "Leo",  avatarEmoji: "🎸", storyCount: 8, status: .away),
+            FamilyMember(name: "Mia", avatarEmoji: "🌟", storyCount: 7, status: .online)
         ],
         earnedStickers: ["⭐️", "🚀", "🦁", "🎨", "🌈"],
         lockedStickers: ["🐶", "🎪", "🎈", "🎯", "🏆"],
         achievements: [
-            Achievement(title: "First Story", description: "Record your first story", icon: "star.fill", earned: true, earnedAt: Date().addingTimeInterval(-86400 * 10), progress: nil),
-            Achievement(title: "Streak Master", description: "7-day recording streak", icon: "flame.fill", earned: true, earnedAt: Date().addingTimeInterval(-86400 * 5), progress: nil),
-            Achievement(title: "Storyteller", description: "Record 10 stories", icon: "mic.fill", earned: true, earnedAt: Date().addingTimeInterval(-86400 * 3), progress: nil),
-            Achievement(title: "Family Champion", description: "Get family to 50 stories", icon: "person.3.fill", earned: false, earnedAt: nil, progress: 0.84)
+            Milestone(title: "First Story Preserved", description: "Your first family story saved forever", icon: "star.fill", earned: true, earnedAt: Date().addingTimeInterval(-86400 * 10), progress: nil, category: .preservation),
+            Milestone(title: "Storyteller", description: "10 stories preserved", icon: "book.fill", earned: true, earnedAt: Date().addingTimeInterval(-86400 * 3), progress: nil, category: .preservation),
+            Milestone(title: "Family Anthology", description: "50 stories preserved", icon: "books.vertical.fill", earned: false, earnedAt: nil, progress: 0.84, category: .preservation)
         ],
         recentActivity: [
             Activity(type: .storyRecorded, title: "The Summer Road Trip of '68", member: "Grandma Rose", timestamp: Date().addingTimeInterval(-3600)),
-            Activity(type: .milestone, title: "Reached 40 stories!", member: nil, timestamp: Date().addingTimeInterval(-86400)),
-            Activity(type: .achievement, title: "Streak Master unlocked", member: nil, timestamp: Date().addingTimeInterval(-86400 * 2))
+            Activity(type: .milestone, title: "Reached 40 stories!", member: nil, timestamp: Date().addingTimeInterval(-86400))
         ]
     )
 }
@@ -162,8 +158,8 @@ struct TeenProfile: View {
                 }
             }
         }
-        .sheet(isPresented: $showAchievements) { AchievementsModal(achievements: ProfileData.sample.achievements) }
-        .sheet(isPresented: $showInvite) { InviteFamilyModal() }
+        .sheet(isPresented: $showAchievements) { MilestonesModal(milestones: ProfileData.sample.achievements) }
+        .sheet(isPresented: $showInvite) { ShareCollectionsModal() }
         .sheet(isPresented: $showAddElder) { AddElderModal() }
         .sheet(isPresented: $showManageMembers) { ManageMembersModal() }
         .sheet(isPresented: $showGovernance) { FamilyGovernanceModal(familyData: familyData) }
@@ -196,34 +192,19 @@ struct TeenProfileContent: View {
 
     var progress: Double { Double(data.totalStories) / Double(data.nextMilestone) }
 
-    var streakOrange: Color {
-        switch theme.role {
-        case .dark:
-            // Lighter background → darker, richer orange
-            Color(red: 1.0, green: 0.4, blue: 0.0)
-        case .light:
-            // Darker background → brighter orange
-            Color(red: 1.0, green: 0.6, blue: 0.0)
-        }
-    }
-    
-
-
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // Streak & Stats Card
+                // Stories & Milestone Card (simplified - removed streak)
                 ZStack {
-                    
-
                     VStack(spacing: 16) {
-                        // Top section: Streak & Total Stories
+                        // Top section: Total Stories
                         HStack {
-                            Image(systemName: "flame.fill").font(.system(size: 35, weight: .bold)).foregroundColor(streakOrange)
-                            
+                            Image(systemName: "book.fill").font(.system(size: 35, weight: .bold)).foregroundColor(.white)
+
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("\(data.weekStreak) Week Streak").font(.system(size: 22, weight: .bold)).foregroundColor(.white)
-                                Text("Keep it momentum!").font(.system(size: 14, weight: .medium)).foregroundColor(.white.opacity(0.8))
+                                Text("Family Stories").font(.system(size: 22, weight: .bold)).foregroundColor(.white)
+                                Text("Preserving memories together").font(.system(size: 14, weight: .medium)).foregroundColor(.white.opacity(0.8))
                             }
                             Spacer()
                             VStack(spacing: 4) {
@@ -250,7 +231,7 @@ struct TeenProfileContent: View {
                     }
                     .padding(20)
                 }
-                .frame(height: 220)
+                .frame(height: 200)
                 .background(theme.accentColor)
                 .cornerRadius(24)
                 .shadow(color: theme.accentColor.opacity(0.3), radius: 12, y: 4)
@@ -299,11 +280,11 @@ struct TeenProfileContent: View {
                 .cornerRadius(20)
                 .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
 
-                // Invite Button
+                // Share Button (TRANSFORMED from "Invite Family Member")
                 Button(action: { showInvite = true }) {
                     HStack(spacing: 12) {
-                        Image(systemName: "person.badge.plus").font(.system(size: 18, weight: .semibold))
-                        Text("Invite Family Member").font(.system(size: 17, weight: .semibold))
+                        Image(systemName: "square.and.arrow.up").font(.system(size: 18, weight: .semibold))
+                        Text("Share Stories").font(.system(size: 17, weight: .semibold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -313,26 +294,8 @@ struct TeenProfileContent: View {
                 }
                 .padding(.top, 8)
 
-                
-                // Achievements Card - 2 Column Grid
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Image(systemName: "trophy.fill").font(.system(size: 20)).foregroundColor(theme.accentColor)
-                        Text("Achievements").font(.system(size: 17, weight: .bold)).foregroundColor(theme.textColor)
-                        Spacer()
-                        Button(action: { showAchievements = true }) {
-                            Text("See All").font(.system(size: 14, weight: .semibold)).foregroundColor(theme.accentColor)
-                        }
-                    }.padding(.horizontal, 16).padding(.top, 16)
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        ForEach(data.achievements.prefix(4), id: \.title) { achievement in
-                            TeenAchievementCard(achievement: achievement)
-                        }
-                    }.padding(.horizontal, 16).padding(.bottom, 16)
-                }
-                .background(theme.role == .light ? Color.white : theme.cardBackgroundColor)
-                .cornerRadius(20)
-                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+                // Achievements section REMOVED - gamification de-emphasized in favor of value extraction
+                // Milestones are still accessible through the milestones modal
             }
             .padding(theme.screenPadding)
         }

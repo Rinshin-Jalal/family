@@ -1,33 +1,36 @@
 //
-//  AchievementsModal.swift
+//  MilestonesModal.swift
 //  StoryRide
 //
-//  Modal view for displaying user achievements
+//  Modal view for displaying content milestones (value created, not engagement)
+//
+//  TRANSFORMED FROM: AchievementsModal.swift
+//  Changed from gamification to value-based progress tracking
 //
 
 import SwiftUI
 
-// MARK: - Achievements Modal
+// MARK: - Milestones Modal
 
-struct AchievementsModal: View {
+struct MilestonesModal: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
-    
-    let achievements: [Achievement]
-    
+
+    let milestones: [Milestone]
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 16) {
-                    ForEach(achievements, id: \.id) { achievement in
-                        AchievementCard(achievement: achievement)
+                    ForEach(milestones, id: \.id) { milestone in
+                        MilestoneCard(milestone: milestone)
                     }
                 }
                 .padding(.horizontal, theme.screenPadding)
                 .padding(.vertical, 16)
             }
             .background(theme.backgroundColor)
-            .navigationTitle("Achievements")
+            .navigationTitle("Your Milestones")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -42,64 +45,64 @@ struct AchievementsModal: View {
     }
 }
 
-// MARK: - Achievement Card
+// MARK: - Milestone Card
 
-struct AchievementCard: View {
-    let achievement: Achievement
+struct MilestoneCard: View {
+    let milestone: Milestone
     @Environment(\.theme) var theme
-    
+
     var body: some View {
         HStack(spacing: 16) {
             // Avatar/icon circle
             ZStack {
                 Circle()
                     .fill(
-                        (achievement.earned ? theme.accentColor : Color.gray)
-                            .opacity(achievement.earned ? 0.2 : 0.1)
+                        (milestone.earned ? theme.accentColor : Color.gray)
+                            .opacity(milestone.earned ? 0.2 : 0.1)
                     )
                     .frame(width: 64, height: 64)
-                
-                Image(systemName: achievement.icon)
+
+                Image(systemName: milestone.icon)
                     .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(achievement.earned ? theme.accentColor : .gray)
+                    .foregroundColor(milestone.earned ? theme.accentColor : .gray)
             }
-            
+
             // Content
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(achievement.title)
+                    Text(milestone.title)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(achievement.earned ? theme.textColor : .secondary)
-                    
-                    if achievement.earned {
+                        .foregroundColor(milestone.earned ? theme.textColor : .secondary)
+
+                    if milestone.earned {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 20))
                             .foregroundColor(.green)
                     }
                 }
-                
-                Text(achievement.description)
+
+                Text(milestone.description)
                     .font(.system(size: 15))
                     .foregroundColor(theme.secondaryTextColor)
                     .lineLimit(2)
-                
+
                 // Progress or earned date
-                if let progress = achievement.progress, !achievement.earned {
+                if let progress = milestone.progress, !milestone.earned {
                     VStack(alignment: .leading, spacing: 6) {
                         ProgressView(value: progress)
                             .tint(theme.accentColor)
-                        
+
                         Text("\(Int(progress * 100))% Complete")
                             .font(.system(size: 13))
                             .foregroundColor(theme.secondaryTextColor)
                     }
-                } else if let earnedAt = achievement.earnedAt {
-                    Text("Earned \(earnedAt, style: .date)")
+                } else if let earnedAt = milestone.earnedAt {
+                    Text("Milestone reached \(earnedAt, style: .date)")
                         .font(.system(size: 13))
                         .foregroundColor(theme.secondaryTextColor)
                 }
             }
-            
+
             Spacer()
         }
         .padding()
@@ -110,64 +113,74 @@ struct AchievementCard: View {
     }
 }
 
+// Backward compatibility alias
+typealias AchievementsModal = MilestonesModal
+typealias AchievementCard = MilestoneCard
+
 // MARK: - Preview
 
-struct AchievementsModal_Previews: PreviewProvider {
+struct MilestonesModal_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            AchievementsModal(achievements: [
-                Achievement(
-                    title: "First Story",
-                    description: "Record your first story",
+            MilestonesModal(milestones: [
+                Milestone(
+                    title: "First Story Preserved",
+                    description: "Your first family story saved forever",
                     icon: "star.fill",
                     earned: true,
                     earnedAt: Date().addingTimeInterval(-86400 * 10),
-                    progress: nil
+                    progress: nil,
+                    category: .preservation
                 ),
-                Achievement(
-                    title: "Streak Master",
-                    description: "7-day recording streak",
-                    icon: "flame.fill",
+                Milestone(
+                    title: "Wisdom Captured",
+                    description: "10 wisdom moments tagged",
+                    icon: "brain.fill",
                     earned: true,
                     earnedAt: Date().addingTimeInterval(-86400 * 5),
-                    progress: nil
+                    progress: nil,
+                    category: .wisdom
                 ),
-                Achievement(
-                    title: "Storyteller",
-                    description: "Record 10 stories",
-                    icon: "mic.fill",
+                Milestone(
+                    title: "Elder Reached",
+                    description: "Grandma's stories captured",
+                    icon: "heart.fill",
                     earned: true,
                     earnedAt: Date().addingTimeInterval(-86400 * 3),
-                    progress: nil
+                    progress: nil,
+                    category: .connection
                 ),
-                Achievement(
-                    title: "Family Champion",
-                    description: "Get family to 50 stories",
-                    icon: "person.3.fill",
+                Milestone(
+                    title: "Family Anthology",
+                    description: "50 stories preserved",
+                    icon: "book.fill",
                     earned: false,
                     earnedAt: nil,
-                    progress: 0.84
+                    progress: 0.84,
+                    category: .preservation
                 )
             ])
             .themed(DarkTheme())
             .previewDisplayName("Dark Theme")
-            
-            AchievementsModal(achievements: [
-                Achievement(
+
+            MilestonesModal(milestones: [
+                Milestone(
                     title: "First Story",
-                    description: "Record your first story",
+                    description: "Your first family story saved",
                     icon: "star.fill",
                     earned: true,
                     earnedAt: Date(),
-                    progress: nil
+                    progress: nil,
+                    category: .preservation
                 ),
-                Achievement(
-                    title: "In Progress",
-                    description: "Keep going!",
-                    icon: "chart.bar.fill",
+                Milestone(
+                    title: "Building Wisdom",
+                    description: "Keep capturing family stories!",
+                    icon: "brain.fill",
                     earned: false,
                     earnedAt: nil,
-                    progress: 0.5
+                    progress: 0.5,
+                    category: .wisdom
                 )
             ])
             .themed(LightTheme())
@@ -175,3 +188,4 @@ struct AchievementsModal_Previews: PreviewProvider {
         }
     }
 }
+

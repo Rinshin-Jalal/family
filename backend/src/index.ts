@@ -15,6 +15,7 @@ import stories from './routes/stories'
 import prompts from './routes/prompts'
 import responses from './routes/responses'
 import profiles from './routes/profiles'
+import families from './routes/families'
 import reactions from './routes/reactions'
 import quotes from './routes/quotes'
 import links from './routes/links'
@@ -25,6 +26,8 @@ import locations from './routes/locations'
 import ai from './routes/ai'
 import wisdom from './routes/wisdom'
 import diary from './routes/diary'
+import share from './routes/share'
+import exportRoutes from './routes/export'
 import { createQwenTurboClient } from './ai/llm'
 import { createCartesiaClient } from './ai/cartesia'
 import { createWisdomTaggerClient } from './ai/wisdom-tagger'
@@ -83,6 +86,7 @@ app.route('/', stories)
 app.route('/', prompts)
 app.route('/', responses)
 app.route('/', profiles)
+app.route('/', families)
 app.route('/', reactions)
 app.route('/', quotes)
 app.route('/', links)
@@ -93,6 +97,8 @@ app.route('/', locations)
 app.route('/', ai)
 app.route('/', wisdom)
 app.route('/', diary)
+app.route('/', share)
+app.route('/', exportRoutes)
 
 // Health check
 app.get('/health', (c) => {

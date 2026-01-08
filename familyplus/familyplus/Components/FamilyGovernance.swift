@@ -2,12 +2,32 @@
 //  FamilyGovernance.swift
 //  StoryRide
 //
-//  Family governance, permissions, and safety controls
+//  SIMPLIFIED: Family sharing controls (value-focused, not permission-heavy)
+//
+//  DEPRECATED: Complex permission system removed in favor of simple sharing model
+//  The app should focus on value extraction (preserving stories), not governance
 //
 
 import SwiftUI
 
-// MARK: - Permission
+// MARK: - Simplified Sharing Model
+
+struct SharingSettings {
+    let familyName: String
+    let allowMemberSharing: Bool  // Can members share outside family?
+    let allowPublicExports: Bool   // Can exports be shared publicly?
+    let requireApprovalForEdits: Bool  // Edits require story creator approval
+
+    static let `default` = SharingSettings(
+        familyName: "My Family",
+        allowMemberSharing: true,
+        allowPublicExports: false,
+        requireApprovalForEdits: true
+    )
+}
+
+// MARK: - Legacy Permission System (DEPRECATED)
+// TODO: Remove after migration to simple sharing model
 
 struct Permission: Identifiable {
     let id = UUID()
@@ -15,41 +35,18 @@ struct Permission: Identifiable {
     let description: String
     let icon: String
     let isAllowed: Bool
-    
+
     static let all: [Permission] = [
+        // Simplified to just essential permissions
         Permission(
-            name: "Add Prompts",
-            description: "Create new story prompts for the family",
-            icon: "plus.bubble",
+            name: "Share Stories",
+            description: "Share family stories outside the app",
+            icon: "square.and.arrow.up",
             isAllowed: true
         ),
         Permission(
-            name: "Vote on Prompts",
-            description: "Vote to prioritize which prompts to answer",
-            icon: "hand.thumbsup",
-            isAllowed: true
-        ),
-        Permission(
-            name: "Trigger Calls",
-            description: "Initiate phone calls to elders for stories",
-            icon: "phone.fill",
-            isAllowed: true
-        ),
-        Permission(
-            name: "See Sensitive Memories",
-            description: "Access to memories marked as sensitive",
-            icon: "eye",
-            isAllowed: true
-        ),
-        Permission(
-            name: "Invite Members",
-            description: "Send invitations to join the family",
-            icon: "person.badge.plus",
-            isAllowed: true
-        ),
-        Permission(
-            name: "Export Audio",
-            description: "Download and export story recordings",
+            name: "Export Memories",
+            description: "Download and export family recordings",
             icon: "square.and.arrow.down",
             isAllowed: true
         )

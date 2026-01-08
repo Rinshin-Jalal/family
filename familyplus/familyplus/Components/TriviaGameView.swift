@@ -96,15 +96,7 @@ struct TriviaGameSession: Identifiable, Codable {
     }
 }
 
-struct TriviaLeaderboardEntry: Identifiable, Codable {
-    let id: UUID
-    let memberName: String
-    let score: Int
-    let correctAnswers: Int
-    let streak: Int
-    let completedAt: Date
-    let avatarEmoji: String?
-}
+// LEADERBOARD ENTRY REMOVED: No longer needed after leaderboard removal
 
 // MARK: - Trivia Game View
 
@@ -115,7 +107,6 @@ struct TriviaGameView: View {
     @State private var selectedOptionId: UUID?
     @State private var showExplanation = false
     @State private var isLoading = false
-    @State private var showLeaderboard = false
     
     @Environment(\.theme) var theme
     
@@ -129,9 +120,6 @@ struct TriviaGameView: View {
                             gameSession = nil
                             selectedCategory = nil
                             showResults = false
-                        },
-                        onViewLeaderboard: {
-                            showLeaderboard = true
                         }
                     )
                 } else {
@@ -176,11 +164,8 @@ struct TriviaGameView: View {
                 )
             }
         }
-        .sheet(isPresented: $showLeaderboard) {
-            TriviaLeaderboardView()
-        }
     }
-    
+
     private func startGame() {
         guard let category = selectedCategory else { return }
         isLoading = true
@@ -760,7 +745,6 @@ struct TriviaOptionButton: View {
 struct TriviaResultsView: View {
     let session: TriviaGameSession
     let onPlayAgain: () -> Void
-    let onViewLeaderboard: () -> Void
     
     @Environment(\.theme) var theme
     @State private var showConfetti = false
@@ -821,16 +805,6 @@ struct TriviaResultsView: View {
                         .background(theme.accentColor)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                
-                Button(action: onViewLeaderboard) {
-                    Text("View Leaderboard")
-                        .fontWeight(.medium)
-                        .foregroundColor(theme.accentColor)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(theme.accentColor.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 32)
@@ -882,88 +856,8 @@ struct TriviaStatItem: View {
     }
 }
 
-// MARK: - Trivia Leaderboard View
-
-struct TriviaLeaderboardView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.theme) var theme
-    
-    @State private var entries: [TriviaLeaderboardEntry] = [
-        TriviaLeaderboardEntry(id: UUID(), memberName: "Grandma Rose", score: 150, correctAnswers: 8, streak: 5, completedAt: Date(), avatarEmoji: "👵"),
-        TriviaLeaderboardEntry(id: UUID(), memberName: "Dad", score: 120, correctAnswers: 6, streak: 3, completedAt: Date(), avatarEmoji: "👨"),
-        TriviaLeaderboardEntry(id: UUID(), memberName: "Mia", score: 90, correctAnswers: 5, streak: 2, completedAt: Date(), avatarEmoji: "👧"),
-        TriviaLeaderboardEntry(id: UUID(), memberName: "Leo", score: 60, correctAnswers: 3, streak: 1, completedAt: Date(), avatarEmoji: "👦")
-    ]
-    
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    HStack(spacing: 16) {
-                        // Rank
-                        Text("#\(index + 1)")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(rankColor(for: index))
-                            .frame(width: 32)
-                        
-                        // Avatar
-                        Text(entry.avatarEmoji ?? "👤")
-                            .font(.title2)
-                        
-                        // Info
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.memberName)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            
-                            Text("\(entry.correctAnswers) correct • \(entry.streak) streak")
-                                .font(.caption)
-                                .foregroundColor(theme.secondaryTextColor)
-                        }
-                        
-                        Spacer()
-                        
-                        // Score
-                        VStack(alignment: .trailing, spacing: 2) {
-                            HStack(spacing: 4) {
-                                Text("\(entry.score)")
-                                    .font(.headline)
-                                    .fontWeight(.bold)
-                                Image(systemName: "star.fill")
-                                    .font(.caption)
-                                    .foregroundColor(.yellow)
-                            }
-                            
-                            Text("pts")
-                                .font(.caption2)
-                                .foregroundColor(theme.secondaryTextColor)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-            }
-            .navigationTitle("Leaderboard")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-    
-    private func rankColor(for index: Int) -> Color {
-        switch index {
-        case 0: return .yellow
-        case 1: return .gray
-        case 2: return .orange
-        default: return theme.textColor.opacity(0.5)
-        }
-    }
-}
+// LEADERBOARD REMOVED: Leaderboards promoted toxic competition in family dynamics.
+// The app should focus on value extraction (learning family stories) not social comparison.
 
 // MARK: - Preview
 

@@ -11,7 +11,7 @@ import SwiftUI
 
 struct LegacySignalsView: View {
     let voiceCount: Int
-    let heardCount: Int
+    let heardCount: Int?  // MADE OPTIONAL - social proof feature de-emphasized
     let lastAdded: Date?
     let theme: PersonaTheme
 
@@ -26,14 +26,16 @@ struct LegacySignalsView: View {
                 theme: theme
             )
 
-            // Heard count (times listened)
-            SignalItem(
-                icon: "headphones",
-                value: formattedHeardCount,
-                label: "listened",
-                color: heardCount > 0 ? .green.opacity(0.7) : theme.secondaryTextColor.opacity(0.5),
-                theme: theme
-            )
+            // Heard count (times listened) - ONLY SHOW if provided
+            if let heardCount = heardCount {
+                SignalItem(
+                    icon: "headphones",
+                    value: formattedHeardCount(heardCount),
+                    label: "listened",
+                    color: heardCount > 0 ? .green.opacity(0.7) : theme.secondaryTextColor.opacity(0.5),
+                    theme: theme
+                )
+            }
 
             Spacer()
 
@@ -50,13 +52,13 @@ struct LegacySignalsView: View {
         }
     }
 
-    private var formattedHeardCount: String {
-        if heardCount == 0 {
+    private func formattedHeardCount(_ count: Int) -> String {
+        if count == 0 {
             return "—"
-        } else if heardCount >= 1000 {
-            return "\(heardCount / 1000)k"
+        } else if count >= 1000 {
+            return "\(count / 1000)k"
         } else {
-            return "\(heardCount)"
+            return "\(count)"
         }
     }
 

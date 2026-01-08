@@ -161,9 +161,9 @@ struct SettingsView: View {
         )
     }
     
-    private func loadFamilyInfo() async throws -> FamilyInfo {
+    private func loadFamilyInfo() async throws -> FamilySettingsInfo {
         try await Task.sleep(nanoseconds: 200_000_000)
-        return FamilyInfo(
+        return FamilySettingsInfo(
             id: "family-123",
             name: "The Rodriguez Family",
             memberCount: 4,
@@ -175,7 +175,6 @@ struct SettingsView: View {
         try await Task.sleep(nanoseconds: 150_000_000)
         return UserStats(
             totalStories: 42,
-            weekStreak: 4,
             totalRecordings: 156,
             favoriteTopics: ["Childhood", "Travel", "Music"]
         )
@@ -186,10 +185,7 @@ struct SettingsView: View {
         return UserSettings(
             notifications: NotificationSettings(
                 pushEnabled: true,
-                emailEnabled: true,
-                storyReminders: true,
-                familyUpdates: true,
-                weeklyDigest: true
+                emailEnabled: true
             ),
             privacy: PrivacySettings(
                 shareWithFamily: true,
@@ -375,7 +371,7 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 struct ProfileSettingsData {
     let user: UserProfile
-    let family: FamilyInfo
+    let family: FamilySettingsInfo
     let stats: UserStats
     let settings: UserSettings
     
@@ -388,7 +384,7 @@ struct ProfileSettingsData {
             theme: .dark,
             joinedAt: Date().addingTimeInterval(-86400 * 90)
         ),
-        family: FamilyInfo(
+        family: FamilySettingsInfo(
             id: "family-123",
             name: "The Rodriguez Family",
             memberCount: 4,
@@ -396,17 +392,13 @@ struct ProfileSettingsData {
         ),
         stats: UserStats(
             totalStories: 42,
-            weekStreak: 4,
             totalRecordings: 156,
             favoriteTopics: ["Childhood", "Travel", "Music"]
         ),
         settings: UserSettings(
             notifications: NotificationSettings(
                 pushEnabled: true,
-                emailEnabled: true,
-                storyReminders: true,
-                familyUpdates: true,
-                weeklyDigest: true
+                emailEnabled: true
             ),
             privacy: PrivacySettings(
                 shareWithFamily: true,
@@ -431,7 +423,8 @@ struct UserProfile: Identifiable {
     let joinedAt: Date
 }
 
-struct FamilyInfo: Identifiable {
+// RENAMED from FamilyInfo to avoid conflict with APIService.FamilyInfo
+struct FamilySettingsInfo: Identifiable {
     let id: String
     let name: String
     let memberCount: Int
@@ -440,7 +433,6 @@ struct FamilyInfo: Identifiable {
 
 struct UserStats {
     let totalStories: Int
-    let weekStreak: Int
     let totalRecordings: TimeInterval
     let favoriteTopics: [String]
     
@@ -463,9 +455,7 @@ struct UserSettings {
 struct NotificationSettings {
     let pushEnabled: Bool
     let emailEnabled: Bool
-    let storyReminders: Bool
-    let familyUpdates: Bool
-    let weeklyDigest: Bool
+    // Removed: storyReminders, familyUpdates, weeklyDigest (engagement spam)
 }
 
 struct PrivacySettings {
@@ -658,12 +648,6 @@ struct ProfileHeaderCard: View {
                     .frame(height: 40)
                     .padding(.horizontal, 16)
 
-                StatItem(value: "\(stats.weekStreak)", label: "Week Streak", icon: "flame.fill")
-
-                Divider()
-                    .frame(height: 40)
-                    .padding(.horizontal, 16)
-
                 StatItem(value: stats.formattedRecordings, label: "Recorded", icon: "waveform")
             }
             .padding(.vertical, 8)
@@ -707,56 +691,26 @@ struct NotificationSection: View {
     @Environment(\.theme) var theme
     @State private var pushEnabled: Bool
     @State private var emailEnabled: Bool
-    @State private var storyReminders: Bool
-    @State private var familyUpdates: Bool
-    @State private var weeklyDigest: Bool
-    
+
     init(settings: NotificationSettings) {
         self.settings = settings
         _pushEnabled = State(initialValue: settings.pushEnabled)
         _emailEnabled = State(initialValue: settings.emailEnabled)
-        _storyReminders = State(initialValue: settings.storyReminders)
-        _familyUpdates = State(initialValue: settings.familyUpdates)
-        _weeklyDigest = State(initialValue: settings.weeklyDigest)
     }
-    
+
     var body: some View {
         SettingsToggleRow(
             icon: "bell.fill",
             title: "Push Notifications",
+            subtitle: "Wisdom requests and important updates",
             isOn: $pushEnabled
         )
-        
-        if pushEnabled {
-            SettingsToggleRow(
-                icon: "text.bubble",
-                title: "Story Reminders",
-                subtitle: "Remind me to record stories",
-                isOn: $storyReminders
-            )
-            
-            SettingsToggleRow(
-                icon: "person.2",
-                title: "Family Updates",
-                subtitle: "When family members record",
-                isOn: $familyUpdates
-            )
-        }
-        
+
         SettingsToggleRow(
             icon: "envelope",
             title: "Email Notifications",
             isOn: $emailEnabled
         )
-        
-        if emailEnabled {
-            SettingsToggleRow(
-                icon: "calendar",
-                title: "Weekly Digest",
-                subtitle: "Summary of family activity",
-                isOn: $weeklyDigest
-            )
-        }
     }
 }
 

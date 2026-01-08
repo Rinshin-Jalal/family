@@ -190,12 +190,17 @@ struct HubView: View {
                     Button {
                         showSearchView = true
                     } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(theme.accentColor)
-                            .padding(8)
-                            .background(theme.accentColor.opacity(0.1))
-                            .clipShape(Circle())
+                        HStack(spacing: 6) {
+                            Text("Search")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(theme.accentColor)
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(theme.accentColor)
+                                .padding(8)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
                     }
                 }
             }
@@ -527,38 +532,46 @@ struct DashboardView: View {
                 }
             }
 
-            // 4. Family Polls
+            // 4. Family Discussion Topics (REFRAMED from "Active Family Polls")
+            // Changed from voting-based polls to conversation starters
             VStack(alignment: .leading, spacing: 16) {
-                CozySectionHeader(icon: "chart.bar.fill", title: "Active Family Polls")
-                
+                CozySectionHeader(icon: "bubble.left.and.bubble.right.fill", title: "Family Discussion Topics")
+
                 CozyCard {
                     VStack(alignment: .leading, spacing: 16) {
+                        // Topic tag
                         HStack {
-                            Label("Tradition", systemImage: "star.fill")
+                            Label("Traditions", systemImage: "star.fill")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(.storytellerParent)
                             Spacer()
-                            Text("25 votes")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
                         }
-                        
+
                         Text("What's your favorite family holiday tradition?")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(theme.textColor)
-                        
-                        // Simple Progress bar representation
-                        VStack(spacing: 8) {
-                            PollBar(label: "Christmas Dinner", percentage: 0.6, color: .storytellerParent)
-                            PollBar(label: "Summer BBQ", percentage: 0.3, color: .storytellerElder)
-                            PollBar(label: "Game Night", percentage: 0.1, color: .storytellerTeen)
+
+                        // Reframed: Remove voting bars, add conversation prompt
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "lightbulb.fill")
+                                    .foregroundColor(.yellow)
+                                Text("Start a conversation:")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(theme.secondaryTextColor)
+                            }
+
+                            Text("Share your memories and ask family members about their favorite traditions. Every story adds to your family's collective wisdom.")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.textColor)
+                                .lineLimit(3)
                         }
                     }
                     .padding(24)
-                    
+
                     Divider()
-                    
-                    ViewAllButton(title: "Join the Conversation", action: {})
+
+                    ViewAllButton(title: "Share Your Perspective", action: {})
                 }
             }
         }

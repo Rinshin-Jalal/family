@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { authMiddleware, profileMiddleware } from '../middleware/auth'
+import { createDalleClient } from '../ai/dalle'
 
 const app = new Hono()
 
@@ -189,6 +190,90 @@ app.get('/api/stories/:id/podcast-status', async (c) => {
     totalDuration,
     isReady: readyClips === totalClips && totalClips > 0,
   })
+})
+
+// ============================================================================
+// DALL-E COVER GENERATION
+// ============================================================================
+
+/**
+ * POST /api/stories/:id/generate-cover
+ *
+ * Generate an AI cover image for a story using DALL-E
+ *
+ * Requires: OPENAI_API_KEY environment variable
+ */
+app.post('/api/stories/:id/generate-cover', authMiddleware, profileMiddleware, async (c) => {
+  const supabase = c.get('supabase')
+  const storyId = c.req.param('id')
+  const profile = c.get('profile')
+
+  // Verify story belongs to user's family
+  const { data: story, error: storyError } = await supabase
+    .from('stories')
+    .select('id, title, summary_text, family_id, prompt_id')
+    .eq('id', storyId)
+    .single()
+
+  if (storyError || !story) {
+    return c.json({ error: 'Story not found' }, 404)
+  }
+
+  if (story.family_id !== profile.family_id) {
+    return c.json({ error: 'Unauthorized' }, 403)
+  }
+
+  try {
+    // Get prompt text for context
+    const { data: prompt } = await supabase
+      .from('prompts')
+      .select('text')
+      .eq('id', story.prompt_id)
+      .single()
+
+    // Initialize DALL-E client
+    const dalle = createDalleClient({
+      apiKey: c.env.OPENAI_API_KEY,
+      model: 'dall-e-3',
+      size: '1024x1024',
+      quality: 'standard',
+      style: 'vivid',
+    })
+
+    // Generate and upload cover
+    const { r2Url, revisedPrompt } = await dalle.generateAndUploadCover(
+      {
+        title: story.title || 'Family Story',
+        summary: story.summary_text || prompt?.text || 'A heartwarming family story',
+        style: 'warm',
+      },
+      storyId,
+      c.env.AUDIO_BUCKET  // Reusing the same R2 bucket for images
+    )
+
+    // Update story with cover URL
+    const { error: updateError } = await supabase
+      .from('stories')
+      .update({ cover_image_url: r2Url })
+      .eq('id', storyId)
+
+    if (updateError) {
+      return c.json({ error: updateError.message }, 500)
+    }
+
+    return c.json({
+      success: true,
+      coverImageUrl: r2Url,
+      revisedPrompt,
+    })
+
+  } catch (error) {
+    console.error('DALL-E generation error:', error)
+    return c.json({
+      error: 'Failed to generate cover image',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    }, 500)
+  }
 })
 
 export default app

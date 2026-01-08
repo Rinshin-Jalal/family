@@ -12,7 +12,6 @@ struct FamilyMember: Identifiable {
     let name: String
     let avatarEmoji: String
     let storyCount: Int
-    let weeksStreak: Int
     let status: MemberStatus
     var isElder: Bool = false
 
@@ -40,9 +39,9 @@ struct FamilyMember: Identifiable {
     }
 
     static let sampleMembers: [FamilyMember] = [
-        FamilyMember(name: "Grandma Rose", avatarEmoji: "❤️", storyCount: 15, weeksStreak: 3, status: .offline, isElder: true),
-        FamilyMember(name: "Dad",  avatarEmoji: "👨", storyCount: 12, weeksStreak: 4, status: .online),
-        FamilyMember(name: "Leo",  avatarEmoji: "🎸", storyCount: 8, weeksStreak: 2, status: .away),
-        FamilyMember(name: "Mia", avatarEmoji: "🌟", storyCount: 7, weeksStreak: 3, status: .online)
+        FamilyMember(name: "Grandma Rose", avatarEmoji: "❤️", storyCount: 15, status: .offline, isElder: true),
+        FamilyMember(name: "Dad",  avatarEmoji: "👨", storyCount: 12, status: .online),
+        FamilyMember(name: "Leo",  avatarEmoji: "🎸", storyCount: 8, status: .away),
+        FamilyMember(name: "Mia", avatarEmoji: "🌟", storyCount: 7, status: .online)
     ]
 }

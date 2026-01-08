@@ -2,6 +2,10 @@
 //  PushNotificationSettingsView.swift
 //  StoryRide
 //
+//  DEPRECATED: This view contains engagement-spam features that violate the value-extraction principle
+//  TODO: Remove storyReminders, familyUpdates, weeklyDigest, triviaReminders
+//  OR: Delete this entire view and use simplified SettingsView instead
+//
 //  Push Notifications Settings - Manage notification preferences
 //
 
@@ -11,13 +15,13 @@ import UserNotifications
 // MARK: - Push Notification Settings Models
 
 struct PushNotificationSettings: Codable {
-    var storyReminders: Bool
-    var storyRemindersTime: Date?
-    var familyUpdates: Bool
-    var requestResponses: Bool
-    var weeklyDigest: Bool
-    var mentions: Bool
-    var triviaReminders: Bool
+    var storyReminders: Bool  // DEPRECATED: Engagement spam
+    var storyRemindersTime: Date?  // DEPRECATED
+    var familyUpdates: Bool  // DEPRECATED: Engagement spam
+    var requestResponses: Bool  // KEEP: Value-based notifications
+    var weeklyDigest: Bool  // DEPRECATED: Engagement spam
+    var mentions: Bool  // KEEP: Relevant
+    var triviaReminders: Bool  // DEPRECATED: Gamification
     var kidsContent: Bool
     var quietHoursEnabled: Bool
     var quietHoursStart: Date?

@@ -2,13 +2,13 @@
 //  Color+Extensions.swift
 //  StoryRide
 //
-//  Design system color tokens - Owl Library Aesthetic
+//  Design system color tokens - Simple dark/light themes
 //
 
 import SwiftUI
 
 extension Color {
-    // MARK: - Base Colors (Warm Neutrals from Owl Feathers)
+    // MARK: - Base Colors (Warm Neutrals)
 
     /// Dark mode background - Rich espresso (#1A1210)
     static let espressoDark = Color(hex: "1A1210")
@@ -16,7 +16,7 @@ extension Color {
     /// Dark mode cards/surfaces - Warm cocoa (#3D2B2B)
     static let cocoaBrown = Color(hex: "3D2B2B")
 
-    /// Mid-tone accent - Owl body tan (#C4A574)
+    /// Mid-tone accent - Warm tan (#C4A574)
     static let warmTan = Color(hex: "C4A574")
 
     /// Light mode cards/surfaces - Soft parchment (#F5E6D3)
@@ -42,15 +42,15 @@ extension Color {
     /// @deprecated Use ivoryCream instead
     static let warmYellow = ivoryCream
 
-    // MARK: - Scarf Accents (Brand Identity)
+    // MARK: - Brand Accents
 
-    /// Primary accent - Deep burgundy red from scarf (#8B2942)
+    /// Primary accent - Deep burgundy red (#8B2942)
     static let burgundyRed = Color(hex: "8B2942")
 
-    /// Secondary accent - Forest green from scarf (#3D6B4F)
+    /// Secondary accent - Forest green (#3D6B4F)
     static let forestGreen = Color(hex: "3D6B4F")
 
-    /// Highlight/CTA - Golden amber from owl's eyes (#D4A84A)
+    /// Highlight/CTA - Golden amber (#D4A84A)
     static let owlGold = Color(hex: "D4A84A")
 
     /// Soft accent background - Light burgundy tint (#F5E1E6)
@@ -78,15 +78,18 @@ extension Color {
     /// Stop recording, Delete, Errors - Warm red (#C42B2B)
     static let alertRed = Color(hex: "C42B2B")
 
-    // MARK: - Storyteller Colors (Timeline Segments)
+    // MARK: - Storyteller Colors (for Timeline Segments)
+    //
+    // These colors identify different speakers in multiplayer stories.
+    // They're NOT for adaptive personas - just visual distinction.
 
-    /// Elder segment - Wise gold (#D4A84A)
+    /// Elder/family elder segment - Wise gold (#D4A84A)
     static let storytellerElder = Color(hex: "D4A84A")
 
-    /// Parent segment - Grounded green (#3D6B4F)
+    /// Parent/organizer segment - Grounded green (#3D6B4F)
     static let storytellerParent = Color(hex: "3D6B4F")
 
-    /// Teen segment - Bold burgundy (#8B2942)
+    /// Teen/young adult segment - Bold burgundy (#8B2942)
     static let storytellerTeen = Color(hex: "8B2942")
 
     /// Child segment - Playful amber (#C4946A)
@@ -134,21 +137,21 @@ extension Color {
     }
 }
 
-// MARK: - Semantic Color Extensions
+// MARK: - Theme-based Color Helpers
 
 extension Color {
-    /// Adaptive text color based on theme
-    static func adaptiveText(for theme: PersonaTheme) -> Color {
+    /// Text color from current theme
+    static func themedText(for theme: PersonaTheme) -> Color {
         theme.textColor
     }
 
-    /// Adaptive background based on theme
-    static func adaptiveBackground(for theme: PersonaTheme) -> Color {
+    /// Background color from current theme
+    static func themedBackground(for theme: PersonaTheme) -> Color {
         theme.backgroundColor
     }
 
-    /// Adaptive accent based on theme
-    static func adaptiveAccent(for theme: PersonaTheme) -> Color {
+    /// Accent color from current theme
+    static func themedAccent(for theme: PersonaTheme) -> Color {
         theme.accentColor
     }
 }

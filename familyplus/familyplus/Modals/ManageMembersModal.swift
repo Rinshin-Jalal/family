@@ -241,18 +241,9 @@ struct MemberRowView: View {
                         }
                     }
 
-                    HStack(spacing: 8) {
-                        Text(statusText)
-                            .font(.system(size: 13))
-                            .foregroundColor(statusColor)
-
-                        Text("*")
-                            .foregroundColor(theme.secondaryTextColor.opacity(0.5))
-
-                        Text("\(member.weeksStreak)w streak")
-                            .font(.system(size: 13))
-                            .foregroundColor(theme.secondaryTextColor)
-                    }
+                    Text(statusText)
+                        .font(.system(size: 13))
+                        .foregroundColor(statusColor)
                 }
 
                 Spacer()
