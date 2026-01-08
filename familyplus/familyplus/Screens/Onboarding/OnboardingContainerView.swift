@@ -10,11 +10,15 @@ import SwiftUI
 struct OnboardingContainerView: View {
     @StateObject private var coordinator: OnboardingCoordinator
     @Environment(\.theme) private var theme
-    
-    init(navigationCoordinator: NavigationCoordinator = .shared) {
+
+    /// Callback when onboarding is completed
+    var onComplete: (() -> Void)?
+
+    init(navigationCoordinator: NavigationCoordinator = .shared, onComplete: (() -> Void)? = nil) {
         _coordinator = StateObject(wrappedValue: OnboardingCoordinator())
+        self.onComplete = onComplete
     }
-    
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -38,6 +42,11 @@ struct OnboardingContainerView: View {
             }
         }
         .environmentObject(coordinator)
+        .onChange(of: coordinator.onboardingState.isCompleted) { _, isCompleted in
+            if isCompleted {
+                onComplete?()
+            }
+        }
     }
 }
 

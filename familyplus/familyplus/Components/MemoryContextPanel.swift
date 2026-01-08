@@ -422,10 +422,10 @@ struct EmotionalTagChip: View {
 extension MemoryContextData {
     static let mock = MemoryContextData(
         contributors: [
-            Contributor(name: "Grandma Rose",  avatarColor: .storytellerOrange),
-            Contributor(name: "Dad", avatarColor: .storytellerBlue),
-            Contributor(name: "Mom", avatarColor: .storytellerBlue),
-            Contributor(name: "Jake", avatarColor: .storytellerPurple)
+            Contributor(name: "Grandma Rose",  avatarColor: .storytellerElder),
+            Contributor(name: "Dad", avatarColor: .storytellerParent),
+            Contributor(name: "Mom", avatarColor: .storytellerParent),
+            Contributor(name: "Jake", avatarColor: .storytellerTeen)
         ],
         yearsSpanned: YearsSpan(
             startYear: 2019,

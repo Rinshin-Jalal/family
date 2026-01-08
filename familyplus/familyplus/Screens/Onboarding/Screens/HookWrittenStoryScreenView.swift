@@ -151,7 +151,7 @@ private struct DigitalStoryCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Circle()
-                    .fill(Color.storytellerOrange)
+                    .fill(Color.storytellerElder)
                     .frame(width: 40, height: 40)
                     .overlay(
                         Text("G")

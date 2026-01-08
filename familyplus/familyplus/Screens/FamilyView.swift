@@ -81,6 +81,35 @@ struct Activity {
     let timestamp: Date
 }
 
+struct TeenProfileSkeleton: View {
+    @Environment(\.theme) var theme
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                Rectangle().fill(Color.gray.opacity(0.3)).frame(height: 200).clipShape(RoundedRectangle(cornerRadius: 16))
+                Rectangle().fill(Color.gray.opacity(0.1)).frame(height: 150).clipShape(RoundedRectangle(cornerRadius: 16))
+                Rectangle().fill(Color.gray.opacity(0.1)).frame(height: 200).clipShape(RoundedRectangle(cornerRadius: 16))
+                Rectangle().fill(Color.gray.opacity(0.3)).frame(height: theme.buttonHeight).clipShape(RoundedRectangle(cornerRadius: 16))
+            }.padding(theme.screenPadding)
+        }.background(theme.backgroundColor)
+    }
+}
+
+struct TeenProfileEmptyState: View {
+    @Environment(\.theme) var theme
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "chart.bar.doc.horizontal").font(.system(size: 80)).foregroundColor(theme.secondaryTextColor.opacity(0.5))
+            VStack(spacing: 12) {
+                Text("No Stats Yet").font(.system(size: 28, weight: .bold)).foregroundColor(theme.textColor)
+                Text("Start recording stories\nto track your family's journey").font(.system(size: 16, weight: .medium)).foregroundColor(theme.secondaryTextColor).multilineTextAlignment(.center)
+            }
+            Spacer()
+        }.padding(theme.screenPadding)
+    }
+}
+
 struct TeenProfile: View {
     let loadingState: LoadingState<ProfileData>
     @Environment(\.theme) var theme
@@ -221,8 +250,10 @@ struct TeenProfileContent: View {
                     }
                     .padding(20)
                 }
-                .frame(height: 220).glassEffect(.regular.tint(theme.accentColor), in: .containerRelative)
-                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+                .frame(height: 220)
+                .background(theme.accentColor)
+                .cornerRadius(24)
+                .shadow(color: theme.accentColor.opacity(0.3), radius: 12, y: 4)
 
                 // Governance quick access (owner only)
                 if isOwner {
@@ -263,15 +294,24 @@ struct TeenProfileContent: View {
                             TeenFamilyMemberRow(member: member)
                         }
                     }.padding(.horizontal, 16).padding(.bottom, 16)
-                }.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
+                }
+                .background(theme.role == .light ? Color.white : theme.cardBackgroundColor)
+                .cornerRadius(20)
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
 
                 // Invite Button
                 Button(action: { showInvite = true }) {
                     HStack(spacing: 12) {
                         Image(systemName: "person.badge.plus").font(.system(size: 18, weight: .semibold))
                         Text("Invite Family Member").font(.system(size: 17, weight: .semibold))
-                    }.foregroundColor(.white).frame(maxWidth: .infinity).frame(height: theme.buttonHeight)
-                }.buttonStyle(.glassProminent).tint(LinearGradient(colors: [theme.accentColor, theme.accentColor.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: theme.buttonHeight)
+                    .background(theme.accentColor)
+                    .cornerRadius(16)
+                }
+                .padding(.top, 8)
 
                 
                 // Achievements Card - 2 Column Grid
@@ -289,7 +329,11 @@ struct TeenProfileContent: View {
                             TeenAchievementCard(achievement: achievement)
                         }
                     }.padding(.horizontal, 16).padding(.bottom, 16)
-                }.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))            }
+                }
+                .background(theme.role == .light ? Color.white : theme.cardBackgroundColor)
+                .cornerRadius(20)
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+            }
             .padding(theme.screenPadding)
         }
     }
@@ -357,42 +401,20 @@ struct TeenFamilyMemberRow: View {
     }
 }
 
-struct TeenProfileSkeleton: View {
-    @Environment(\.theme) var theme
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                Rectangle().fill(Color.gray.opacity(0.3)).frame(height: 200).clipShape(RoundedRectangle(cornerRadius: 16))
-                Rectangle().fill(Color.gray.opacity(0.1)).frame(height: 150).clipShape(RoundedRectangle(cornerRadius: 16))
-                Rectangle().fill(Color.gray.opacity(0.1)).frame(height: 200).clipShape(RoundedRectangle(cornerRadius: 16))
-                Rectangle().fill(Color.gray.opacity(0.3)).frame(height: theme.buttonHeight).clipShape(RoundedRectangle(cornerRadius: 16))
-            }.padding(theme.screenPadding)
-        }.background(theme.backgroundColor)
-    }
-}
-
-struct TeenProfileEmptyState: View {
-    @Environment(\.theme) var theme
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            Image(systemName: "chart.bar.doc.horizontal").font(.system(size: 80)).foregroundColor(theme.secondaryTextColor.opacity(0.5))
-            VStack(spacing: 12) {
-                Text("No Stats Yet").font(.system(size: 28, weight: .bold)).foregroundColor(theme.textColor)
-                Text("Start recording stories\nto track your family's journey").font(.system(size: 16, weight: .medium)).foregroundColor(theme.secondaryTextColor).multilineTextAlignment(.center)
-            }
-            Spacer()
-        }.padding(theme.screenPadding)
-    }
-}
-
 // MARK: - Preview
 
 struct FamilyView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            FamilyView().themed(DarkTheme()).previewDisplayName("dark Family")
-            FamilyView().themed(LightTheme()).previewDisplayName("light Family")
+            FamilyView()
+                .environmentObject(NavigationCoordinator.shared)
+                .themed(DarkTheme())
+                .previewDisplayName("dark Family")
+            
+            FamilyView()
+                .environmentObject(NavigationCoordinator.shared)
+                .themed(LightTheme())
+                .previewDisplayName("light Family")
         }
     }
 }

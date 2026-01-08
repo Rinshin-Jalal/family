@@ -15,16 +15,16 @@ struct FamilyInviteParentsScreenView: View {
                 
                 ZStack {
                     Circle()
-                        .fill(Color.storytellerBlue.opacity(0.1))
+                        .fill(Color.storytellerParent.opacity(0.1))
                         .frame(width: 160, height: 160)
                     
                     Circle()
-                        .fill(Color.storytellerBlue.opacity(0.15))
+                        .fill(Color.storytellerParent.opacity(0.15))
                         .frame(width: 120, height: 120)
                     
                     ZStack {
                         Circle()
-                            .fill(Color.storytellerBlue)
+                            .fill(Color.storytellerParent)
                             .frame(width: 88, height: 88)
                         
                         Image(systemName: "figure.and.child.holdinghands")
@@ -103,7 +103,7 @@ private struct ParentFeatureRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 18))
-                .foregroundColor(Color.storytellerBlue)
+                .foregroundColor(Color.storytellerParent)
                 .frame(width: 24)
             
             Text(text)

@@ -14,7 +14,11 @@ struct ThemeToggle: View {
     
     var body: some View {
         Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            #if os(iOS)
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            #endif
+            withAnimation(.bouncy) {
                 currentTheme = currentTheme == .dark ? .light : .dark
             }
         }) {

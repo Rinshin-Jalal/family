@@ -45,7 +45,7 @@ struct WisdomTagView: View {
             
             FlowLayout(spacing: 6) {
                 ForEach(tags, id: \.self) { tag in
-                    TagChip(tag: tag, color: color)
+                    WisdomTagChip(tag: tag, color: color)
                         .onTapGesture {
                             onTagTapped?(tag)
                         }
@@ -55,7 +55,7 @@ struct WisdomTagView: View {
     }
 }
 
-struct TagChip: View {
+struct WisdomTagChip: View {
     let tag: String
     let color: Color
     

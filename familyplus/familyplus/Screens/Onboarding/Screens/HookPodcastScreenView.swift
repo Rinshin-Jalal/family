@@ -10,9 +10,9 @@ struct HookPodcastScreenView: View {
     @State private var currentEpisode = 0
     
     private let episodes = [
-        ("How We Met", "Grandma & Grandpa", "12:34", Color.storytellerOrange),
-        ("Summer of '85", "Dad", "8:21", Color.storytellerBlue),
-        ("My First Day", "Everyone", "15:47", Color.storytellerPurple)
+        ("How We Met", "Grandma & Grandpa", "12:34", Color.storytellerElder),
+        ("Summer of '85", "Dad", "8:21", Color.storytellerParent),
+        ("My First Day", "Everyone", "15:47", Color.storytellerTeen)
     ]
     
     var body: some View {

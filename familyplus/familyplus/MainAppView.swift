@@ -19,7 +19,6 @@ struct MainAppView: View {
     var body: some View {
         MainNavigation(selectedTab: $selectedTab)
             .themed(currentTheme)
-            .animation(currentTheme.animation, value: selectedTab)
     }
 }
 

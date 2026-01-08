@@ -53,7 +53,7 @@ class NavigationCoordinator: ObservableObject {
     /// - Parameter action: The action to trigger on the Family tab
     func navigateToFamily(action: FamilyTabAction) {
         pendingFamilyAction = action
-        selectedTab = .hub
+        selectedTab = .family
     }
 
     /// Clear pending action after it's been handled

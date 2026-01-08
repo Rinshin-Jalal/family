@@ -1,8 +1,6 @@
 import SwiftUI
 
-extension Color {
-    static let brandIndigo = Color(red: 0.345, green: 0.337, blue: 0.839)
-}
+// Using burgundyRed from Color+Extensions.swift
 
 struct QuoteShareLink: View {
     let quote: String
@@ -31,7 +29,7 @@ struct QuoteShareLink: View {
             }
         }
         .buttonStyle(.borderedProminent)
-        .tint(Color.brandIndigo)
+        .tint(Color.burgundyRed)
     }
 }
 
@@ -53,7 +51,7 @@ struct StoryShareLink: View {
             Image(systemName: "square.and.arrow.up")
                 .font(.system(size: 18))
         }
-        .tint(Color.brandIndigo)
+        .tint(Color.burgundyRed)
     }
 }
 
@@ -76,7 +74,7 @@ struct QuoteCardShareButton: View {
             }
         }
         .buttonStyle(.bordered)
-        .tint(Color.brandIndigo)
+        .tint(Color.burgundyRed)
     }
 }
 
@@ -101,7 +99,7 @@ struct GenericShareButton: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color.brandIndigo)
+                .tint(Color.burgundyRed)
             } else {
                 ShareLink(
                     item: title,
@@ -116,7 +114,7 @@ struct GenericShareButton: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color.brandIndigo)
+                .tint(Color.burgundyRed)
             }
         }
     }

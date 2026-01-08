@@ -15,16 +15,16 @@ struct FamilyInviteSiblingsScreenView: View {
                 
                 ZStack {
                     Circle()
-                        .fill(Color.storytellerPurple.opacity(0.1))
+                        .fill(Color.storytellerTeen.opacity(0.1))
                         .frame(width: 160, height: 160)
                     
                     Circle()
-                        .fill(Color.storytellerPurple.opacity(0.15))
+                        .fill(Color.storytellerTeen.opacity(0.15))
                         .frame(width: 120, height: 120)
                     
                     ZStack {
                         Circle()
-                            .fill(Color.storytellerPurple)
+                            .fill(Color.storytellerTeen)
                             .frame(width: 88, height: 88)
                         
                         Image(systemName: "person.2.fill")
@@ -103,7 +103,7 @@ private struct SiblingFeatureRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 18))
-                .foregroundColor(Color.storytellerPurple)
+                .foregroundColor(Color.storytellerTeen)
                 .frame(width: 24)
             
             Text(text)

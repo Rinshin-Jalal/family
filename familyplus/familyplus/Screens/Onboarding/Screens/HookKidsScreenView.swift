@@ -45,7 +45,7 @@ struct HookKidsScreenView: View {
                 HStack(spacing: 8) {
                     ForEach(0..<kidStories.count, id: \.self) { index in
                         Circle()
-                            .fill(index == currentStoryIndex ? Color.playfulOrange : Color.gray.opacity(0.3))
+                            .fill(index == currentStoryIndex ? Color.owlGold : Color.gray.opacity(0.3))
                             .frame(width: index == currentStoryIndex ? 10 : 8, height: index == currentStoryIndex ? 10 : 8)
                     }
                 }
@@ -59,7 +59,7 @@ struct HookKidsScreenView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "sparkles")
                             .font(.title)
-                            .foregroundColor(.playfulOrange)
+                            .foregroundColor(.owlGold)
                         Text("Made for little listeners")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(theme.textColor)
@@ -128,7 +128,7 @@ private struct FloatingStarsBackground: View {
             ForEach(0..<15, id: \.self) { i in
                 Image(systemName: "star.fill")
                     .font(.system(size: CGFloat.random(in: 8...20)))
-                    .foregroundColor([Color.playfulOrange, .yellow, .pink, .purple][i % 4].opacity(0.3))
+                    .foregroundColor([Color.owlGold, .yellow, .pink, .purple][i % 4].opacity(0.3))
                     .position(
                         x: CGFloat.random(in: 0...geo.size.width),
                         y: CGFloat.random(in: 0...geo.size.height)
@@ -199,7 +199,7 @@ private struct KidFeatureBadge: View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.title3)
-                .foregroundColor(.playfulOrange)
+                .foregroundColor(.owlGold)
             Text(text)
                 .font(.caption)
                 .fontWeight(.medium)
@@ -209,7 +209,7 @@ private struct KidFeatureBadge: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.playfulOrange.opacity(0.1))
+                .fill(Color.owlGold.opacity(0.1))
         )
     }
 }

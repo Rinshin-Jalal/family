@@ -275,7 +275,10 @@ struct FullStoryDetail: View {
                                         .font(.caption)
                                         .foregroundColor(theme.secondaryTextColor)
                                 }
-                            }.padding(8).glassEffect(.regular.tint(story.storytellerColor.opacity(0.2)))
+                            }
+                            .padding(8)
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(12)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, theme.screenPadding)

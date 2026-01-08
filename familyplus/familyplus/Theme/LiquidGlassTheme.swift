@@ -1,31 +1,11 @@
 import SwiftUI
 
-// MARK: - Liquid Glass Color System (HIG Semantic Colors)
+// MARK: - Color Extension
 
 extension Color {
-    // MARK: - Semantic Colors (Pure SwiftUI - Hex Based)
-    
+    static let brandIndigoLight = Color(hex: "E1F0E6") // Soft green variant for light mode
     static let primaryLabel = Color.primary
-    static let secondaryLabel = Color.secondary
-    static let tertiaryLabel = Color.gray.opacity(0.6)
-    
-    static let primaryBackground = Color(red: 1.0, green: 1.0, blue: 1.0)
-    static let secondaryBackground = Color(red: 0.95, green: 0.95, blue: 0.97)
-    static let tertiaryBackground = Color(red: 0.90, green: 0.90, blue: 0.92)
-    
-    static let separator = Color.gray.opacity(0.2)
-    
-    // MARK: - Brand Colors
-    
-    static let brandIndigo = Color(red: 0.345, green: 0.337, blue: 0.839)
-    static let brandIndigoLight = Color(red: 0.678, green: 0.655, blue: 1.0)
-    
-    // MARK: - Storyteller Colors
-    
-    static let storytellerOrange = Color(red: 1.0, green: 0.584, blue: 0.0)
-    static let storytellerBlue = Color(red: 0.0, green: 0.478, blue: 1.0)
-    static let storytellerPurple = Color(red: 0.686, green: 0.321, blue: 0.870)
-    static let storytellerGreen = Color(red: 0.204, green: 0.780, blue: 0.349)
+    static let secondaryLabel = Color.gray
 }
 
 // MARK: - Liquid Glass Button Style
@@ -34,7 +14,7 @@ struct LiquidGlassButtonStyle: ButtonStyle {
     let tintColor: Color
     let intensity: CGFloat
     
-    init(tintColor: Color = .brandIndigo, intensity: CGFloat = 0.15) {
+    init(tintColor: Color = .burgundyRed, intensity: CGFloat = 0.15) {
         self.tintColor = tintColor
         self.intensity = intensity
     }
@@ -53,10 +33,26 @@ struct LiquidGlassButtonStyle: ButtonStyle {
                             .stroke(tintColor.opacity(intensity), lineWidth: 1)
                     )
             )
-            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+            .shadow(
+                color: .black.opacity(configuration.isPressed ? 0.05 : 0.1),
+                radius: configuration.isPressed ? 4 : 8,
+                x: 0,
+                y: configuration.isPressed ? 2 : 4
+            )
+            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+            .animation(.bouncy, value: configuration.isPressed)
             .contentShape(Rectangle())
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !configuration.isPressed {
+                            #if os(iOS)
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            #endif
+                        }
+                    }
+            )
     }
 }
 
@@ -120,8 +116,8 @@ struct LiquidGlassBackground: View {
     let secondaryColor: Color
     
     init(
-        primaryColor: Color = .brandIndigo,
-        secondaryColor: Color = .brandIndigoLight
+        primaryColor: Color = .burgundyRed,
+        secondaryColor: Color = .softBurgundy
     ) {
         self.primaryColor = primaryColor
         self.secondaryColor = secondaryColor
@@ -164,7 +160,7 @@ struct LiquidProgressView: View {
     let progress: Double
     let tint: Color
     
-    init(progress: Double, tint: Color = .brandIndigo) {
+    init(progress: Double, tint: Color = .burgundyRed) {
         self.progress = progress
         self.tint = tint
     }
@@ -296,7 +292,7 @@ struct LiquidLoadingState: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.5)
-                .tint(.brandIndigo)
+                .tint(.burgundyRed)
             
             Text(message)
                 .font(.subheadline)
@@ -323,7 +319,7 @@ struct SFSymbolButton: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: size))
-                .foregroundColor(.brandIndigo)
+                .foregroundColor(.burgundyRed)
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
@@ -349,7 +345,7 @@ struct CountdownView: View {
             Circle()
                 .trim(from: 0, to: CGFloat(remaining) / CGFloat(total))
                 .stroke(
-                    remaining <= 5 ? Color.orange : Color.brandIndigo,
+                    remaining <= 5 ? Color.orange : Color.burgundyRed,
                     style: StrokeStyle(lineWidth: 4, lineCap: .round)
                 )
                 .frame(width: 60, height: 60)

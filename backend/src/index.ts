@@ -21,8 +21,10 @@ import links from './routes/links'
 import polls from './routes/polls'
 import analytics from './routes/analytics'
 import trivia from './routes/trivia'
+import locations from './routes/locations'
 import ai from './routes/ai'
 import wisdom from './routes/wisdom'
+import diary from './routes/diary'
 import { createQwenTurboClient } from './ai/llm'
 import { createCartesiaClient } from './ai/cartesia'
 import { createWisdomTaggerClient } from './ai/wisdom-tagger'
@@ -86,8 +88,11 @@ app.route('/', quotes)
 app.route('/', links)
 app.route('/', polls)
 app.route('/', analytics)
+app.route('/', trivia)
+app.route('/', locations)
 app.route('/', ai)
 app.route('/', wisdom)
+app.route('/', diary)
 
 // Health check
 app.get('/health', (c) => {

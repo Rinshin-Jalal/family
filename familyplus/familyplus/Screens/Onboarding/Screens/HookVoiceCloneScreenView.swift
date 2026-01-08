@@ -65,7 +65,7 @@ struct HookVoiceCloneScreenView: View {
                                 if isPlaying {
                                     ForEach(0..<3, id: \.self) { i in
                                         Circle()
-                                            .stroke(Color.storytellerOrange.opacity(0.3 - Double(i) * 0.1), lineWidth: 2)
+                                            .stroke(Color.storytellerElder.opacity(0.3 - Double(i) * 0.1), lineWidth: 2)
                                             .frame(width: 80 + CGFloat(i) * 20, height: 80 + CGFloat(i) * 20)
                                             .scaleEffect(isPlaying ? 1.2 : 1)
                                             .opacity(isPlaying ? 0 : 1)
@@ -81,13 +81,13 @@ struct HookVoiceCloneScreenView: View {
                                 Circle()
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color.storytellerOrange, Color.storytellerOrange.opacity(0.7)],
+                                            colors: [Color.storytellerElder, Color.storytellerElder.opacity(0.7)],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
                                     )
                                     .frame(width: 80, height: 80)
-                                    .shadow(color: Color.storytellerOrange.opacity(0.4), radius: 15)
+                                    .shadow(color: Color.storytellerElder.opacity(0.4), radius: 15)
                                 
                                 Text("G")
                                     .font(.system(size: 32, weight: .bold))
@@ -200,7 +200,7 @@ private struct VoiceWavesBackground: View {
                     path.addLine(to: CGPoint(x: x, y: y))
                 }
             }
-            .stroke(Color.storytellerOrange, lineWidth: 3)
+            .stroke(Color.storytellerElder, lineWidth: 3)
         }
     }
 }
@@ -239,7 +239,7 @@ private struct VoicePlayerCard: View {
                         .frame(height: 4)
                     
                     Capsule()
-                        .fill(Color.storytellerOrange)
+                        .fill(Color.storytellerElder)
                         .frame(width: geo.size.width * progress, height: 4)
                 }
             }
@@ -281,7 +281,7 @@ private struct VoiceCloneWaveformBar: View {
         let isActive = CGFloat(index) / 30.0 < progress
         
         RoundedRectangle(cornerRadius: 2)
-            .fill(isActive ? Color.storytellerOrange : Color.gray.opacity(0.3))
+            .fill(isActive ? Color.storytellerElder : Color.gray.opacity(0.3))
             .frame(width: 4, height: isPlaying && isActive ? animatedHeight * 40 : 8)
             .onAppear {
                 if isPlaying {

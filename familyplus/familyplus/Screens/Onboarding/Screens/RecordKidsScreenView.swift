@@ -24,17 +24,17 @@ struct RecordKidsScreenView: View {
                 VStack(spacing: 24) {
                     ZStack {
                         Circle()
-                            .fill(Color.playfulOrange.opacity(0.15))
+                            .fill(Color.owlGold.opacity(0.15))
                             .frame(width: 120, height: 120)
                             .scaleEffect(bounceAnimation ? 1.1 : 1.0)
                         
                         Circle()
-                            .fill(Color.playfulOrange.opacity(0.2))
+                            .fill(Color.owlGold.opacity(0.2))
                             .frame(width: 90, height: 90)
                         
                         Image(systemName: "sparkles")
                             .font(.system(size: 44, weight: .medium))
-                            .foregroundColor(.playfulOrange)
+                            .foregroundColor(.owlGold)
                             .rotationEffect(.degrees(bounceAnimation ? 10 : -10))
                     }
                     .opacity(showContent ? 1 : 0)
@@ -86,7 +86,7 @@ struct RecordKidsScreenView: View {
                             coordinator.goToNextStep()
                         },
                         icon: "wand.and.stars",
-                        style: .custom(Color.playfulOrange)
+                        style: .custom(Color.owlGold)
                     )
                     
                     OnboardingSecondaryButton(
@@ -133,12 +133,12 @@ private struct KidsFeatureCard: View {
         HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(Color.playfulOrange.opacity(0.15))
+                    .fill(Color.owlGold.opacity(0.15))
                     .frame(width: 48, height: 48)
                 
                 Image(systemName: icon)
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.playfulOrange)
+                    .foregroundColor(.owlGold)
             }
             
             VStack(alignment: .leading, spacing: 2) {

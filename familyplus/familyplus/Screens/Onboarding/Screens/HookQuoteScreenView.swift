@@ -9,10 +9,10 @@ struct HookQuoteScreenView: View {
     @State private var showShareSheet = false
     
     private let quotes: [(String, String, Color)] = [
-        ("The best things in life are the people you love and the memories you make.", "Grandma Rose", Color.storytellerOrange),
-        ("Work hard, be kind, and amazing things will happen.", "Dad", Color.storytellerBlue),
-        ("Home is wherever we are together.", "Mom", Color.storytellerGreen),
-        ("Every day is a gift. That is why they call it the present.", "Grandpa Joe", Color.storytellerPurple)
+        ("The best things in life are the people you love and the memories you make.", "Grandma Rose", Color.storytellerElder),
+        ("Work hard, be kind, and amazing things will happen.", "Dad", Color.storytellerParent),
+        ("Home is wherever we are together.", "Mom", Color.storytellerChild),
+        ("Every day is a gift. That is why they call it the present.", "Grandpa Joe", Color.storytellerTeen)
     ]
     
     var body: some View {

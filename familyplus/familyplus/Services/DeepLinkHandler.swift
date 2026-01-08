@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 enum DeepLinkDestination: Equatable {
     case invite(code: String)
@@ -150,6 +151,11 @@ struct LinkDestinationData: Codable, Hashable {
 }
 
 #Preview("Deep Link Handler") {
-    DeepLinkHandler.shared
-        .padding()
+    Text("DeepLinkHandler")
+        .onDeepLink(
+            onInvite: { code in print("Invite: \(code)") },
+            onStory: { id in print("Story: \(id)") },
+            onQuote: { id in print("Quote: \(id)") },
+            onRequest: { id in print("Request: \(id)") }
+        )
 }

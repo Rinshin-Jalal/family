@@ -3,6 +3,7 @@
 //  StoryRide
 //
 //  Adaptive theme system with Dark/Light mode support
+//  Owl Library Aesthetic - Scholarly warmth meets cozy storytelling
 //
 
 import SwiftUI
@@ -15,8 +16,8 @@ public enum AppTheme: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .dark: return "Dark"
-        case .light: return "Light"
+        case .dark: return "Scholarly Night"
+        case .light: return "Cozy Library"
         }
     }
 
@@ -61,76 +62,88 @@ public protocol PersonaTheme {
     var enableHaptics: Bool { get }
 }
 
-// MARK: - Dark Theme
+// MARK: - Dark Theme (Scholarly Night)
 
-struct DarkTheme: PersonaTheme {
-    let role: AppTheme = .dark
+public struct DarkTheme: PersonaTheme {
+    public init() {}
+    public let role: AppTheme = .dark
 
-    // Colors - Dark mode aesthetic (#000000, #5856D6, #1C1C1E)
-    let backgroundColor = Color(red: 0.0, green: 0.0, blue: 0.0)
-    let textColor = Color(red: 1.0, green: 1.0, blue: 1.0)
-    let secondaryTextColor = Color(red: 1.0, green: 1.0, blue: 1.0).opacity(0.7)
-    let accentColor = Color(red: 0.345, green: 0.337, blue: 0.839)
-    let cardBackgroundColor = Color(red: 0.110, green: 0.110, blue: 0.118)
+    // Colors - Warm espresso & gold aesthetic
+    // Background: Espresso Dark (#1A1210)
+    public let backgroundColor = Color(hex: "1A1210")
+    // Text: Ivory Cream (#FFF8F0)
+    public let textColor = Color(hex: "FFF8F0")
+    // Secondary: Warm Tan at 70% (#C4A574)
+    public let secondaryTextColor = Color(hex: "C4A574").opacity(0.7)
+    // Accent: Owl Gold (#D4A84A)
+    public let accentColor = Color(hex: "D4A84A")
+    // Cards: Cocoa Brown (#3D2B2B)
+    public let cardBackgroundColor = Color(hex: "3D2B2B")
 
     // Typography - Trendy, tight spacing
-    let headlineFont = Font.custom("SF Pro Display", size: 16).weight(.bold)
-    let bodyFont = Font.system(size: 17, weight: .regular, design: .default)
-    let storyFont = Font.custom("New York", size: 20).italic()
+    public let headlineFont = Font.custom("SF Pro Display", size: 16).weight(.bold)
+    public let bodyFont = Font.system(size: 17, weight: .regular, design: .default)
+    public let storyFont = Font.custom("New York", size: 20).italic()
 
     // Spacing
-    let screenPadding: CGFloat = 16
-    let cardRadius: CGFloat = 12
-    let buttonHeight: CGFloat = 44
-    let touchTarget: CGFloat = 44
+    public let screenPadding: CGFloat = 16
+    public let cardRadius: CGFloat = 12
+    public let buttonHeight: CGFloat = 44
+    public let touchTarget: CGFloat = 44
 
     // Motion - Snappy, springy
-    let animation = Animation.spring(response: 0.3, dampingFraction: 0.7)
-    let transitionDuration: Double = 0.25
+    public let animation = Animation.spring(response: 0.3, dampingFraction: 0.7)
+    public let transitionDuration: Double = 0.25
 
     // Features
-    let showNavigation = true
-    let enableAudioPrompts = false
-    let enableHaptics = true
+    public let showNavigation = true
+    public let enableAudioPrompts = false
+    public let enableHaptics = true
 }
 
-// MARK: - Light Theme
+// MARK: - Light Theme (Cozy Library)
 
-struct LightTheme: PersonaTheme {
-    let role: AppTheme = .light
+public struct LightTheme: PersonaTheme {
+    public init() {}
+    public let role: AppTheme = .light
 
-    // Colors - Light mode, clean (#FFFFFF, #5856D6, #F2F2F7)
-    let backgroundColor = Color(red: 1.0, green: 1.0, blue: 1.0)
-    let textColor = Color(red: 0.0, green: 0.0, blue: 0.0)
-    let secondaryTextColor = Color.gray
-    let accentColor = Color(red: 0.345, green: 0.337, blue: 0.839)
-    let cardBackgroundColor = Color(red: 0.949, green: 0.949, blue: 0.969)
+    // Colors - Warm cream & burgundy aesthetic
+    // Background: Ivory Cream (#FFF8F0)
+    public let backgroundColor = Color(hex: "FFF8F0")
+    // Text: Espresso Dark (#1A1210)
+    public let textColor = Color(hex: "1A1210")
+    // Secondary: Cocoa Brown (#3D2B2B)
+    public let secondaryTextColor = Color(hex: "3D2B2B").opacity(0.6)
+    // Accent: Burgundy Red (#8B2942)
+    public let accentColor = Color(hex: "8B2942")
+    // Cards: Soft Parchment (#F5E6D3)
+    public let cardBackgroundColor = Color(hex: "F5E6D3")
 
     // Typography - Clear, trustworthy
-    let headlineFont = Font.system(size: 16, weight: .semibold, design: .default)
-    let bodyFont = Font.system(size: 17, weight: .regular, design: .default)
-    let storyFont = Font.custom("New York", size: 20)
+    public let headlineFont = Font.system(size: 16, weight: .semibold, design: .default)
+    public let bodyFont = Font.system(size: 17, weight: .regular, design: .default)
+    public let storyFont = Font.custom("New York", size: 20)
 
     // Spacing
-    let screenPadding: CGFloat = 20
-    let cardRadius: CGFloat = 16
-    let buttonHeight: CGFloat = 48
-    let touchTarget: CGFloat = 48
+    public let screenPadding: CGFloat = 20
+    public let cardRadius: CGFloat = 16
+    public let buttonHeight: CGFloat = 48
+    public let touchTarget: CGFloat = 48
 
     // Motion - Smooth, ease in/out
-    let animation = Animation.easeInOut(duration: 0.3)
-    let transitionDuration: Double = 0.3
+    public let animation = Animation.easeInOut(duration: 0.3)
+    public let transitionDuration: Double = 0.3
 
     // Features
-    let showNavigation = true
-    let enableAudioPrompts = false
-    let enableHaptics = false
+    public let showNavigation = true
+    public let enableAudioPrompts = false
+    public let enableHaptics = true
 }
 
 // MARK: - Theme Factory
 
-struct ThemeFactory {
-    static func theme(for role: AppTheme) -> PersonaTheme {
+public struct ThemeFactory {
+    public static func theme(for role: AppTheme) -> PersonaTheme {
         switch role {
         case .dark:
             return DarkTheme()
@@ -147,7 +160,7 @@ private struct ThemeKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    var theme: PersonaTheme {
+    public var theme: PersonaTheme {
         get { self[ThemeKey.self] }
         set { self[ThemeKey.self] = newValue }
     }
@@ -155,10 +168,10 @@ extension EnvironmentValues {
 
 // MARK: - Theme Modifier
 
-struct ThemedView: ViewModifier {
-    let theme: PersonaTheme
+public struct ThemedView: ViewModifier {
+    public let theme: PersonaTheme
 
-    func body(content: Content) -> some View {
+    public func body(content: Content) -> some View {
         content
             .environment(\.theme, theme)
             .environment(\.colorScheme, colorScheme(for: theme))
@@ -177,7 +190,7 @@ struct ThemedView: ViewModifier {
 }
 
 extension View {
-    func themed(_ theme: PersonaTheme) -> some View {
+    public func themed(_ theme: PersonaTheme) -> some View {
         modifier(ThemedView(theme: theme))
     }
 }

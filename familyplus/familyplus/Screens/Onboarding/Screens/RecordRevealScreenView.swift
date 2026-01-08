@@ -40,10 +40,10 @@ struct RecordRevealScreenView: View {
                             HStack(spacing: 8) {
                                 Label("Grandma", systemImage: "person.fill")
                                     .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(Color.storytellerOrange)
+                                    .foregroundColor(Color.storytellerElder)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(Color.storytellerOrange.opacity(0.15))
+                                    .background(Color.storytellerElder.opacity(0.15))
                                     .clipShape(Capsule())
                                 
                                 Text("•")

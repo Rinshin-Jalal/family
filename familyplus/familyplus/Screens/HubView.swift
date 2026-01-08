@@ -2,1213 +2,783 @@
 //  HubView.swift
 //  StoryRide
 //
-//  Living Memory Dashboard - Home screen showing what's alive in the family
-//  Redesigned following Apple HIG: clarity, deference, depth
+//  Family Stories - Where your family's memories live
 //
 
 import SwiftUI
+import Foundation
 
-// MARK: - Dashboard Data Models
 
-struct DailyPrompt: Identifiable, Codable {
-    let id: String
-    let question: String
-    let category: PromptCategory
+// MARK: - Hub Loading State Enum
+
+enum HubLoadingState<T>: Equatable {
+    case loading
+    case empty
+    case loaded(T)
+    case error(String)
+
+    static func == (lhs: HubLoadingState<T>, rhs: HubLoadingState<T>) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading, .loading), (.empty, .empty):
+            return true
+        case (.loaded, .loaded):
+            return true // Simplified for Equatable conformance
+        case (.error(let lhsMsg), .error(let rhsMsg)):
+            return lhsMsg == rhsMsg
+        default:
+            return false
+        }
+    }
+}
+
+// MARK: - Local UI Helpers
+
+struct CozySectionHeader: View {
     let icon: String
-    let validUntil: Date
-    let responseCount: Int?
-
-    enum PromptCategory: String, Codable {
-        case memory = "Memory"
-        case tradition = "Tradition"
-        case milestone = "Milestone"
-        case wisdom = "Wisdom"
-        case fun = "Fun"
-
-        var color: Color {
-            switch self {
-            case .memory: return .blue
-            case .tradition: return .orange
-            case .milestone: return .purple
-            case .wisdom: return .teal
-            case .fun: return .yellow
-            }
-        }
-    }
-}
-
-struct RecentActivity: Identifiable {
-    let id = UUID()
-    let type: ActivityType
     let title: String
-    let subtitle: String
-    let timestamp: Date
-    let storyId: String?
-    let duration: TimeInterval?
-    let hasListened: Bool
-
-    enum ActivityType {
-        case newStory
-        case newPerspective
-        case upcomingCall
-
-        var icon: String {
-            switch self {
-            case .newStory: return "waveform"
-            case .newPerspective: return "bubble.left.and.bubble.right"
-            case .upcomingCall: return "phone"
-            }
+    @Environment(\.theme) var theme
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(theme.accentColor)
+            
+            Text(title)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(theme.secondaryTextColor)
+            
+            Spacer()
         }
-
-        var color: Color {
-            switch self {
-            case .newStory: return .orange
-            case .newPerspective: return .blue
-            case .upcomingCall: return .purple
-            }
-        }
-    }
-
-    var timeAgoText: String {
-        let now = Date()
-        let interval = now.timeIntervalSince(timestamp)
-
-        if interval < 0 {
-            let futureInterval = -interval
-            if futureInterval < 3600 {
-                return "In \(Int(futureInterval / 60))m"
-            } else if futureInterval < 86400 {
-                return "In \(Int(futureInterval / 3600))h"
-            } else if futureInterval < 172800 {
-                return "Tomorrow"
-            } else {
-                return "In \(Int(futureInterval / 86400))d"
-            }
-        }
-
-        if interval < 3600 {
-            return "\(Int(interval / 60))m ago"
-        } else if interval < 86400 {
-            return "\(Int(interval / 3600))h ago"
-        } else if interval < 172800 {
-            return "Yesterday"
-        } else {
-            return "\(Int(interval / 86400))d ago"
-        }
-    }
-
-    var formattedDuration: String? {
-        guard let duration = duration else { return nil }
-        let minutes = Int(duration / 60)
-        if minutes == 0 {
-            return "\(Int(duration))s"
-        }
-        return "\(minutes) min"
+        .padding(.horizontal, theme.screenPadding)
     }
 }
 
-struct ActiveStory: Identifiable {
-    let id = UUID()
-    let story: Story
-    let lastActivity: Date
-    let isEvolving: Bool
-    let emotionalHint: String?
-    let freshnessText: String?
-}
-
-struct UnheardVoice: Identifiable {
-    let id = UUID()
-    let storyteller: String
-    let storyTitle: String
-    let role: AppTheme
-    let duration: TimeInterval
-    let recordedDate: Date
-
-    var formattedDuration: String {
-        let minutes = Int(duration / 60)
-        return "\(minutes) min"
+struct ViewAllButton: View {
+    let title: String
+    let action: () -> Void
+    @Environment(\.theme) var theme
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(theme.accentColor)
+                
+                Spacer()
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.right")
+                }
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(theme.accentColor)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+        .buttonStyle(.plain)
     }
 }
 
-// MARK: - Hub View (Dashboard)
+struct CozyCard<Content: View>: View {
+    @Environment(\.theme) var theme
+    let content: Content
+    
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            content
+        }
+        .background(theme.role == .light ? Color.white : theme.cardBackgroundColor)
+        .cornerRadius(24)
+        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+        .padding(.horizontal, 16)
+    }
+}
+
+struct RoleBadge: View {
+    let text: String
+    let color: Color
+    
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: .bold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.6))
+            .foregroundColor(.white)
+            .clipShape(Capsule())
+    }
+}
 
 struct HubView: View {
     @Environment(\.theme) var theme
-    @Environment(\.colorScheme) var colorScheme
-    @State private var loadingState: LoadingState<DashboardData> = .loading
+    @State private var loadingState: HubLoadingState<ArchivistData> = .loading
     @State private var showCaptureSheet = false
-    @State private var showCreateStoryModal = false
-    @State private var dailyPrompt: DailyPrompt?
-    @State private var selectedPromptForCapture: PromptData?
+    @State private var showSearchView = false
+    @State private var selectedInputMode: InputMode? = nil
 
     var body: some View {
-        UnifiedDashboard(
-            loadingState: loadingState,
-            onShowCapture: { prompt in
-                selectedPromptForCapture = prompt
-                showCaptureSheet = true
-            },
-            onShowCreateStory: {
-                showCreateStoryModal = true
-            },
-            dailyPrompt: dailyPrompt
-        )
-        .animation(theme.animation, value: theme.role)
-        .sheet(isPresented: $showCaptureSheet) {
-            CaptureMemorySheet(initialPrompt: selectedPromptForCapture)
-                .onDisappear {
-                    selectedPromptForCapture = nil
+        NavigationStack {
+            ZStack {
+                theme.backgroundColor.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 32) {
+                        switch loadingState {
+                        case .loading:
+                            DashboardSkeletonView()
+                        case .loaded(let data):
+                            // 1. Quick Action Hero
+                            QuickActionHero(onAction: { mode in
+                                selectedInputMode = mode
+                                showCaptureSheet = true
+                            })
+                            .padding(.top, 8)
+
+                            DashboardView(data: data, onCaptureAction: {
+                                selectedInputMode = .recording
+                                showCaptureSheet = true
+                            })
+                            .transition(.opacity)
+                        case .empty:
+                            HubEmptyStateView(onAction: {
+                                showCaptureSheet = true
+                            })
+                        case .error(let message):
+                            HubErrorStateView(message: message, onRetry: loadDashboard)
+                        }
+                    }
+                    .padding(.bottom, 100) // Space for FAB
                 }
+                
+                // 2. Floating Action Button
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            selectedInputMode = .recording
+                            showCaptureSheet = true
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(theme.accentColor)
+                                    .frame(width: 64, height: 64)
+                                    .shadow(color: theme.accentColor.opacity(0.3), radius: 10, x: 0, y: 5)
+                                
+                                Image(systemName: "plus")
+                                    .font(.system(size: 30, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .padding(.trailing, 24)
+                        .padding(.bottom, 24)
+                    }
+                }
+            }
+            .navigationTitle("Family Library")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showSearchView = true
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(theme.accentColor)
+                            .padding(8)
+                            .background(theme.accentColor.opacity(0.1))
+                            .clipShape(Circle())
+                    }
+                }
+            }
         }
-        .sheet(isPresented: $showCreateStoryModal) {
-            CreateStoryModal()
+        .sheet(isPresented: $showCaptureSheet) {
+            CaptureMemorySheet(initialMode: selectedInputMode ?? .recording)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showSearchView) {
+            WisdomSearchView()
         }
         .onAppear {
             loadDashboard()
-            loadDailyPrompt()
         }
     }
 
     private func loadDashboard() {
         loadingState = .loading
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            let data = DashboardData.mock
-            loadingState = .loaded(data)
+            withAnimation(.snappy) {
+                loadingState = .loaded(ArchivistData.mock)
+            }
         }
-    }
-
-    private func loadDailyPrompt() {
-        dailyPrompt = DailyPrompt(
-            id: UUID().uuidString,
-            question: "What memory would you like to capture today?",
-            category: .memory,
-            icon: "lightbulb.fill",
-            validUntil: Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date(),
-            responseCount: nil
-        )
     }
 }
 
-// MARK: - Dashboard Data
+// MARK: - Subviews
 
-struct DashboardData {
-    let recentActivities: [RecentActivity]
-    let activeStories: [ActiveStory]
-    let unheardVoices: [UnheardVoice]
+struct QuickActionHero: View {
+    @Environment(\.theme) var theme
+    var onAction: (InputMode) -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Capture a Memory")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(theme.textColor)
+                .padding(.horizontal, theme.screenPadding)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    QuickActionButton(icon: "mic.fill", label: "Record", color: .storytellerElder) {
+                        onAction(.recording)
+                    }
+                    QuickActionButton(icon: "camera.fill", label: "Photo", color: .storytellerChild) {
+                        onAction(.imageUpload)
+                    }
+                    QuickActionButton(icon: "text.bubble.fill", label: "Write", color: .storytellerTeen) {
+                        onAction(.typing)
+                    }
+                    QuickActionButton(icon: "folder.fill", label: "Audio", color: .storytellerParent) {
+                        onAction(.audioUpload)
+                    }
+                    QuickActionButton(icon: "doc.fill", label: "Document", color: .storytellerPurple) {
+                        onAction(.documentUpload)
+                    }
+                }
+                .padding(.horizontal, theme.screenPadding)
+            }
+        }
+    }
+}
+
+struct QuickActionButton: View {
+    let icon: String
+    let label: String
+    let color: Color
+    let action: () -> Void
+    @Environment(\.theme) var theme
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .frame(width: 60, height: 60)
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 24))
+                        .foregroundColor(color)
+                }
+                
+                Text(label)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.textColor)
+            }
+            .frame(width: 90)
+            .padding(.vertical, 16)
+            .background(theme.cardBackgroundColor)
+            .cornerRadius(20)
+            .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct HubEmptyStateView: View {
+    @Environment(\.theme) var theme
+    var onAction: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "book.closed.fill")
+                .font(.system(size: 80))
+                .foregroundColor(theme.accentColor.opacity(0.3))
+            
+            VStack(spacing: 8) {
+                Text("Your Family Story Starts Here")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(theme.textColor)
+                
+                Text("Capture voices, photos, and documents to build your family library.")
+                    .font(.system(size: 16))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+            
+            Button(action: onAction) {
+                Text("Start First Story")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 16)
+                    .background(theme.accentColor)
+                    .cornerRadius(16)
+                    .shadow(color: theme.accentColor.opacity(0.3), radius: 8, y: 4)
+            }
+        }
+        .padding(.top, 60)
+    }
+}
+
+struct HubErrorStateView: View {
+    let message: String
+    var onRetry: () -> Void
+    @Environment(\.theme) var theme
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(.orange.opacity(0.8))
+            
+            Text("Something went wrong")
+                .font(.system(size: 18, weight: .bold))
+            
+            Text(message)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            
+            Button("Try Again") {
+                onRetry()
+            }
+            .font(.system(size: 16, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(theme.accentColor)
+            .cornerRadius(12)
+        }
+        .padding(.top, 60)
+    }
+}
+
+// MARK: - Data Models
+
+struct ArchivistData {
     let totalVoices: Int
     let totalStories: Int
+    let evolvingStories: [EvolvingStory]
+    let recentContributions: [Contribution]
 
-    static let mock = DashboardData(
-        recentActivities: [
-            RecentActivity(
-                type: .newStory,
-                title: "Grandpa shared a new story",
-                subtitle: "The Summer of 1968",
-                timestamp: Date().addingTimeInterval(-86400),
-                storyId: "story-1",
-                duration: 180,
-                hasListened: false
-            ),
-            RecentActivity(
-                type: .newPerspective,
-                title: "A new perspective was added",
-                subtitle: "to 'Our First Home' by Mom",
-                timestamp: Date().addingTimeInterval(-172800),
-                storyId: "story-2",
-                duration: 120,
-                hasListened: false
-            ),
-            RecentActivity(
-                type: .upcomingCall,
-                title: "Next call with Grandma",
-                subtitle: "Tomorrow, 6 PM",
-                timestamp: Date().addingTimeInterval(82800),
-                storyId: nil,
-                duration: nil,
-                hasListened: false
-            )
-        ],
-        activeStories: [
-            ActiveStory(
-                story: Story.sampleStories[0],
-                lastActivity: Date().addingTimeInterval(-259200),
-                isEvolving: true,
-                emotionalHint: "Remembered very differently by each person",
-                freshnessText: "New perspective 3 days ago"
-            ),
-            ActiveStory(
-                story: Story.sampleStories[1],
-                lastActivity: Date().addingTimeInterval(-604800),
-                isEvolving: false,
-                emotionalHint: "A joyful memory for everyone",
-                freshnessText: "Last updated 1 week ago"
-            ),
-            ActiveStory(
-                story: Story.sampleStories[2],
-                lastActivity: Date().addingTimeInterval(-1209600),
-                isEvolving: true,
-                emotionalHint: "The last trip before everything changed",
-                freshnessText: "Still evolving"
-            )
-        ],
-        unheardVoices: [
-            UnheardVoice(
+    static let mock = ArchivistData(
+        totalVoices: 23,
+        totalStories: 12,
+        evolvingStories: [
+            EvolvingStory(
+                id: "1",
+                title: "The Summer of 1968",
                 storyteller: "Grandma Rose",
-                storyTitle: "When I Met Your Grandfather",
-                role: .light,
-                duration: 180,
-                recordedDate: Date().addingTimeInterval(-432000)
+                color: Color(hex: "D4A84A"), // storytellerElder
+                contributionCount: 3,
+                lastActivity: Date().addingTimeInterval(-86400),
+                previewText: "We drove across the country in our old Chevy..."
             ),
-            UnheardVoice(
+            EvolvingStory(
+                id: "2",
+                title: "Our First Home",
                 storyteller: "Dad",
+                color: Color(hex: "3D6B4F"), // storytellerParent
+                contributionCount: 5,
+                lastActivity: Date().addingTimeInterval(-172800),
+                previewText: "I remember the kitchen with yellow curtains..."
+            )
+        ],
+        recentContributions: [
+            Contribution(
+                id: "1",
+                storyteller: "Mom",
                 storyTitle: "My First Day at School",
                 role: .light,
-                duration: 120,
-                recordedDate: Date().addingTimeInterval(-259200)
+                timestamp: Date().addingTimeInterval(-3600),
+                duration: 120
+            ),
+            Contribution(
+                id: "2",
+                storyteller: "Leo",
+                storyTitle: "The Best Birthday Ever",
+                role: .dark,
+                timestamp: Date().addingTimeInterval(-7200),
+                duration: 45
             )
-        ],
-        totalVoices: 23,
-        totalStories: 12
+        ]
     )
 }
 
-// MARK: - Unified Dashboard (Apple HIG Compliant)
+struct EvolvingStory: Identifiable {
+    let id: String
+    let title: String
+    let storyteller: String
+    let color: Color
+    let contributionCount: Int
+    let lastActivity: Date
+    let previewText: String
 
-struct UnifiedDashboard: View {
-    let loadingState: LoadingState<DashboardData>
-    let onShowCapture: (PromptData?) -> Void
-    let onShowCreateStory: () -> Void
-    let dailyPrompt: DailyPrompt?
+    var timeAgo: String {
+        let interval = Date().timeIntervalSince(lastActivity)
+        if interval < 3600 { return "\(Int(interval / 60))m ago" }
+        if interval < 86400 { return "\(Int(interval / 3600))h ago" }
+        return "\(Int(interval / 86400))d ago"
+    }
+}
+
+struct Contribution: Identifiable {
+    let id: String
+    let storyteller: String
+    let storyTitle: String
+    let role: AppTheme
+    let timestamp: Date
+    let duration: TimeInterval
+
+    var timeAgo: String {
+        let interval = Date().timeIntervalSince(timestamp)
+        if interval < 3600 { return "\(Int(interval / 60))m ago" }
+        if interval < 86400 { return "\(Int(interval / 3600))h ago" }
+        return "\(Int(interval / 86400))d ago"
+    }
+
+    var formattedDuration: String {
+        let minutes = Int(duration / 60)
+        return minutes > 0 ? "\(minutes) min" : "\(Int(duration))s"
+    }
+}
+
+// MARK: - Dashboard View
+
+struct DashboardView: View {
+    let data: ArchivistData
     @Environment(\.theme) var theme
-    @Environment(\.colorScheme) var colorScheme
+    var onCaptureAction: () -> Void = {}
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch loadingState {
-                case .loading:
-                    DashboardSkeleton()
-                case .empty:
-                    UnifiedEmptyState(onCreateStory: { onShowCapture(nil) })
-                case .loaded(let data):
-                    DashboardContent(
-                        data: data,
-                        onShowCapture: onShowCapture,
-                        onShowCreateStory: onShowCreateStory,
-                        dailyPrompt: dailyPrompt
-                    )
-                case .error(let message):
-                    ErrorStateView(message: message, onRetry: {})
-                }
-            }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("Home")
-            .navigationBarTitleDisplayMode(.large)
-        }
-    }
-}
-
-// MARK: - Dashboard Content
-
-struct DashboardContent: View {
-    let data: DashboardData
-    let onShowCapture: (PromptData?) -> Void
-    let onShowCreateStory: () -> Void
-    let dailyPrompt: DailyPrompt?
-    @Environment(\.theme) var theme
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        List {
-            // Daily Prompt Section
-            if let prompt = dailyPrompt {
-                Section {
-                    PromptHeroCard(prompt: prompt, onTap: onShowCreateStory)
-                } header: {
-                    HStack {
-                        Image(systemName: "lightbulb.fill")
-                            .foregroundColor(.yellow)
-                        Text("Today's Question")
-                    }
-                    .font(.subheadline)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-                }
-            }
-
-            // Recent Activity Section
-            Section {
-                ForEach(data.recentActivities) { activity in
-                    NavigationLink(destination: storyDetail(for: activity)) {
-                        ActivityRow(activity: activity)
-                    }
-                    .buttonStyle(.plain)
-                }
-            } header: {
-                Text("Recent Activity")
-                    .font(.subheadline)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-            }
-
-            // Stories Section
-            Section {
-                ForEach(data.activeStories) { activeStory in
-                    NavigationLink(destination: StoryDetailView(story: activeStory.story)) {
-                        StoryCardRow(story: activeStory)
-                    }
-                    .buttonStyle(.plain)
-                }
-            } header: {
-                Text("Stories")
-                    .font(.subheadline)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-            }
-
-            // Unheard Voices Section
-            if !data.unheardVoices.isEmpty {
-                Section {
-                    ForEach(data.unheardVoices) { voice in
-                        NavigationLink(destination: Text("Story Player")) {
-                            VoiceRow(voice: voice)
+        VStack(spacing: 32) {
+            // 1. Evolving Stories (The "Value")
+            VStack(alignment: .leading, spacing: 16) {
+                CozySectionHeader(icon: "sparkles", title: "Stories in Progress")
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(data.evolvingStories) { story in
+                            EvolvingStoryCard(story: story)
                         }
-                        .buttonStyle(.plain)
                     }
-                } header: {
-                    HStack {
-                        Text("Unheard Voices")
-                        Spacer()
-                        Text("\(data.unheardVoices.count)")
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(Color.red)
-                            .clipShape(Capsule())
-                    }
-                    .font(.subheadline)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
+                    .padding(.horizontal, theme.screenPadding)
                 }
             }
 
-            // Stats Summary
-            Section {
-                HStack(spacing: 32) {
-                    DashboardStatItem(value: "\(data.totalStories)", label: "Stories")
-                    DashboardStatItem(value: "\(data.totalVoices)", label: "Voices")
-                }
-                .padding(.vertical, 8)
-            } header: {
-                Text("Your Family")
-                    .font(.subheadline)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-            }
-        }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-    }
-
-    private func storyDetail(for activity: RecentActivity) -> some View {
-        if let storyId = activity.storyId,
-           let story = Story.sampleStories.first(where: { $0.id.uuidString == storyId }) {
-            return AnyView(StoryDetailView(story: story))
-        }
-        return AnyView(Text("Story detail"))
-    }
-}
-
-// MARK: - Activity Row
-
-struct ActivityRow: View {
-    let activity: RecentActivity
-
-    var body: some View {
-        HStack(spacing: 16) {
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(activity.type.color.opacity(0.15))
-                    .frame(width: 40, height: 40)
-
-                Image(systemName: activity.type.icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(activity.type.color)
-            }
-
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
-                Text(activity.title)
-                    .font(.body)
-                    .foregroundColor(Color(UIColor.label))
-
-                HStack(spacing: 8) {
-                    Text(activity.subtitle)
-                        .font(.footnote)
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-                        .lineLimit(1)
-
-                    if let duration = activity.formattedDuration {
-                        Text("·")
-                            .font(.footnote)
-                            .foregroundColor(Color(UIColor.tertiaryLabel))
-
-                        Text(duration)
-                            .font(.footnote)
-                            .foregroundColor(Color(UIColor.secondaryLabel))
-                    }
-
-                    Text("·")
-                        .font(.footnote)
-                        .foregroundColor(Color(UIColor.tertiaryLabel))
-
-                    Text(activity.timeAgoText)
-                        .font(.footnote)
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-    }
-}
-
-// MARK: - Story Card Row
-
-struct StoryCardRow: View {
-    let story: ActiveStory
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(storyColor)
-                .frame(width: 48, height: 48)
-                .overlay(
-                    Image(systemName: "waveform")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.white)
-                )
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(story.story.title)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(Color(UIColor.label))
-                    .lineLimit(1)
-
-                Text(story.story.storyteller)
-                    .font(.caption)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            if story.isEvolving {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(.blue)
-            }
-
-            if story.story.voiceCount > 1 {
-                HStack(spacing: 3) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 10))
-                    Text("\(story.story.voiceCount)")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundColor(.blue)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.blue.opacity(0.15))
-                .clipShape(Capsule())
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-    }
-
-    private var storyColor: Color {
-        .storytellerPurple
-    }
-}
-
-// MARK: - Voice Row
-
-struct VoiceRow: View {
-    let voice: UnheardVoice
-
-    var body: some View {
-        HStack(spacing: 16) {
-            // Avatar initial
-            Text(String(voice.storyteller.prefix(1)).uppercased())
-                .font(.system(size: 17, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(storytellerColor))
-
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
-                Text(voice.storyTitle)
-                    .font(.body)
-                    .foregroundColor(Color(UIColor.label))
-                    .lineLimit(1)
-
-                HStack(spacing: 8) {
-                    Text(voice.storyteller)
-                        .font(.footnote)
-                        .foregroundColor(storytellerColor)
-
-                    Text("·")
-                        .foregroundColor(Color(UIColor.tertiaryLabel))
-
-                    Text(voice.formattedDuration)
-                        .font(.footnote)
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-                }
-            }
-
-            Spacer()
-
-            Circle()
-                .fill(Color.blue)
-                .frame(width: 8, height: 8)
-        }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-    }
-
-    private var storytellerColor: Color {
-        switch voice.role {
-        case .light: return .storytellerBlue
-        case .dark: return .storytellerPurple
-        }
-    }
-}
-
-// MARK: - Dashboard Stat Item
-
-struct DashboardStatItem: View {
-    let value: String
-    let label: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(Color(UIColor.label))
-
-            Text(label)
-                .font(.caption)
-                .foregroundColor(Color(UIColor.secondaryLabel))
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - Prompt Hero Card
-
-struct PromptHeroCard: View {
-    let prompt: DailyPrompt
-    let onTap: () -> Void
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Image(systemName: prompt.icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(prompt.category.color)
-
-                    Text(prompt.category.rawValue)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(prompt.category.color)
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color(UIColor.tertiaryLabel))
-                }
-
-                Text(prompt.question)
-                    .font(.headline)
-                    .foregroundColor(Color(UIColor.label))
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(3)
-
-                Text("Tap to share your story")
-                    .font(.caption)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-            }
-            .padding(16)
-            .background {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemBackground))
-                    .shadow(
-                        color: .black.opacity(colorScheme == .dark ? 0.3 : 0.1),
-                        radius: 8,
-                        x: 0,
-                        y: 4
-                    )
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.vertical, 8)
-    }
-}
-
-// MARK: - Unified Empty State
-
-struct UnifiedEmptyState: View {
-    let onCreateStory: () -> Void
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 64))
-                .foregroundColor(.secondary)
-
-            VStack(spacing: 12) {
-                Text("No Stories Yet")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(Color(UIColor.label))
-
-                Text("Start capturing your family memories")
-                    .font(.body)
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-                    .multilineTextAlignment(.center)
-            }
-
-            Button(action: onCreateStory) {
-                Text("Record Your First Story")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.accentColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .padding(.horizontal, 32)
-
-            Spacer()
-        }
-        .padding(32)
-        .background(Color(uiColor: .systemGroupedBackground))
-    }
-}
-
-// MARK: - Dashboard Skeleton
-
-struct DashboardSkeleton: View {
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        NavigationStack {
-            List {
-                // Prompt skeleton
-                Section {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Circle()
-                                .fill(Color(.tertiaryLabel).opacity(0.3))
-                                .frame(width: 20, height: 20)
-
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(.tertiaryLabel).opacity(0.3))
-                                .frame(width: 60, height: 12)
-
-                            Spacer()
-
-                            Circle()
-                                .fill(Color(.tertiaryLabel).opacity(0.3))
-                                .frame(width: 14, height: 14)
+            // 2. Recent Contributions
+            VStack(alignment: .leading, spacing: 16) {
+                CozySectionHeader(icon: "clock.fill", title: "Family Activity")
+                
+                CozyCard {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(data.recentContributions.indices, id: \.self) { index in
+                            let contribution = data.recentContributions[index]
+                            ContributionRow(contribution: contribution)
+                            
+                            if index < data.recentContributions.count - 1 {
+                                Divider().padding(.leading, 64)
+                            }
                         }
-
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(.tertiaryLabel).opacity(0.3))
-                            .frame(height: 24)
-                            .frame(maxWidth: .infinity)
-
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color(.tertiaryLabel).opacity(0.3))
-                            .frame(width: 150, height: 12)
                     }
                     .padding(.vertical, 8)
-                } header: {
-                    Text("Today's Question")
-                        .font(.subheadline)
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-                }
-
-                // Activity skeleton
-                Section {
-                    ForEach(0..<3, id: \.self) { _ in
-                        HStack(spacing: 16) {
-                            Circle()
-                                .fill(Color(.tertiaryLabel).opacity(0.3))
-                                .frame(width: 40, height: 40)
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color(.tertiaryLabel).opacity(0.3))
-                                    .frame(width: 180, height: 16)
-
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color(.tertiaryLabel).opacity(0.3))
-                                    .frame(width: 120, height: 12)
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.vertical, 8)
-                    }
-                } header: {
-                    Text("Recent Activity")
-                        .font(.subheadline)
-                        .foregroundColor(Color(UIColor.secondaryLabel))
-                }
-
-                // Stories skeleton
-                Section {
-                    ForEach(0..<2, id: \.self) { _ in
-                        HStack(spacing: 16) {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color(.tertiaryLabel).opacity(0.3))
-                                .frame(width: 48, height: 48)
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color(.tertiaryLabel).opacity(0.3))
-                                    .frame(width: 160, height: 16)
-
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color(.tertiaryLabel).opacity(0.3))
-                                    .frame(width: 100, height: 12)
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.vertical, 8)
-                    }
-                } header: {
-                    Text("Stories")
-                        .font(.subheadline)
-                        .foregroundColor(Color(UIColor.secondaryLabel))
                 }
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-        }
-    }
-}
 
-// MARK: - Create Story Modal
-
-struct CreateStoryModal: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var selectedPrompt: String?
-    @State private var customPrompt = ""
-    @State private var storyText = ""
-    @State private var isRecording = false
-    @State private var inputMethod: InputMethod = .text
-    @State private var showStoryView = false
-
-    enum InputMethod: String, CaseIterable {
-        case text = "Text"
-        case voice = "Voice"
-    }
-
-    // Sample prompts for story creation
-    let samplePrompts = [
-        "What's your earliest memory?",
-        "Tell me about a family tradition that matters to you.",
-        "What was the happiest day of your life?",
-        "What's a lesson you've learned that you want to pass on?",
-        "Describe your childhood home.",
-        "What's a story your parents or grandparents told you?",
-        "Tell me about a challenge you overcame.",
-        "What was life like when you were young?"
-    ]
-
-    var canProceed: Bool {
-        if selectedPrompt != nil {
-            return true
-        }
-        return !customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    var body: some View {
-        Group {
-            if showStoryView {
-                StoryCreationView(
-                    prompt: selectedPrompt ?? customPrompt,
-                    storyText: $storyText,
-                    isRecording: $isRecording,
-                    inputMethod: $inputMethod,
-                    onBack: {
-                        showStoryView = false
-                        selectedPrompt = nil
-                        customPrompt = ""
-                    },
-                    onSubmit: submitStory
-                )
-            } else {
-                PromptSelectionView(
-                    prompts: samplePrompts,
-                    selectedPrompt: $selectedPrompt,
-                    customPrompt: $customPrompt,
-                    onContinue: {
-                        showStoryView = true
-                    },
-                    canProceed: canProceed
-                )
-            }
-        }
-        .background(Color(uiColor: .systemBackground))
-    }
-
-    func submitStory() {
-        print("Creating story with prompt: \(selectedPrompt ?? customPrompt)")
-        print("Method: \(inputMethod.rawValue)")
-        print("Content: \(storyText)")
-        dismiss()
-    }
-
-    // MARK: - Prompt Selection View
-
-    struct PromptSelectionView: View {
-        let prompts: [String]
-        @Binding var selectedPrompt: String?
-        @Binding var customPrompt: String
-        let onContinue: () -> Void
-        let canProceed: Bool
-
-        var body: some View {
-            NavigationStack {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        // Header
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Create a Story")
-                                .font(.title)
-                                .fontWeight(.bold)
-                            Text("Choose a prompt or write your own to get started")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-
-                        // Prompts section
-                        Text("Choose a Prompt")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        VStack(spacing: 12) {
-                            ForEach(prompts, id: \.self) { prompt in
-                                PromptButton(
-                                    prompt: prompt,
-                                    isSelected: selectedPrompt == prompt,
-                                    onSelect: {
-                                        selectedPrompt = prompt
-                                        customPrompt = ""
-                                    }
-                                )
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        // Custom prompt section
-                        HStack {
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.3))
-                                .frame(height: 1)
-                            Text("or write your own")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.3))
-                                .frame(height: 1)
-                        }
-                        .padding(.horizontal)
-
-                        // Custom prompt input
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Your Prompt")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-
-                            TextEditor(text: $customPrompt)
-                                .frame(minHeight: 80)
-                                .padding(8)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color(.systemGray4), lineWidth: 1)
-                                )
-                                .onTapGesture {
-                                    selectedPrompt = nil
-                                }
-
-                            Text("Write your own story prompt")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.horizontal)
-
-                        Spacer(minLength: 100)
-                    }
-                }
-                .navigationTitle("New Story")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: onContinue) {
-                            Text("Continue")
-                                .fontWeight(.semibold)
-                        }
-                        .disabled(!canProceed)
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Prompt Button
-
-    struct PromptButton: View {
-        let prompt: String
-        let isSelected: Bool
-        let onSelect: () -> Void
-
-        var body: some View {
-            Button(action: onSelect) {
-                HStack(spacing: 12) {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.title2)
-                        .foregroundColor(isSelected ? .blue : .secondary)
-
-                    Text(prompt)
-                        .font(.body)
-                        .foregroundColor(.primary)
-                        .multilineTextAlignment(.leading)
-
-                    Spacer()
-                }
-                .padding()
-                .background(isSelected ? Color.blue.opacity(0.1) : Color(.systemGray6))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-                )
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    // MARK: - Story Creation View
-
-    struct StoryCreationView: View {
-        let prompt: String
-        @Binding var storyText: String
-        @Binding var isRecording: Bool
-        @Binding var inputMethod: InputMethod
-        let onBack: () -> Void
-        let onSubmit: () -> Void
-
-        var canSubmit: Bool {
-            switch inputMethod {
-            case .text:
-                return !storyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .voice:
-                return isRecording
-            }
-        }
-
-        var body: some View {
-            NavigationStack {
-                ScrollView {
+            // 3. Family Wisdom Quotes
+            VStack(alignment: .leading, spacing: 16) {
+                CozySectionHeader(icon: "quote.bubble.fill", title: "Family Wisdom")
+                
+                CozyCard {
                     VStack(alignment: .leading, spacing: 20) {
-                        // Prompt context
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Your Prompt")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.secondary)
-                                .textCase(.uppercase)
-
-                            Text(prompt)
-                                .font(.title3)
-                                .fontWeight(.medium)
-                        }
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-
+                        QuoteItem(
+                            text: "Family is not an important thing, it's everything.",
+                            author: "Grandma Rose",
+                            role: "Elder",
+                            roleColor: .storytellerElder
+                        )
+                        
                         Divider()
-                            .padding(.horizontal)
-
-                        // Input method picker
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("How would you like to tell your story?")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-
-                            Picker("Input Method", selection: $inputMethod) {
-                                ForEach(InputMethod.allCases, id: \.self) { method in
-                                    Text(method.rawValue).tag(method)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        .padding(.horizontal)
-
-                        // Input area based on method
-                        Group {
-                            if inputMethod == .text {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Your Story")
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-
-                                    TextEditor(text: $storyText)
-                                        .frame(minHeight: 200)
-                                        .padding(12)
-                                        .background(Color(.systemGray6))
-                                        .cornerRadius(12)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color(.systemGray4), lineWidth: 1)
-                                        )
-
-                                    HStack {
-                                        Spacer()
-                                        Text("\(storyText.count) characters")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            } else {
-                                VStack(spacing: 20) {
-                                    Image(systemName: isRecording ? "waveform" : "mic.fill")
-                                        .font(.system(size: 64))
-                                        .foregroundColor(isRecording ? .red : .blue)
-                                        .symbolEffect(.pulse, isActive: isRecording)
-
-                                    Text(isRecording ? "Recording your story..." : "Tap to record")
-                                        .font(.headline)
-
-                                    Text("Tell your story naturally")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-
-                                    Button(action: {
-                                        isRecording.toggle()
-                                    }) {
-                                        Text(isRecording ? "Stop Recording" : "Start Recording")
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.white)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 16)
-                                            .background(isRecording ? Color.red : Color.blue)
-                                            .cornerRadius(12)
-                                    }
-                                    .disabled(false)
-                                }
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        Spacer(minLength: 100)
+                        
+                        QuoteItem(
+                            text: "The secret to a happy life is finding joy in small moments.",
+                            author: "Dad",
+                            role: "Parent",
+                            roleColor: .storytellerParent
+                        )
                     }
+                    .padding(24)
+                    
+                    Divider()
+                    
+                    ViewAllButton(title: "View All Quotes", action: {})
                 }
-                .navigationTitle("Tell Your Story")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button(action: onBack) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                Text("Back")
-                            }
+            }
+
+            // 4. Family Polls
+            VStack(alignment: .leading, spacing: 16) {
+                CozySectionHeader(icon: "chart.bar.fill", title: "Active Family Polls")
+                
+                CozyCard {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Label("Tradition", systemImage: "star.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.storytellerParent)
+                            Spacer()
+                            Text("25 votes")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Text("What's your favorite family holiday tradition?")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(theme.textColor)
+                        
+                        // Simple Progress bar representation
+                        VStack(spacing: 8) {
+                            PollBar(label: "Christmas Dinner", percentage: 0.6, color: .storytellerParent)
+                            PollBar(label: "Summer BBQ", percentage: 0.3, color: .storytellerElder)
+                            PollBar(label: "Game Night", percentage: 0.1, color: .storytellerTeen)
                         }
                     }
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: onSubmit) {
-                            Text("Save Story")
-                                .fontWeight(.semibold)
-                        }
-                        .disabled(!canSubmit)
-                    }
+                    .padding(24)
+                    
+                    Divider()
+                    
+                    ViewAllButton(title: "Join the Conversation", action: {})
                 }
             }
         }
     }
 }
 
-// MARK: - Story Bubble Card
+// MARK: - Dashboard Components
 
-struct StoryBubbleCard: View {
-    let story: Story
-    let isSelected: Bool
-    let textColor: Color
-    let accentColor: Color
-
+struct EvolvingStoryCard: View {
+    let story: EvolvingStory
+    @Environment(\.theme) var theme
+    
     var body: some View {
-        VStack(spacing: 8) {
-            // Bubble indicator
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Circle()
+                    .fill(story.color.opacity(0.2))
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(story.color)
+                    )
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(story.storyteller)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(theme.secondaryTextColor)
+                    Text(story.timeAgo)
+                        .font(.system(size: 10))
+                        .foregroundColor(theme.secondaryTextColor.opacity(0.6))
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "waveform")
+                    Text("\(story.contributionCount)")
+                }
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(story.color)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(story.color.opacity(0.1))
+                .clipShape(Capsule())
+            }
+            
+            Text(story.title)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(theme.textColor)
+                .lineLimit(2)
+            
+            Text(story.previewText)
+                .font(.system(size: 14))
+                .foregroundColor(theme.secondaryTextColor)
+                .lineLimit(3)
+            
+            Spacer(minLength: 0)
+            
+            HStack {
+                Text("Contribute")
+                    .font(.system(size: 13, weight: .bold))
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .foregroundColor(theme.accentColor)
+        }
+        .padding(20)
+        .frame(width: 260, height: 200)
+        .background(theme.cardBackgroundColor)
+        .cornerRadius(24)
+        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+    }
+}
+
+struct ContributionRow: View {
+    let contribution: Contribution
+    @Environment(\.theme) var theme
+    
+    var body: some View {
+        HStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(isSelected ? accentColor : Color.clear)
-                    .frame(width: 12, height: 12)
-                    .overlay(
-                        Circle()
-                            .stroke(isSelected ? accentColor : Color.gray.opacity(0.3), lineWidth: 2)
-                            .frame(width: 16, height: 16)
-                    )
-                    .offset(y: -30)
+                    .fill(theme.accentColor.opacity(0.1))
+                    .frame(width: 48, height: 48)
+                
+                Image(systemName: contribution.role == .dark ? "person.fill" : "person.2.fill")
+                    .foregroundColor(theme.accentColor)
             }
-
-            // Story card
-            VStack(alignment: .leading, spacing: 6) {
-                Text(story.title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(textColor)
-                    .lineLimit(2)
-
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(contribution.storyteller)
+                        .font(.system(size: 16, weight: .bold))
+                    Text("contributed to")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                
+                Text(contribution.storyTitle)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.accentColor)
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(contribution.timeAgo)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                
                 HStack(spacing: 4) {
-                    Text(story.storyteller)
-                        .font(.caption2)
-                        .foregroundColor(textColor.opacity(0.7))
+                    Image(systemName: "mic.fill")
+                    Text(contribution.formattedDuration)
+                }
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(theme.secondaryTextColor)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+    }
+}
+
+struct PollBar: View {
+    let label: String
+    let percentage: Double
+    let color: Color
+    @Environment(\.theme) var theme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textColor)
+                Spacer()
+                Text("\(Int(percentage * 100))%")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(theme.secondaryTextColor)
+            }
+            
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(theme.backgroundColor)
+                        .frame(height: 8)
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color)
+                        .frame(width: geo.size.width * CGFloat(percentage), height: 8)
                 }
             }
-            .padding(12)
-            .frame(width: 140)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white.opacity(isSelected ? 0.2 : 0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? accentColor : Color.clear, lineWidth: 2)
-                    )
-            )
+            .frame(height: 8)
         }
-        .animation(.spring(response: 0.3), value: isSelected)
+    }
+}
+
+struct QuoteItem: View {
+    let text: String
+    let author: String
+    let role: String
+    let roleColor: Color
+    @Environment(\.theme) var theme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("\"\(text)\"")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundColor(theme.textColor)
+                .fixedSize(horizontal: false, vertical: true)
+            
+            HStack {
+                Text("— \(author)")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                
+                RoleBadge(text: role, color: roleColor)
+            }
+        }
+    }
+}
+
+// MARK: - Skeleton
+
+struct DashboardSkeletonView: View {
+    @Environment(\.theme) var theme
+
+    var body: some View {
+        VStack(spacing: 32) {
+            ForEach(0..<3) { _ in
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Circle()
+                            .fill(Color.gray.opacity(0.1))
+                            .frame(width: 24, height: 24)
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.1))
+                            .frame(width: 150, height: 20)
+                            .cornerRadius(4)
+                    }
+                    .padding(.horizontal, theme.screenPadding)
+                    
+                    Rectangle()
+                        .fill(theme.role == .light ? Color.white : theme.cardBackgroundColor)
+                        .frame(height: 200)
+                        .cornerRadius(24)
+                        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+                        .padding(.horizontal, 16)
+                        .overlay(
+                            VStack(alignment: .leading, spacing: 12) {
+                                Rectangle().fill(Color.gray.opacity(0.05)).frame(height: 20).cornerRadius(4)
+                                Rectangle().fill(Color.gray.opacity(0.05)).frame(height: 20).cornerRadius(4)
+                                Rectangle().fill(Color.gray.opacity(0.05)).frame(width: 200, height: 20).cornerRadius(4)
+                            }
+                            .padding(24)
+                        )
+                }
+            }
+        }
     }
 }
 
@@ -1218,12 +788,12 @@ struct HubView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             HubView()
-                .preferredColorScheme(.light)
-                .previewDisplayName("Light Theme")
+                .environment(\.theme, ThemeFactory.theme(for: .dark))
+                .previewDisplayName("Teen (Dark)")
 
             HubView()
-                .preferredColorScheme(.dark)
-                .previewDisplayName("Dark Theme")
+                .environment(\.theme, ThemeFactory.theme(for: .light))
+                .previewDisplayName("Parent (Light)")
         }
     }
 }

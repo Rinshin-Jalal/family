@@ -456,30 +456,6 @@ final class APIService {
         }
     }
     
-    // MARK: - AI Wisdom Summary API
-    
-    /// Get wisdom summary for a question across family stories
-    func getWisdomSummary(question: String, storyIds: [UUID]? = nil, maxStories: Int = 10) async throws -> WisdomSummaryResponse {
-        let body = WisdomSummaryRequest(
-            question: question,
-            storyIds: storyIds?.map { $0.uuidString },
-            maxStories: maxStories
-        )
-        var request = await createRequest(endpoint: "/api/wisdom/summary", method: "POST")
-        request.httpBody = try JSONEncoder().encode(body)
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(WisdomSummaryResponse.self, from: data)
-    }
-    
-    /// Get follow-up wisdom insights
-    func getWisdomFollowUp(summaryId: UUID, followUpQuestion: String) async throws -> WisdomSummaryResponse {
-        let body = FollowUpRequest(summary_id: summaryId.uuidString, question: followUpQuestion)
-        var request = await createRequest(endpoint: "/api/wisdom/summary/follow-up", method: "POST")
-        request.httpBody = try JSONEncoder().encode(body)
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(WisdomSummaryResponse.self, from: data)
-    }
-    
     // MARK: - Trivia Game API
     
     /// Get trivia questions for a category

@@ -293,7 +293,7 @@ struct ThreadNodeView: View {
                 }
 
                 // Response content
-                ResponseCard(
+                ThreadedResponseCard(
                     response: node.response,
                     isThreaded: effectiveDepth > 0,
                     isDeepReply: isDeepReply,
@@ -321,9 +321,9 @@ struct ThreadNodeView: View {
     }
 }
 
-// MARK: - Response Card
+// MARK: - Threaded Response Card
 
-struct ResponseCard: View {
+struct ThreadedResponseCard: View {
     @Environment(\.theme) var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

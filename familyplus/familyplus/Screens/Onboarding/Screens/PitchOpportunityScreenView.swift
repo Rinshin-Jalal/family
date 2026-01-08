@@ -24,7 +24,7 @@ struct PitchOpportunityScreenView: View {
                         .trim(from: 0, to: clockProgress)
                         .stroke(
                             LinearGradient(
-                                colors: [Color.storytellerOrange, Color.alertRed],
+                                colors: [Color.storytellerElder, Color.alertRed],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -36,7 +36,7 @@ struct PitchOpportunityScreenView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "hourglass")
                             .font(.system(size: 40))
-                            .foregroundColor(.storytellerOrange)
+                            .foregroundColor(.storytellerElder)
                             .scaleEffect(pulseScale)
                         
                         Text("Limited Time")
@@ -76,7 +76,7 @@ struct PitchOpportunityScreenView: View {
                         icon: "person.2.fill",
                         title: "Average age of grandparents",
                         value: "72 years",
-                        color: .storytellerOrange
+                        color: .storytellerElder
                     )
                     
                     OpportunityCard(

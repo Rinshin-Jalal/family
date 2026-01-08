@@ -8,10 +8,10 @@ struct PitchHowItWorksCollectionScreenView: View {
     @State private var selectedMethod: Int? = nil
     
     private let methods: [(icon: String, title: String, description: String, color: Color)] = [
-        ("mic.fill", "Voice", "Record conversations naturally", Color.storytellerOrange),
-        ("text.quote", "Written", "Type or dictate stories", Color.storytellerBlue),
-        ("photo.fill", "Photos", "Add context to memories", Color.storytellerPurple),
-        ("phone.fill", "Phone AI", "Auto-interviews elders", Color.storytellerGreen)
+        ("mic.fill", "Voice", "Record conversations naturally", Color.storytellerElder),
+        ("text.quote", "Written", "Type or dictate stories", Color.storytellerParent),
+        ("photo.fill", "Photos", "Add context to memories", Color.storytellerTeen),
+        ("phone.fill", "Phone AI", "Auto-interviews elders", Color.storytellerChild)
     ]
     
     var body: some View {

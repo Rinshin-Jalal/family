@@ -2,56 +2,109 @@
 //  Color+Extensions.swift
 //  StoryRide
 //
-//  Design system color tokens
+//  Design system color tokens - Owl Library Aesthetic
 //
 
 import SwiftUI
 
 extension Color {
-    // MARK: - Base Colors
+    // MARK: - Base Colors (Warm Neutrals from Owl Feathers)
 
-    /// dark Background (#000000)
-    static let inkBlack = Color(hex: "000000")
+    /// Dark mode background - Rich espresso (#1A1210)
+    static let espressoDark = Color(hex: "1A1210")
 
-    /// light/Child Background (#FFFFFF)
-    static let paperWhite = Color(hex: "FFFFFF")
+    /// Dark mode cards/surfaces - Warm cocoa (#3D2B2B)
+    static let cocoaBrown = Color(hex: "3D2B2B")
 
-    /// Elder Background (#FFF9C4) - High contrast warm tone
-    static let warmYellow = Color(hex: "FFF9C4")
+    /// Mid-tone accent - Owl body tan (#C4A574)
+    static let warmTan = Color(hex: "C4A574")
 
-    /// Cards/Modals Light Mode (#F2F2F7)
-    static let surfaceGrey = Color(hex: "F2F2F7")
+    /// Light mode cards/surfaces - Soft parchment (#F5E6D3)
+    static let softParchment = Color(hex: "F5E6D3")
 
-    /// Cards/Modals Dark Mode (#1C1C1E)
-    static let darkGrey = Color(hex: "1C1C1E")
+    /// Light mode background - Warm ivory cream (#FFF8F0)
+    static let ivoryCream = Color(hex: "FFF8F0")
 
-    // MARK: - Accent Colors (Brand Identity)
+    // MARK: - Legacy Aliases (for backward compatibility)
 
-    /// Primary Buttons, Links, Active States (#5856D6)
-    static let brandIndigo = Color(hex: "5856D6")
+    /// @deprecated Use espressoDark instead
+    static let inkBlack = espressoDark
 
-    /// Secondary backgrounds, tags (#E5E1FA)
-    static let softIndigo = Color(hex: "E5E1FA")
+    /// @deprecated Use ivoryCream instead
+    static let paperWhite = ivoryCream
 
-    /// Stop recording, Delete, Errors (#FF3B30)
-    static let alertRed = Color(hex: "FF3B30")
+    /// @deprecated Use softParchment instead
+    static let surfaceGrey = softParchment
 
-    /// Child mode accent (#FF9500)
-    static let playfulOrange = Color(hex: "FF9500")
+    /// @deprecated Use cocoaBrown instead
+    static let darkGrey = cocoaBrown
 
-    // MARK: - Storyteller Colors (Timeline)
+    /// @deprecated Use ivoryCream instead
+    static let warmYellow = ivoryCream
 
-    /// Grandma/Elder segment color
-    static let storytellerOrange = Color(hex: "FF9500")
+    // MARK: - Scarf Accents (Brand Identity)
 
-    /// Dad/light segment color
-    static let storytellerBlue = Color(hex: "007AFF")
+    /// Primary accent - Deep burgundy red from scarf (#8B2942)
+    static let burgundyRed = Color(hex: "8B2942")
 
-    /// dark segment color
-    static let storytellerPurple = Color(hex: "AF52DE")
+    /// Secondary accent - Forest green from scarf (#3D6B4F)
+    static let forestGreen = Color(hex: "3D6B4F")
 
-    /// Child segment color
-    static let storytellerGreen = Color(hex: "34C759")
+    /// Highlight/CTA - Golden amber from owl's eyes (#D4A84A)
+    static let owlGold = Color(hex: "D4A84A")
+
+    /// Soft accent background - Light burgundy tint (#F5E1E6)
+    static let softBurgundy = Color(hex: "F5E1E6")
+
+    /// Soft accent background - Light green tint (#E1F0E6)
+    static let softGreen = Color(hex: "E1F0E6")
+
+    /// Soft accent background - Light gold tint (#FFF5E1)
+    static let softGold = Color(hex: "FFF5E1")
+
+    // MARK: - Legacy Accent Aliases
+
+    /// @deprecated Use burgundyRed instead
+    static let brandIndigo = burgundyRed
+
+    /// @deprecated Use softBurgundy instead
+    static let softIndigo = softBurgundy
+
+    /// @deprecated Use owlGold instead
+    static let playfulOrange = owlGold
+
+    // MARK: - Alert Colors
+
+    /// Stop recording, Delete, Errors - Warm red (#C42B2B)
+    static let alertRed = Color(hex: "C42B2B")
+
+    // MARK: - Storyteller Colors (Timeline Segments)
+
+    /// Elder segment - Wise gold (#D4A84A)
+    static let storytellerElder = Color(hex: "D4A84A")
+
+    /// Parent segment - Grounded green (#3D6B4F)
+    static let storytellerParent = Color(hex: "3D6B4F")
+
+    /// Teen segment - Bold burgundy (#8B2942)
+    static let storytellerTeen = Color(hex: "8B2942")
+
+    /// Child segment - Playful amber (#C4946A)
+    static let storytellerChild = Color(hex: "C4946A")
+
+    // MARK: - Legacy Storyteller Aliases
+
+    /// @deprecated Use storytellerElder instead
+    static let storytellerOrange = storytellerElder
+
+    /// @deprecated Use storytellerParent instead
+    static let storytellerBlue = storytellerParent
+
+    /// @deprecated Use storytellerTeen instead
+    static let storytellerPurple = storytellerTeen
+
+    /// @deprecated Use storytellerChild instead
+    static let storytellerGreen = storytellerChild
 
     // MARK: - Hex Initializer
 
