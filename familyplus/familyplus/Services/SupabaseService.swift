@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Supabase
 
 // MARK: - Supabase Service (Auth Only)
 
@@ -15,32 +16,92 @@ import Foundation
 /// This ensures proper API boundaries, RLS enforcement, and schema encapsulation.
 final class SupabaseService {
     static let shared = SupabaseService()
-    
-    // Placeholder values - replace with environment-specific credentials
-    private let supabaseURL = "https://your-project.supabase.co"
-    private let anonKey = "your-anon-key"
-    
-    private init() {}
-    
+
+    /// Supabase client instance
+    let client: SupabaseClient
+
+    private init() {
+        #if DEBUG
+        // Local Supabase for development
+        let url = URL(string: "http://127.0.0.1:54321")!
+        let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+        #else
+        // Production Supabase - REPLACE with real credentials
+        let url = URL(string: "https://your-project.supabase.co")!
+        let anonKey = "your-anon-key"
+        #endif
+
+        self.client = SupabaseClient(
+            supabaseURL: url,
+            supabaseKey: anonKey
+        )
+    }
+
     // MARK: - Authentication
-    
+
     /// Get current user session
-    func getCurrentSession() async throws -> Session? {
-        return nil
+    func getCurrentSession() async throws -> AuthSession? {
+        return try await client.auth.session
     }
-    
+
     /// Sign in with Apple OAuth
-    func signInWithApple(idToken: String, nonce: String) async throws -> Session {
-        throw SupabaseServiceError.notConfigured
+    func signInWithApple(idToken: String, nonce: String) async throws -> AuthSession {
+        let session = try await client.auth.signInWithIdToken(
+            credentials: .init(
+                provider: .apple,
+                idToken: idToken,
+                nonce: nonce
+            )
+        )
+
+        // Store user ID for backend API requests
+        UserDefaults.standard.set(session.user.id.uuidString, forKey: "auth_user_id")
+
+        return session
     }
-    
+
+    /// Sign up with email and password (for testing)
+    func signUp(email: String, password: String) async throws -> AuthSession {
+        let response = try await client.auth.signUp(email: email, password: password)
+
+        guard let session = response.session else {
+            throw SupabaseServiceError.signUpFailed
+        }
+
+        // Store user ID for backend API requests
+        UserDefaults.standard.set(session.user.id.uuidString, forKey: "auth_user_id")
+
+        return session
+    }
+
+    /// Sign in with email and password (for testing)
+    func signIn(email: String, password: String) async throws -> AuthSession {
+        let session = try await client.auth.signIn(email: email, password: password)
+
+        // Store user ID for backend API requests
+        UserDefaults.standard.set(session.user.id.uuidString, forKey: "auth_user_id")
+
+        return session
+    }
+
     /// Sign out current user
-    func signOut() async throws {}
-    
-    /// Get current user ID from stored token
+    func signOut() async throws {
+        try await client.auth.signOut()
+        UserDefaults.standard.removeObject(forKey: "auth_user_id")
+        UserDefaults.standard.removeObject(forKey: "auth_token")
+    }
+
+    /// Get current user ID from session
     func getCurrentUserId() async throws -> String? {
-        // Read from UserDefaults directly to avoid circular dependency
-        return UserDefaults.standard.string(forKey: "auth_token")
+        if let session = try await getCurrentSession() {
+            return session.user.id.uuidString
+        }
+        return UserDefaults.standard.string(forKey: "auth_user_id")
+    }
+
+    /// Get access token for API requests
+    func getAccessToken() async throws -> String? {
+        return try await getCurrentSession()?.accessToken
     }
 }
 
@@ -50,7 +111,8 @@ enum SupabaseServiceError: LocalizedError {
     case notConfigured
     case sdkNotInstalled
     case storageNotSupported
-    
+    case signUpFailed
+
     var errorDescription: String? {
         switch self {
         case .notConfigured:
@@ -59,19 +121,12 @@ enum SupabaseServiceError: LocalizedError {
             return "Supabase SDK not installed - use APIService for all data operations"
         case .storageNotSupported:
             return "Direct storage access not supported - audio files must use backend API (R2)"
+        case .signUpFailed:
+            return "Sign up failed - no session returned"
         }
     }
 }
 
-// MARK: - Session Model
+// MARK: - Type Aliases for Compatibility
 
-struct Session {
-    let accessToken: String
-    let refreshToken: String?
-    let user: User
-    
-    struct User {
-        let id: UUID
-        let email: String?
-    }
-}
+typealias AuthSession = Supabase.Session

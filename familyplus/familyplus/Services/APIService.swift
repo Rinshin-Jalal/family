@@ -81,7 +81,14 @@ final class APIService {
         var request = await createRequest(endpoint: "/api/stories", method: "POST")
         request.httpBody = try JSONEncoder().encode(body)
         let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(StoryData.self, from: data)
+        let result = try JSONDecoder().decode(StoryData.self, from: data)
+
+        // Track value analytics: story captured via prompt/type method
+        Task { @MainActor in
+            ValueAnalyticsService.shared.trackStoryCapture(method: .type)
+        }
+
+        return result
     }
     
     // MARK: - Family API
@@ -129,7 +136,14 @@ final class APIService {
         var request = await createRequest(endpoint: "/api/stories/\(id.uuidString)/complete", method: "PATCH")
         request.httpBody = try JSONEncoder().encode(body)
         let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(StoryData.self, from: data)
+        let result = try JSONDecoder().decode(StoryData.self, from: data)
+
+        // Track value analytics: story completed
+        Task { @MainActor in
+            ValueAnalyticsService.shared.trackStoryComplete(storyId: id.uuidString, panelCount: voiceCount)
+        }
+
+        return result
     }
 
     /// Generate AI cover image for a story
@@ -162,22 +176,22 @@ final class APIService {
     /// Upload audio response
     func uploadResponse(promptId: UUID, storyId: UUID?, audioData: Data, filename: String, source: String) async throws -> ResponseData {
         let boundary = UUID().uuidString
-        
+
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        
+
         // Add audio file
         body.append("Content-Disposition: form-data; name=\"audio\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: audio/mpeg\r\n\r\n".data(using: .utf8)!)
         body.append(audioData)
         body.append("\r\n".data(using: .utf8)!)
-        
+
         // Add prompt_id
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"prompt_id\"\r\n\r\n".data(using: .utf8)!)
         body.append(promptId.uuidString.data(using: .utf8)!)
         body.append("\r\n".data(using: .utf8)!)
-        
+
         // Add story_id (optional)
         if let storyId = storyId {
             body.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -185,21 +199,28 @@ final class APIService {
             body.append(storyId.uuidString.data(using: .utf8)!)
             body.append("\r\n".data(using: .utf8)!)
         }
-        
+
         // Add source
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"source\"\r\n\r\n".data(using: .utf8)!)
         body.append(source.data(using: .utf8)!)
         body.append("\r\n".data(using: .utf8)!)
-        
+
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        
+
         var request = await createRequest(endpoint: "/api/responses", method: "POST")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
-        
+
         let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(ResponseData.self, from: data)
+        let result = try JSONDecoder().decode(ResponseData.self, from: data)
+
+        // Track value analytics: audio captured via record method
+        Task { @MainActor in
+            ValueAnalyticsService.shared.trackStoryCapture(method: .record)
+        }
+
+        return result
     }
     
     /// Trigger transcription
@@ -314,6 +335,12 @@ final class APIService {
     func exportUserData() async throws -> Data {
         let request = await createRequest(endpoint: "/api/settings/export", method: "POST")
         let (data, _) = try await session.data(for: request)
+
+        // Track value analytics: data export completed
+        Task { @MainActor in
+            ValueAnalyticsService.shared.trackStoryExport(format: "json", storyId: "all")
+        }
+
         return data
     }
     
@@ -342,7 +369,14 @@ final class APIService {
         let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
         let request = await createRequest(endpoint: "/api/wisdom/search?q=\(encodedQuery)&limit=\(limit)")
         let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(WisdomSearchResponse.self, from: data)
+        let result = try JSONDecoder().decode(WisdomSearchResponse.self, from: data)
+
+        // Track value analytics: search performed
+        Task { @MainActor in
+            ValueAnalyticsService.shared.trackSearch(query: query, resultsCount: result.stories.count)
+        }
+
+        return result
     }
     
     /// Request a story from family members

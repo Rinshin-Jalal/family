@@ -26,7 +26,7 @@ CREATE POLICY "Family members can manage timeline" ON story_timeline
         auth.uid() IN (
             SELECT auth_user_id FROM profiles WHERE family_id IN (
                 SELECT family_id FROM stories WHERE id = story_id
-            ) AND role IN ('organizer', 'parent')
+            ) AND role IN ('organizer', 'elder')
         )
     );
 
@@ -65,7 +65,7 @@ SELECT
     ) as stories
 FROM story_timeline st
 INNER JOIN stories s ON st.story_id = s.id
-WHERE s.is_public IS TRUE OR s.family_id IN (
+WHERE s.family_id IN (
     SELECT family_id FROM profiles WHERE auth_user_id = auth.uid()
 )
 GROUP BY st.year, st.era_label, st.era_color

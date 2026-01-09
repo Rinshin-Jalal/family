@@ -8,6 +8,7 @@
 
 import SwiftUI
 import Combine
+import Auth
 
 // MARK: - Simple Onboarding Steps
 
@@ -95,6 +96,8 @@ final class SimpleOnboardingCoordinator: ObservableObject {
     @Published var currentStep: SimpleOnboardingStep = .welcome
     @Published var onboardingState = SimpleOnboardingState()
     @Published var isLoading: Bool = false
+    @Published var errorMessage: String = ""
+    @Published var showError: Bool = false
 
     // MARK: - Navigation
 
@@ -111,11 +114,15 @@ final class SimpleOnboardingCoordinator: ObservableObject {
     }
 
     func completeOnboarding() {
-        // Create account in background with selected preferences
-        Task {
+        // Create account and WAIT for it before marking complete
+        Task { @MainActor in
             await createAccountInBackground()
+
+            // Only mark completed if auth succeeded (no error)
+            if !showError && AuthService.shared.isAuthenticated {
+                onboardingState.isCompleted = true
+            }
         }
-        onboardingState.isCompleted = true
     }
 
     // MARK: - Selection Actions
@@ -139,22 +146,51 @@ final class SimpleOnboardingCoordinator: ObservableObject {
     // MARK: - Background Account Creation
 
     func createAccountInBackground() async {
-        // TODO: Create Supabase account with:
-        // - preserveTypes preference
-        // - captureTarget preference
-        // - Auto-generated family name if needed
-        // - No invite code required
-
         isLoading = true
         defer { isLoading = false }
 
-        // Simulate API call
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        do {
+            // 1. Generate anonymous credentials for frictionless signup
+            let uuid = UUID().uuidString.prefix(8)
+            let email = "anon-\(uuid)@familyplus.local"
+            let password = UUID().uuidString
 
-        // Account created successfully
-        print("✅ Account created in background")
-        print("   Preserve types: \(onboardingState.preserveTypes)")
-        print("   Target: \(onboardingState.captureTarget)")
+            // 2. Create Supabase account
+            let session = try await SupabaseService.shared.signUp(
+                email: String(email),
+                password: password
+            )
+
+            // 3. Store auth token in AuthService
+            AuthService.shared.setToken(session.accessToken)
+
+            // 4. Create family with default name
+            let familyName = onboardingState.userName.isEmpty
+                ? "My Family"
+                : "\(onboardingState.userName)'s Family"
+            let _ = try await APIService.shared.createFamily(name: familyName)
+
+            // 5. Save onboarding preferences locally
+            savePreferencesLocally()
+
+            print("✅ Account created successfully")
+            print("   User ID: \(session.user.id)")
+            print("   Email: \(email)")
+            print("   Preserve types: \(onboardingState.preserveTypes)")
+            print("   Target: \(onboardingState.captureTarget)")
+
+        } catch {
+            print("❌ Account creation failed: \(error)")
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    private func savePreferencesLocally() {
+        // Store preferences in UserDefaults for later sync
+        let preserveTypes = onboardingState.preserveTypes.map { $0.rawValue }
+        UserDefaults.standard.set(preserveTypes, forKey: "onboarding_preserve_types")
+        UserDefaults.standard.set(onboardingState.captureTarget.rawValue, forKey: "onboarding_capture_target")
     }
 
     // MARK: - Progress

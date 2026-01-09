@@ -287,9 +287,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9AKL4J8794;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Famly needs microphone access to record your family stories";
+				INFOPLIST_KEY_NSCameraUsageDescription = "StoryLane needs camera access to capture photos for your stories";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "StoryLane needs microphone access to record your family stories";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "StoryLane needs access to your photo library to add photos to stories";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -319,9 +322,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9AKL4J8794;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Famly needs microphone access to record your family stories";
+				INFOPLIST_KEY_NSCameraUsageDescription = "StoryLane needs camera access to capture photos for your stories";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "StoryLane needs microphone access to record your family stories";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "StoryLane needs access to your photo library to add photos to stories";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

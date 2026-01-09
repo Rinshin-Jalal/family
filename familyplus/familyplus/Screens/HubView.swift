@@ -466,17 +466,21 @@ struct DashboardView: View {
     let data: ArchivistData
     @Environment(\.theme) var theme
     var onCaptureAction: () -> Void = {}
+    @State private var selectedStory: EvolvingStory?
 
     var body: some View {
         VStack(spacing: 32) {
             // 1. Evolving Stories (The "Value")
             VStack(alignment: .leading, spacing: 16) {
                 CozySectionHeader(icon: "sparkles", title: "Stories in Progress")
-                
+
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
                         ForEach(data.evolvingStories) { story in
                             EvolvingStoryCard(story: story)
+                                .onTapGesture {
+                                    selectedStory = story
+                                }
                         }
                     }
                     .padding(.horizontal, theme.screenPadding)
@@ -486,13 +490,18 @@ struct DashboardView: View {
             // 2. Recent Contributions
             VStack(alignment: .leading, spacing: 16) {
                 CozySectionHeader(icon: "clock.fill", title: "Family Activity")
-                
+
                 CozyCard {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(data.recentContributions.indices, id: \.self) { index in
                             let contribution = data.recentContributions[index]
-                            ContributionRow(contribution: contribution)
-                            
+                            ContributionRow(contribution: contribution) {
+                                // Find matching story by ID or title
+                                if let matchingStory = data.evolvingStories.first(where: { $0.id == contribution.id }) {
+                                    selectedStory = matchingStory
+                                }
+                            }
+
                             if index < data.recentContributions.count - 1 {
                                 Divider().padding(.leading, 64)
                             }
@@ -527,8 +536,11 @@ struct DashboardView: View {
                     .padding(24)
                     
                     Divider()
-                    
-                    ViewAllButton(title: "View All Quotes", action: {})
+
+                    ViewAllButton(title: "View All Quotes", action: {
+                        // Placeholder: Navigate to quotes view
+                        print("Navigate to all quotes")
+                    })
                 }
             }
 
@@ -574,6 +586,15 @@ struct DashboardView: View {
                     ViewAllButton(title: "Share Your Perspective", action: {})
                 }
             }
+        }
+        .sheet(item: $selectedStory) { story in
+            StoryDetailView(story: Story(
+                title: story.title,
+                storyteller: story.storyteller,
+                imageURL: nil,
+                voiceCount: story.contributionCount,
+                timestamp: story.lastActivity
+            ))
         }
     }
 }
@@ -649,19 +670,20 @@ struct EvolvingStoryCard: View {
 
 struct ContributionRow: View {
     let contribution: Contribution
+    let onTap: () -> Void
     @Environment(\.theme) var theme
-    
+
     var body: some View {
         HStack(spacing: 16) {
             ZStack {
                 Circle()
                     .fill(theme.accentColor.opacity(0.1))
                     .frame(width: 48, height: 48)
-                
+
                 Image(systemName: contribution.role == .dark ? "person.fill" : "person.2.fill")
                     .foregroundColor(theme.accentColor)
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(contribution.storyteller)
@@ -670,19 +692,19 @@ struct ContributionRow: View {
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
-                
+
                 Text(contribution.storyTitle)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.accentColor)
             }
-            
+
             Spacer()
-            
+
             VStack(alignment: .trailing, spacing: 4) {
                 Text(contribution.timeAgo)
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
-                
+
                 HStack(spacing: 4) {
                     Image(systemName: "mic.fill")
                     Text(contribution.formattedDuration)
@@ -693,6 +715,10 @@ struct ContributionRow: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
+        }
     }
 }
 

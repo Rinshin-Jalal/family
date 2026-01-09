@@ -282,7 +282,7 @@ SELECT
     sl.is_active,
     NOT (sl.expires_at IS NULL OR sl.expires_at > NOW()) as is_expired,
     CASE
-        WHEN sl.expires_at IS NULL THEN 'never'
+        WHEN sl.expires_at IS NULL THEN NULL
         ELSE extract(epoch FROM (sl.expires_at - NOW()))::int
     END as expires_in_seconds
 FROM share_links sl

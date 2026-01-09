@@ -420,6 +420,13 @@ struct ExportOptionsModal: View {
                     isExporting = false
                     exportComplete = true
                     downloadUrl = "https://storage.example.com/exports/\(storyId).\(selectedFormat)"
+
+                    // Track value analytics: export completed
+                    let exportFormat = selectedFormat == .pdf ? "pdf" :
+                                      selectedFormat == .audio ? "mp3" :
+                                      selectedFormat == .video ? "mp4" :
+                                      selectedFormat == .json ? "json" : "epub"
+                    ValueAnalyticsService.shared.trackStoryExport(format: exportFormat, storyId: storyId)
                 }
             } catch {
                 await MainActor.run {

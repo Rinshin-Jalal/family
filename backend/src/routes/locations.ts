@@ -1,6 +1,5 @@
 import { Hono } from 'hono'
-import { getSupabase } from '../utils/supabase'
-import { errorResponse, successResponse } from '../utils/errors'
+import { getSupabaseFromContext } from '../utils/supabase'
 
 type Bindings = {
   SUPABASE_URL: string
@@ -10,12 +9,12 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>()
 
 // GET /locations - Get all location tags for user's family
-app.get('/', async (c) => {
-  const supabase = getSupabase(c)
+app.get('/api/locations', async (c) => {
+  const supabase = getSupabaseFromContext(c)
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return c.json(errorResponse('Unauthorized'), 401)
+    return c.json({ error: 'Unauthorized' }, 401)
   }
 
   // Get user's family_id
@@ -26,7 +25,7 @@ app.get('/', async (c) => {
     .single()
 
   if (profileError || !profile) {
-    return c.json(errorResponse('Profile not found'), 404)
+    return c.json({ error: 'Profile not found' }, 404)
   }
 
   // Get stories with location tags
@@ -48,20 +47,20 @@ app.get('/', async (c) => {
     ))
 
   if (error) {
-    return c.json(errorResponse(error.message), 500)
+    return c.json({ error: error.message }, 500)
   }
 
-  return c.json(successResponse(locations))
+  return c.json(locations)
 })
 
-// GET /locations/:storyId - Get location tags for a specific story
-app.get('/:storyId', async (c) => {
-  const supabase = getSupabase(c)
+// GET /api/locations/:storyId - Get location tags for a specific story
+app.get('/api/locations/:storyId', async (c) => {
+  const supabase = getSupabaseFromContext(c)
   const storyId = c.req.param('storyId')
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return c.json(errorResponse('Unauthorized'), 401)
+    return c.json({ error: 'Unauthorized' }, 401)
   }
 
   const { data: locations, error } = await supabase
@@ -70,15 +69,15 @@ app.get('/:storyId', async (c) => {
     .eq('story_id', storyId)
 
   if (error) {
-    return c.json(errorResponse(error.message), 500)
+    return c.json({ error: error.message }, 500)
   }
 
-  return c.json(successResponse(locations))
+  return c.json(locations)
 })
 
 // POST /locations - Create a new location tag
-app.post('/', async (c) => {
-  const supabase = getSupabase(c)
+app.post('/api/locations', async (c) => {
+  const supabase = getSupabaseFromContext(c)
   const body = await c.req.json<{
     story_id: string
     place_name: string
@@ -91,7 +90,7 @@ app.post('/', async (c) => {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return c.json(errorResponse('Unauthorized'), 401)
+    return c.json({ error: 'Unauthorized' }, 401)
   }
 
   const { data, error } = await supabase
@@ -109,20 +108,20 @@ app.post('/', async (c) => {
     .single()
 
   if (error) {
-    return c.json(errorResponse(error.message), 500)
+    return c.json({ error: error.message }, 500)
   }
 
-  return c.json(successResponse(data), 201)
+  return c.json(data, 201)
 })
 
 // DELETE /locations/:id - Delete a location tag
-app.delete('/:id', async (c) => {
-  const supabase = getSupabase(c)
+app.delete('/api/locations/:id', async (c) => {
+  const supabase = getSupabaseFromContext(c)
   const id = c.req.param('id')
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return c.json(errorResponse('Unauthorized'), 401)
+    return c.json({ error: 'Unauthorized' }, 401)
   }
 
   const { error } = await supabase
@@ -131,10 +130,10 @@ app.delete('/:id', async (c) => {
     .eq('id', id)
 
   if (error) {
-    return c.json(errorResponse(error.message), 500)
+    return c.json({ error: error.message }, 500)
   }
 
-  return c.json(successResponse({ deleted: true }))
+  return c.json({ deleted: true })
 })
 
 export default app

@@ -344,13 +344,14 @@ struct TeenAchievementCard: View {
 struct TeenFamilyMemberRow: View {
     let member: FamilyMember
     @Environment(\.theme) var theme
+    @State private var showMemberStories = false
 
     var storytellerColor: Color {
         return .storytellerGreen
     }
 
     var body: some View {
-        Button(action: {}) {
+        Button(action: { showMemberStories = true }) {
             HStack(spacing: 12) {
                 ZStack {
                     Circle().fill(storytellerColor.opacity(0.2)).frame(width: 44, height: 44)
@@ -360,7 +361,30 @@ struct TeenFamilyMemberRow: View {
                 Spacer()
                 Text("\(member.storyCount)").font(.system(size: 18, weight: .bold)).foregroundColor(theme.accentColor)
             }.padding(.vertical, 8).padding(.horizontal, 4)
-        }.buttonStyle(.plain)
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showMemberStories) {
+            // Placeholder: Show member's stories
+            NavigationStack {
+                VStack(spacing: 24) {
+                    Spacer()
+                    Text("\(member.name)'s Stories")
+                        .font(.title)
+                        .foregroundColor(theme.textColor)
+                    Text("\(member.storyCount) stories captured")
+                        .font(.subheadline)
+                        .foregroundColor(theme.secondaryTextColor)
+                    Spacer()
+                    Button("Close") {
+                        showMemberStories = false
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding()
+                .navigationTitle("Member Stories")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
     }
 }
 

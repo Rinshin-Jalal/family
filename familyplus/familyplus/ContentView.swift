@@ -42,7 +42,8 @@ open class ThemeManager: ObservableObject {
 struct MainNavigationFlow: View {
     @EnvironmentObject var themeManager: ThemeManager
     @StateObject private var navigationCoordinator = NavigationCoordinator.shared
-    @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+    @ObservedObject private var authService = AuthService.shared
+    @State private var showOnboarding: Bool = false
 
     var theme: PersonaTheme {
         themeManager.currentTheme.theme
@@ -53,10 +54,13 @@ struct MainNavigationFlow: View {
             // Main navigation content
             if showOnboarding {
                 SimpleOnboardingContainerView {
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        showOnboarding = false
+                    // Only hide onboarding if auth actually succeeded
+                    if authService.isAuthenticated {
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showOnboarding = false
+                        }
+                        UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                     }
-                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                 }
             } else {
                 MainTabView(selectedTab: $navigationCoordinator.selectedTab)
@@ -68,6 +72,11 @@ struct MainNavigationFlow: View {
                 .padding()
         }
         .themed(theme)
+        .onAppear {
+            // Show onboarding if: not completed OR not authenticated
+            let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+            showOnboarding = !hasCompletedOnboarding || !authService.isAuthenticated
+        }
     }
 }
 
