@@ -151,7 +151,7 @@ struct StoryDetailView: View {
     @Environment(\.dismiss) var dismiss
 
     let story: Story
-    @State private var segments: [StorySegment] = StorySegment.sampleSegments
+    @State private var segments: [StorySegment] = []
     @State private var currentTime: TimeInterval = 0
     @State private var isPlaying = false
     // selectedReaction REMOVED - social feature de-emphasized
@@ -193,29 +193,36 @@ struct FullStoryDetail: View {
     // selectedReaction binding REMOVED - social feature de-emphasized
     let currentSegment: StorySegment?
 
-    // MARK: - Audio Player Service
+    // MARK: - Audio Services
     @ObservedObject private var audioPlayer = AudioPlayerService.shared
+    @StateObject private var audioRecorder = AudioRecorderService()
 
     // MARK: - Multiplayer Perspectives State
     @State private var responses: [StorySegmentData] = []
     @State private var isLoadingResponses = false
     @State private var replyingTo: StorySegmentData? = nil
+    @State private var storyPromptText: String? = nil  // Store the story's prompt
 
-    // Inline input state
-    @State private var inputText = ""
-    @State private var isRecordingMode = false
-    @State private var recordingDuration: TimeInterval = 0
-    @State private var inlineInputIsRecording = false
+    // MARK: - Podcast Generation State
+    @State private var isGeneratingPodcast = false
+    @State private var showPodcastAlert = false
+    @State private var podcastAlertMessage = ""
 
     // Memory context panel state
     @State private var showMemoryContext = false
     @State private var contextForResponse: StorySegmentData?
 
-    // Export modal state (Phase 3: Export Engine - unified export for all formats)
-    @State private var showExportModal = false
+    // Capture memory modal state
+    @State private var showCaptureSheet = false
+    @State private var captureInitialMode: InputMode = .recording
 
     // REACTION STATE REMOVED - social feature de-emphasized
     // showReactionPicker REMOVED
+
+    // Check if there's any audio content to play
+    private var hasAudioContent: Bool {
+        responses.contains { $0.hasAudio }
+    }
 
     // MARK: - Haptic Feedback Helper
     private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
@@ -230,161 +237,42 @@ struct FullStoryDetail: View {
             // Background extends edge-to-edge
             theme.backgroundColor.ignoresSafeArea()
 
-            // SCROLLABLE content (hero + perspectives)
+            // SCROLLABLE content (hero + perspectives) - with pull-to-refresh
             ScrollView {
                 VStack(spacing: 0) {
-                    // Hero image with title overlay - extends to top edge
-                    ZStack(alignment: .bottomLeading) {
-                        // Background image/color
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        currentSegment?.color.opacity(0.4) ?? .gray.opacity(0.4),
-                                        currentSegment?.color.opacity(0.6) ?? .gray.opacity(0.6)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(height: 300)
-                            .ignoresSafeArea(edges: .top)
-
-                        // Gradient overlay for text visibility
-                        LinearGradient(
-                            colors: [.clear, theme.backgroundColor.opacity(0.95)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-
-                        // Title and info overlay
-                        VStack(alignment: .leading, spacing: 12) {
+                    // Story Prompt Header - Clean and Simple
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Story prompt (main focus)
+                        if let promptText = storyPromptText {
+                            Text(promptText)
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(theme.textColor)
+                                .lineLimit(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
                             Text(story.title)
-                                .font(theme.headlineFont)
+                                .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(theme.textColor)
                                 .lineLimit(3)
-                                .shadow(color: .black.opacity(0.2), radius: 4)
-                                .padding(EdgeInsets(top: 0, leading: 0, bottom: 30, trailing: 0))
-
-                            HStack(spacing: 12) {
-                                Circle()
-                                    .fill(currentSegment?.color ?? story.storytellerColor)
-                                    .frame(width: 12, height: 12)
-
-                                Text(currentSegment?.storyteller ?? story.storyteller)
-                                    .font(.subheadline)
-                                    .foregroundColor(theme.secondaryTextColor)
-
-                                if segments.count > 1 {
-                                    Text("+ \(segments.count - 1) more")
-                                        .font(.caption)
-                                        .foregroundColor(theme.secondaryTextColor)
-                                }
-                            }
-                            .padding(8)
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(12)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, theme.screenPadding)
-                        .padding(.bottom, 60)
-                    }
-
-                    // Podcast/Export Button (PRIMARY FEATURE - value extraction)
-                    // Now uses unified ExportOptionsModal with audio format
-                    Button(action: {
-                        showExportModal = true
-                    }) {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [currentSegment?.color ?? .purple, currentSegment?.color.opacity(0.7) ?? .blue],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 50, height: 50)
-
-                                Image(systemName: "waveform.circle.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.white)
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Export Podcast")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(theme.textColor)
-
-                                Text("AI-created audio from this story")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(theme.secondaryTextColor)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(theme.secondaryTextColor)
+                        
+                        // Voice count badge
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.2.fill")
+                                .font(.caption)
+                            Text("\(responses.count) \(responses.count == 1 ? "perspective" : "perspectives")")
+                                .font(.caption)
+                                .fontWeight(.medium)
                         }
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(theme.cardBackgroundColor)
-                                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
-                        )
+                        .foregroundColor(theme.secondaryTextColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(theme.secondaryTextColor.opacity(0.1))
+                        .cornerRadius(8)
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, theme.screenPadding)
-                    .padding(.bottom, 12)
-
-                    // Export Button (Phase 3: Export Engine - value extraction)
-                    Button(action: {
-                        showExportModal = true
-                    }) {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [.green, .green.opacity(0.7)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 50, height: 50)
-
-                                Image(systemName: "square.and.arrow.up.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundColor(.white)
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Export Story")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(theme.textColor)
-
-                                Text("PDF, Audio, Video, JSON, EPUB")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(theme.secondaryTextColor)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(theme.secondaryTextColor)
-                        }
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(theme.cardBackgroundColor)
-                                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, theme.screenPadding)
+                    .padding(.top, 80)  // Space for back button
                     .padding(.bottom, 24)
 
                     // Perspectives Section
@@ -440,10 +328,7 @@ struct FullStoryDetail: View {
                             .padding(.horizontal, 20)
 
                             // Perspectives header
-                            Text("Perspectives")
-                                .font(theme.headlineFont)
-                                .foregroundColor(theme.textColor)
-                                .padding(.horizontal, 20)
+                            CozySectionHeader(icon: "person.2.fill", title: "Perspectives")
 
                             if isLoadingResponses {
                                 ProgressView()
@@ -458,6 +343,9 @@ struct FullStoryDetail: View {
                                     responses: responses,
                                     onReplyToResponse: { response in
                                         replyingTo = response
+                                        // Open capture sheet for reply
+                                        captureInitialMode = .recording
+                                        showCaptureSheet = true
                                     },
                                     onPlayResponse: { response in
                                         playResponse(response)
@@ -469,97 +357,150 @@ struct FullStoryDetail: View {
                                 )
                             }
                         }
+                        
+                        Button(action: {
+                            captureInitialMode = .recording
+                            showCaptureSheet = true
+                        }) {
+                            HStack(spacing: 14) {
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [theme.accentColor, theme.accentColor.opacity(0.8)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 48, height: 48)
 
-                        // Add perspective button (for dark/light)
-                        InlinePerspectiveInput(
-                            inputText: $inputText,
-                            isRecording: $inlineInputIsRecording,
-                            onSend: { text in
-                                // TODO: Submit text response via API
-                                // Requires:
-                                // 1. Add AudioRecorderService to this view
-                                // 2. Get prompt_id from story (needs StoryData instead of Story model)
-                                // 3. Call APIService.shared.uploadResponse() with text
-                                // 4. Handle success/error and refresh responses
-                                print("Text submitted: \(text)")
-                                inputText = ""
-                            },
-                            onRecordingStart: {
-                                withAnimation {
-                                    isRecordingMode = true
-                                    inlineInputIsRecording = true
-                                    isPlaying = false
+                                    Image(systemName: "mic.fill")
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundColor(.white)
                                 }
-                            },
-                            onRecordingUpdate: { duration in
-                                recordingDuration = duration
-                            },
-                            onRecordingComplete: { duration in
-                                withAnimation {
-                                    isRecordingMode = false
-                                    inlineInputIsRecording = false
-                                    recordingDuration = 0
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Add Your Perspective")
+                                        .font(.system(size: 17, weight: .bold))
+                                        .foregroundColor(.white)
+
+                                    Text("Record or write your story")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.white.opacity(0.8))
                                 }
-                                // TODO: Handle audio recording completion
-                                // Requires:
-                                // 1. AudioRecorderService to be integrated in this view
-                                // 2. Get recording URL from AudioRecorderService.shared.currentRecordingURL
-                                // 3. Load audio data as Data
-                                // 4. Call APIService.shared.uploadResponse() with audio data
-                                // 5. Poll for transcription status
-                                print("Recording completed: \(duration)s - requires AudioRecorderService integration")
-                            },
-                            onCancel: {
-                                withAnimation {
-                                    isRecordingMode = false
-                                    inlineInputIsRecording = false
-                                    recordingDuration = 0
-                                }
-                                inputText = ""
+
+                                Spacer()
+
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white.opacity(0.9))
                             }
-                        )
+                            .padding(16)
+                            .background(
+                                LinearGradient(
+                                    colors: [theme.accentColor, theme.accentColor.opacity(0.85)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(20)
+                            .shadow(color: theme.accentColor.opacity(0.3), radius: 8, y: 4)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 8)
 
-                        // Extra padding at bottom so content doesn't get hidden by player
+                        if !responses.isEmpty {
+                            Button(action: {
+                                generatePodcast()
+                            }) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: isGeneratingPodcast ? "waveform.circle" : "waveform.circle")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(theme.secondaryTextColor)
+
+                                    Text(isGeneratingPodcast ? "Generating..." : "Generate Podcast")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(theme.secondaryTextColor)
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(theme.secondaryTextColor.opacity(0.6))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(theme.secondaryTextColor.opacity(0.2), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.vertical, 4)
+                        }
+
+                        // Reply indicator (shows when replying to someone)
+                        if let replyTo = replyingTo {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "arrowshape.turn.up.left.fill")
+                                            .font(.caption2)
+                                        Text("Replying to \(replyTo.fullName)")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                    }
+                                    .foregroundColor(theme.accentColor)
+                                    
+                                    if let text = replyTo.transcriptionText {
+                                        Text(text)
+                                            .font(.caption2)
+                                            .foregroundColor(theme.secondaryTextColor)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                
+                                Spacer()
+                                
+                                Button(action: { replyingTo = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundColor(theme.secondaryTextColor)
+                                }
+                            }
+                            .padding(12)
+                            .background(theme.accentColor.opacity(0.1))
+                            .cornerRadius(12)
+                            .padding(.horizontal, theme.screenPadding)
+                        }
+
                         Color.clear.frame(height: 140)
                     }
                     .padding(theme.screenPadding)
                 }
             }
+            .refreshable {
+                await refreshStoryData()
+            }
 
-            // STICKY Player controls - fixed at bottom of screen
-            VStack(spacing: 0) {
-                Group {
-                    if isRecordingMode {
-                        // Recording interface replaces player controls
-                        RecordingModePlayer(
-                            duration: recordingDuration,
-                            isPlaying: $isPlaying,
-                            onStop: {
-                                withAnimation {
-                                    isRecordingMode = false
-                                    inlineInputIsRecording = false
-                                    recordingDuration = 0
-                                }
-                            }
-                        )
-                    } else {
-                        // Normal player controls
-                        StoryPlayerControls(
-                            segments: segments,
-                            currentTime: $currentTime,
-                            isPlaying: $isPlaying
-                            // selectedReaction REMOVED - social feature de-emphasized
-                        )
-                    }
+            // STICKY Player controls - fixed at bottom of screen (only show if there's audio)
+            if hasAudioContent {
+                VStack(spacing: 0) {
+                    StoryPlayerControls(
+                        segments: segments,
+                        currentTime: $currentTime,
+                        isPlaying: $isPlaying
+                        // selectedReaction REMOVED - social feature de-emphasized
+                    )
+                    .padding(.horizontal)
+                    .padding(.top)
+                    .padding(.bottom, 12)
+                    .background(
+                        theme.backgroundColor
+                            .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
+                            .ignoresSafeArea(edges: .bottom)
+                    )
                 }
-                .padding(.horizontal)
-                .padding(.top)
-                .padding(.bottom, 12)
-                .background(
-                    theme.backgroundColor
-                        .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
-                        .ignoresSafeArea(edges: .bottom)
-                )
             }
 
             // Sticky gradient overlay at top (stays visible during scroll)
@@ -616,13 +557,41 @@ struct FullStoryDetail: View {
                 )
             }
         }
-        .sheet(isPresented: $showExportModal) {
-            ExportOptionsModal(
-                storyId: story.id.uuidString,
-                storyTitle: story.title,
-                collectionId: nil,
-                collectionTitle: nil
+        .sheet(isPresented: $showCaptureSheet) {
+            let promptData: PromptData? = {
+                // Create a PromptData from the story's prompt text
+                if let promptText = storyPromptText, !promptText.isEmpty {
+                    return PromptData(
+                        id: UUID().uuidString,
+                        text: promptText,
+                        category: nil,
+                        isCustom: false,
+                        createdAt: ISO8601DateFormatter().string(from: Date())
+                    )
+                }
+                return nil
+            }()
+            
+            CaptureMemorySheet(
+                initialPrompt: promptData,  // Pass the story's prompt
+                initialMode: captureInitialMode,
+                storyId: UUID(uuidString: story.id),
+                replyToResponseId: replyingTo?.id,
+                replyToName: replyingTo?.fullName,
+                replyToText: replyingTo?.transcriptionText,
+                hidePromptSection: replyingTo != nil  // Hide prompt when replying
             )
+            .onDisappear {
+                // Refresh responses after capture
+                loadResponses()
+                // Clear reply state
+                replyingTo = nil
+            }
+        }
+        .alert("Podcast Generation", isPresented: $showPodcastAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(podcastAlertMessage)
         }
         .onAppear {
             loadResponses()
@@ -649,186 +618,88 @@ struct FullStoryDetail: View {
         isLoadingResponses = true
 
         Task {
-            do {
-                // TODO: Replace with actual API call when backend ready
-                // Need to change story: Story -> story: StoryData to get prompt_id
-                // Then call:
-                // let detail = try await APIService.shared.getStory(id: story.id)
-                // responses = detail.responses
-
-                let mockResponses = createMockResponses()
-
-                await MainActor.run {
-                    responses = mockResponses
-                    isLoadingResponses = false
-                }
-            } catch {
-                print("Failed to load responses: \(error)")
-                await MainActor.run {
-                    isLoadingResponses = false
-                }
-            }
+            await fetchResponses()
         }
     }
 
-    private func createMockResponses() -> [StorySegmentData] {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    /// Refreshes story data when user pulls to refresh
+    @MainActor
+    private func refreshStoryData() async {
+        // Haptic feedback for refresh start
+        if theme.enableHaptics {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+        }
 
-        let baseTime = Date()
-        let now = formatter.string(from: baseTime)
-        let min5Ago = formatter.string(from: baseTime.addingTimeInterval(-300))
-        let min10Ago = formatter.string(from: baseTime.addingTimeInterval(-600))
-        let min20Ago = formatter.string(from: baseTime.addingTimeInterval(-1200))
-        let hour1Ago = formatter.string(from: baseTime.addingTimeInterval(-3600))
-        let hour3Ago = formatter.string(from: baseTime.addingTimeInterval(-10800))
-        let hour6Ago = formatter.string(from: baseTime.addingTimeInterval(-21600))
-        let oneDayAgo = formatter.string(from: baseTime.addingTimeInterval(-86400))
-        let twoDaysAgo = formatter.string(from: baseTime.addingTimeInterval(-172800))
+        await fetchResponses()
 
-        return [
-            // ROOT: Grandma starts the story
-            StorySegmentData(
-                id: "resp-1",
-                userId: "user-1",
-                source: "app",
-                mediaUrl: "https://example.com/audio1.m4a",
-                transcriptionText: "In the summer of '68, your grandfather and I drove across the country in our old Chevy. We were so young and full of dreams. The whole trip was an adventure!",
-                durationSeconds: 45,
-                createdAt: twoDaysAgo,
-                fullName: "Grandma Rose",
-                role: "elder",
-                avatarUrl: nil,
-                replyToResponseId: nil
-            ),
+        // Haptic feedback for refresh complete
+        if theme.enableHaptics {
+            let notification = UINotificationFeedbackGenerator()
+            notification.notificationOccurred(.success)
+        }
+    }
 
-            // THREAD 1: Mom's memory
-            StorySegmentData(
-                id: "resp-2",
-                userId: "user-2",
-                source: "app",
-                mediaUrl: "https://example.com/audio2.m4a",
-                transcriptionText: "Mom, I remember you telling me about the flat tire in Nevada! Didn't you say it was actually a Ford, not a Chevy?",
-                durationSeconds: 30,
-                createdAt: oneDayAgo,
-                fullName: "Mom",
-                role: "light",
-                avatarUrl: nil,
-                replyToResponseId: "resp-1"
-            ),
+    /// Fetches responses from the API
+    @MainActor
+    private func fetchResponses() async {
+        do {
+            // Convert string ID to UUID for API call
+            guard let storyUUID = UUID(uuidString: story.id) else {
+                print("Invalid story ID: \(story.id)")
+                isLoadingResponses = false
+                return
+            }
 
-            // THREAD 1.1: Grandma clarifies
-            StorySegmentData(
-                id: "resp-3",
-                userId: "user-1",
-                source: "app",
-                mediaUrl: "https://example.com/audio3.m4a",
-                transcriptionText: "You're absolutely right dear! It was a '65 Ford Mustang. My memory isn't what it used to be!",
-                durationSeconds: 22,
-                createdAt: hour6Ago,
-                fullName: "Grandma Rose",
-                role: "elder",
-                avatarUrl: nil,
-                replyToResponseId: "resp-2"
-            ),
+            // Fetch story details using the story ID
+            let storyDetail = try await APIService.shared.getStory(id: storyUUID)
 
-            // THREAD 1.1.1: Leo chimes in (max depth)
-            StorySegmentData(
-                id: "resp-4",
-                userId: "user-4",
-                source: "app",
-                mediaUrl: "https://example.com/audio4.m4a",
-                transcriptionText: "A '65 Mustang?! That's such a cool car! I wish we still had it.",
-                durationSeconds: 18,
-                createdAt: hour3Ago,
-                fullName: "Leo",
-                role: "dark",
-                avatarUrl: nil,
-                replyToResponseId: "resp-3"
-            ),
-
-            // THREAD 2: Uncle Joe's separate memory
-            StorySegmentData(
-                id: "resp-5",
-                userId: "user-3",
-                source: "app",
-                mediaUrl: "https://example.com/audio5.m4a",
-                transcriptionText: "I remember Dad telling me about that trip! He said you guys slept under the stars in Arizona.",
-                durationSeconds: 28,
-                createdAt: hour1Ago,
-                fullName: "Uncle Joe",
-                role: "light",
-                avatarUrl: nil,
-                replyToResponseId: "resp-1"
-            ),
-
-            // THREAD 2.1: Grandma confirms
-            StorySegmentData(
-                id: "resp-6",
-                userId: "user-1",
-                source: "app",
-                mediaUrl: "https://example.com/audio6.m4a",
-                transcriptionText: "Yes! The Grand Canyon at sunset was breathtaking. We didn't have much money for hotels, so we made it an adventure.",
-                durationSeconds: 35,
-                createdAt: min20Ago,
-                fullName: "Grandma Rose",
-                role: "elder",
-                avatarUrl: nil,
-                replyToResponseId: "resp-5"
-            ),
-
-            // THREAD 2.2: Dad adds his perspective
-            StorySegmentData(
-                id: "resp-7",
-                userId: "user-5",
-                source: "app",
-                mediaUrl: "https://example.com/audio7.m4a",
-                transcriptionText: "Dad used to show me photos from that trip. He always had the biggest smile when he talked about it.",
-                durationSeconds: 26,
-                createdAt: min10Ago,
-                fullName: "Dad",
-                role: "light",
-                avatarUrl: nil,
-                replyToResponseId: "resp-5"
-            ),
-
-            // THREAD 3: Sophie (child) asks a question
-            StorySegmentData(
-                id: "resp-8",
-                userId: "user-6",
-                source: "app",
-                mediaUrl: "https://example.com/audio8.m4a",
-                transcriptionText: "Grandma! Did you take pictures? I wanna see!",
-                durationSeconds: 15,
-                createdAt: min5Ago,
-                fullName: "Sophie",
-                role: "child",
-                avatarUrl: nil,
-                replyToResponseId: "resp-1"
-            ),
-
-            // THREAD 3.1: Mom responds to Sophie
-            StorySegmentData(
-                id: "resp-9",
-                userId: "user-2",
-                source: "app",
-                mediaUrl: "https://example.com/audio9.m4a",
-                transcriptionText: "We have an old photo album in the attic! Let's look at it together this weekend.",
-                durationSeconds: 20,
-                createdAt: now,
-                fullName: "Mom",
-                role: "light",
-                avatarUrl: nil,
-                replyToResponseId: "resp-8"
-            )
-        ]
+            self.responses = storyDetail.responses
+            self.storyPromptText = storyDetail.story.promptText  // Store prompt text
+            isLoadingResponses = false
+        } catch {
+            print("Failed to load responses: \(error)")
+            isLoadingResponses = false
+        }
     }
 
     private func playResponse(_ response: StorySegmentData) {
+        // Safety check: only play if response has actual audio
+        guard response.hasAudio else {
+            print("⚠️ Cannot play response - no audio content (media_url: \(response.mediaUrl ?? "nil"))")
+            return
+        }
+
         // Use the AudioPlayerService to play from this response onwards
         // The service will auto-advance through the chronological list
         audioPlayer.playFromHere(responses, startId: response.id)
         print("▶️ Playing from: \(response.fullName) - \(response.transcriptionText ?? "")")
+    }
+
+    // MARK: - Podcast Generation
+
+    private func generatePodcast() {
+        guard !isGeneratingPodcast else { return }
+
+        isGeneratingPodcast = true
+
+        Task {
+            do {
+                try await APIService.shared.generatePodcast(storyId: story.id)
+
+                await MainActor.run {
+                    isGeneratingPodcast = false
+                    podcastAlertMessage = "Podcast generation started! It will be ready in a few minutes."
+                    showPodcastAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    isGeneratingPodcast = false
+                    podcastAlertMessage = "Failed to generate podcast. Please try again."
+                    showPodcastAlert = true
+                }
+            }
+        }
     }
 
     // MARK: - Memory Context Generation
@@ -985,17 +856,16 @@ struct StoryPlayerControls: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            // Current speaker indicator + duration + speed (compact inline layout)
+        VStack(spacing: 12) {
             if let segment = currentSegment {
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Circle()
                         .fill(segment.color)
-                        .frame(width: 8, height: 8)
+                        .frame(width: 10, height: 10)
                         .overlay(
                             Circle()
                                 .stroke(segment.color.opacity(0.5), lineWidth: 2)
-                                .scaleEffect(isPlaying ? 1.5 : 1.0)
+                                .scaleEffect(isPlaying ? 1.8 : 1.0)
                                 .opacity(isPlaying ? 0 : 1)
                                 .animation(
                                     isPlaying ? .easeOut(duration: 1).repeatForever(autoreverses: false) : .default,
@@ -1004,24 +874,22 @@ struct StoryPlayerControls: View {
                         )
 
                     Text(segment.storyteller)
-                        .font(.caption)
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(segment.color)
                         .lineLimit(1)
 
                     Spacer()
 
-                    // Duration
                     Text(formatTime(totalDuration))
-                        .font(.caption.monospacedDigit())
+                        .font(.system(size: 13, design: .monospaced))
                         .foregroundColor(theme.secondaryTextColor)
 
-                    // Speed button
                     Button(action: { playbackSpeed = playbackSpeed.next }) {
                         Text(playbackSpeed.label)
-                            .font(.caption.bold())
+                            .font(.system(size: 12, weight: .bold))
                             .foregroundColor(theme.secondaryTextColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
                             .background(
                                 Capsule()
                                     .fill(Color.gray.opacity(0.2))
@@ -1032,43 +900,37 @@ struct StoryPlayerControls: View {
                 .padding(.horizontal, 4)
             }
 
-            // Timeline with inline current time (compact layout)
-            HStack(spacing: 8) {
-                // Current time
+            HStack(spacing: 10) {
                 Text(formatTime(currentTime))
-                    .font(.caption.monospacedDigit())
+                    .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(theme.secondaryTextColor)
-                    .frame(width: 40, alignment: .trailing)
+                    .frame(width: 44, alignment: .trailing)
 
-                // Timeline with segments (scrubbable)
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
-                        // Background track (reduced height)
                         Capsule()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(height: 6)
+                            .fill(Color.gray.opacity(0.25))
+                            .frame(height: 10)
 
-                        // Segments (reduced height)
                         ForEach(segments) { segment in
                             let startX = geometry.size.width * (segment.startTime / totalDuration)
                             let width = geometry.size.width * (segment.duration / totalDuration)
 
                             Capsule()
                                 .fill(segment.color)
-                                .frame(width: max(width, 4), height: 6)
+                                .frame(width: max(width, 4), height: 10)
                                 .offset(x: startX)
                         }
 
-                        // Playhead (reduced size)
                         Circle()
                             .fill(.white)
-                            .frame(width: isDragging ? 16 : 14, height: isDragging ? 16 : 14)
-                            .shadow(color: .black.opacity(0.3), radius: 4)
+                            .frame(width: isDragging ? 22 : 18, height: isDragging ? 22 : 18)
+                            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
                             .overlay(
                                 Circle()
                                     .stroke(theme.accentColor, lineWidth: isDragging ? 3 : 0)
                             )
-                            .offset(x: geometry.size.width * (currentTime / totalDuration) - (isDragging ? 8 : 7))
+                            .offset(x: geometry.size.width * (currentTime / totalDuration) - (isDragging ? 11 : 9))
                             .animation(.spring(response: 0.3), value: isDragging)
                     }
                     .contentShape(Rectangle())
@@ -1084,7 +946,7 @@ struct StoryPlayerControls: View {
                             }
                     )
                 }
-                .frame(height: 16)
+                .frame(height: 24)
                 .accessibilityLabel("Story timeline")
                 .accessibilityValue("\(formatTime(currentTime)) of \(formatTime(totalDuration))")
             }
@@ -1148,79 +1010,6 @@ struct StoryPlayerControls: View {
 
         }
         // REACTION PICKER SHEET REMOVED - social feature de-emphasized
-    }
-}
-
-// MARK: - Recording Mode Player (replaces player controls during recording)
-
-struct RecordingModePlayer: View {
-    @Environment(\.theme) var theme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let duration: TimeInterval
-    @Binding var isPlaying: Bool
-    let onStop: () -> Void
-
-    @State private var amplitudes: [CGFloat] = Array(repeating: 0.5, count: 30)
-
-    var formattedDuration: String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Recording indicator + timer
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 8, height: 8)
-
-                Text("Recording")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.red)
-
-                Text(formattedDuration)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(.red)
-            }
-
-            // Compact waveform
-            HStack(spacing: 1) {
-                ForEach(0..<30, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.red)
-                        .frame(width: 2, height: 6 + amplitudes[index] * 16)
-                }
-            }
-            .frame(height: 24)
-
-            Spacer()
-
-            // Stop button
-            Button(action: onStop) {
-                Image(systemName: "stop.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(Color.red)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.vertical, 4)
-        .onAppear {
-            startAnimation()
-        }
-    }
-
-    private func startAnimation() {
-        for index in 0..<30 {
-            withAnimation(
-                .easeInOut(duration: 0.3 + Double(index) * 0.02)
-                    .repeatForever(autoreverses: true)
-                    .delay(Double(index) * 0.02)
-            ) {
-                amplitudes[index] = CGFloat.random(in: 0.2...1.0)
-            }
-        }
     }
 }
 
@@ -1554,37 +1343,6 @@ struct ElderStoryDetail: View {
     }
 }
 
-// MARK: - Reaction Picker
-
-extension StorySegment {
-    static let sampleSegments: [StorySegment] = [
-        StorySegment(
-            storyteller: "Grandma Rose",
-            color: .storytellerOrange,
-            text: "In the summer of 1968, your grandfather and I drove across the country in our Chevy. We were so young and full of dreams.",
-            audioURL: nil,
-            duration: 15,
-            startTime: 0
-        ),
-        StorySegment(
-            storyteller: "Dad",
-            color: .storytellerBlue,
-            text: "Actually Mom, I remember you saying it was a Ford, not a Chevy. And you had a flat tire in Nevada!",
-            audioURL: nil,
-            duration: 10,
-            startTime: 15
-        ),
-        StorySegment(
-            storyteller: "Leo",
-            color: .storytellerPurple,
-            text: "That's so cool! I can't believe you drove all that way without GPS.",
-            audioURL: nil,
-            duration: 8,
-            startTime: 25
-        )
-    ]
-}
-
 // MARK: - Empty Perspectives View
 
 struct EmptyPerspectivesView: View {
@@ -1592,37 +1350,96 @@ struct EmptyPerspectivesView: View {
     let onAddFirst: () -> Void
 
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 60))
-                .foregroundColor(theme.secondaryTextColor.opacity(0.3))
+        VStack(spacing: 24) {
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(theme.accentColor.opacity(0.1))
+                        .frame(width: 100, height: 100)
+                    
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 44))
+                        .foregroundColor(theme.accentColor.opacity(0.6))
+                }
 
-            Text("No perspectives yet")
-                .font(.title3)
-                .fontWeight(.semibold)
-                .foregroundColor(theme.textColor)
+                VStack(spacing: 8) {
+                    Text("Start the Conversation")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(theme.textColor)
 
-            Text("Be the first to share your story!")
-                .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
+                    Text("Share your unique perspective on this story. Your voice matters!")
+                        .font(.system(size: 15))
+                        .foregroundColor(theme.secondaryTextColor)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                SuggestionRow(
+                    icon: "mic.fill",
+                    text: "Record a voice memory",
+                    color: .storytellerOrange
+                )
+                SuggestionRow(
+                    icon: "text.quote",
+                    text: "Share a written reflection",
+                    color: .storytellerBlue
+                )
+                SuggestionRow(
+                    icon: "heart.fill",
+                    text: "Add your personal connection",
+                    color: .storytellerPurple
+                )
+            }
+            .padding(.vertical, 8)
 
             Button(action: onAddFirst) {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Add First Perspective")
-                        .fontWeight(.semibold)
+                HStack(spacing: 10) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Be the First to Share")
+                        .font(.system(size: 16, weight: .bold))
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 14)
                 .background(
-                    Capsule()
-                        .fill(theme.accentColor)
+                    LinearGradient(
+                        colors: [theme.accentColor, theme.accentColor.opacity(0.85)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
+                .cornerRadius(14)
+                .shadow(color: theme.accentColor.opacity(0.3), radius: 6, y: 3)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(40)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 32)
+    }
+}
+
+struct SuggestionRow: View {
+    let icon: String
+    let text: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(color)
+                .frame(width: 24)
+            
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+            
+            Spacer()
+        }
+        .padding(.horizontal, 8)
     }
 }
 
@@ -1792,7 +1609,14 @@ struct PromptMemoryHeader: View {
 // MARK: - Preview
 
 struct StoryDetailView_Previews: PreviewProvider {
-    static let sampleStory = Story.sampleStories[0]
+    static let sampleStory = Story(
+        id: UUID().uuidString,
+        title: "The Summer Road Trip of '68",
+        storyteller: "Grandma Rose",
+        imageURL: nil,
+        voiceCount: 3,
+        timestamp: Date().addingTimeInterval(-3600)
+    )
 
     static var previews: some View {
         Group {

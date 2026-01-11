@@ -23,8 +23,28 @@ struct FamilyView: View {
 
     private func loadProfile() {
         loadingState = .loading
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            loadingState = .loaded(ProfileData.sample)
+        Task {
+            do {
+                async let stories = APIService.shared.getStories()
+                async let family = APIService.shared.getFamily()
+                async let members = APIService.shared.getFamilyMembers()
+
+                let (storiesData, familyData, membersData) = try await (stories, family, members)
+
+                let profileData = ProfileData(
+                    stories: storiesData,
+                    family: familyData,
+                    members: membersData
+                )
+
+                await MainActor.run {
+                    loadingState = .loaded(profileData)
+                }
+            } catch {
+                await MainActor.run {
+                    loadingState = .error(error.localizedDescription)
+                }
+            }
         }
     }
 }
@@ -39,28 +59,106 @@ struct ProfileData {
     let lockedStickers: [String]
     let achievements: [Achievement]
     let recentActivity: [Activity]
+    let familyInfo: FamilyInfo
 
-    static let sample = ProfileData(
-        totalStories: 42,
-        nextMilestone: 50,
-        familyMembers: [
-            FamilyMember(name: "Grandma Rose", avatarEmoji: "❤️", storyCount: 15, status: .offline, isElder: true),
-            FamilyMember(name: "Dad",  avatarEmoji: "👨", storyCount: 12, status: .online),
-            FamilyMember(name: "Leo",  avatarEmoji: "🎸", storyCount: 8, status: .away),
-            FamilyMember(name: "Mia", avatarEmoji: "🌟", storyCount: 7, status: .online)
-        ],
-        earnedStickers: ["⭐️", "🚀", "🦁", "🎨", "🌈"],
-        lockedStickers: ["🐶", "🎪", "🎈", "🎯", "🏆"],
-        achievements: [
-            Milestone(title: "First Story Preserved", description: "Your first family story saved forever", icon: "star.fill", earned: true, earnedAt: Date().addingTimeInterval(-86400 * 10), progress: nil, category: .preservation),
-            Milestone(title: "Storyteller", description: "10 stories preserved", icon: "book.fill", earned: true, earnedAt: Date().addingTimeInterval(-86400 * 3), progress: nil, category: .preservation),
-            Milestone(title: "Family Anthology", description: "50 stories preserved", icon: "books.vertical.fill", earned: false, earnedAt: nil, progress: 0.84, category: .preservation)
-        ],
-        recentActivity: [
-            Activity(type: .storyRecorded, title: "The Summer Road Trip of '68", member: "Grandma Rose", timestamp: Date().addingTimeInterval(-3600)),
-            Activity(type: .milestone, title: "Reached 40 stories!", member: nil, timestamp: Date().addingTimeInterval(-86400))
-        ]
-    )
+    // Initialize from real API data
+    init(stories: [StoryData], family: FamilyInfo, members: [FamilyMemberData]) {
+        self.familyInfo = family
+        self.totalStories = stories.count
+
+        // Calculate next milestone (next 10-story increment)
+        self.nextMilestone = ((stories.count / 10) + 1) * 10
+
+        // Convert API members to FamilyMember
+        self.familyMembers = members.map { member in
+            let memberStories = stories.filter { $0.familyId == member.id }
+            return FamilyMember(
+                name: member.fullName ?? "Family Member",
+                avatarEmoji: "👤", // Default avatar
+                storyCount: memberStories.count,
+                status: .online, // Default status
+                isElder: member.role.lowercased().contains("elder")
+            )
+        }
+
+        // Stickers - TODO: Implement real sticker system
+        self.earnedStickers = ["⭐️", "🚀", "🦁", "🎨", "🌈"]
+        self.lockedStickers = ["🐶", "🎪", "🎈", "🎯", "🏆"]
+
+        // Achievements based on story count
+        var achievements: [Achievement] = []
+
+        if stories.count >= 1 {
+            achievements.append(Milestone(
+                title: "First Story Preserved",
+                description: "Your first family story saved forever",
+                icon: "star.fill",
+                earned: true,
+                earnedAt: stories.first?.createdAtDate,
+                progress: nil,
+                category: .preservation
+            ))
+        }
+
+        if stories.count >= 10 {
+            achievements.append(Milestone(
+                title: "Storyteller",
+                description: "10 stories preserved",
+                icon: "book.fill",
+                earned: true,
+                earnedAt: stories[safe: 9]?.createdAtDate,
+                progress: nil,
+                category: .preservation
+            ))
+        } else {
+            achievements.append(Milestone(
+                title: "Storyteller",
+                description: "10 stories preserved",
+                icon: "book.fill",
+                earned: false,
+                earnedAt: nil,
+                progress: Double(stories.count) / 10.0,
+                category: .preservation
+            ))
+        }
+
+        if stories.count >= 50 {
+            achievements.append(Milestone(
+                title: "Family Anthology",
+                description: "50 stories preserved",
+                icon: "books.vertical.fill",
+                earned: true,
+                earnedAt: stories[safe: 49]?.createdAtDate,
+                progress: nil,
+                category: .preservation
+            ))
+        } else if stories.count >= 10 {
+            achievements.append(Milestone(
+                title: "Family Anthology",
+                description: "50 stories preserved",
+                icon: "books.vertical.fill",
+                earned: false,
+                earnedAt: nil,
+                progress: Double(stories.count) / 50.0,
+                category: .preservation
+            ))
+        }
+
+        self.achievements = achievements
+
+        // Recent activity from stories
+        self.recentActivity = stories
+            .sorted { $0.createdAtDate > $1.createdAtDate }
+            .prefix(5)
+            .map { story in
+                Activity(
+                    type: .storyRecorded,
+                    title: story.title ?? story.promptText ?? "New Story",
+                    member: members.first(where: { $0.id == story.familyId })?.fullName,
+                    timestamp: story.createdAtDate
+                )
+            }
+    }
 }
 
 enum ActivityType {
@@ -117,13 +215,12 @@ struct TeenProfile: View {
     @State private var showManageMembers = false
     @State private var showGovernance = false
 
-    // TODO: Replace with actual family data from API
     @State private var familyData = FamilyData(
-        id: "family-123",
-        name: "The Rodriguez Family",
-        memberCount: 4,
-        storyCount: 42,
-        ownerId: "user-1",
+        id: "",
+        name: "",
+        memberCount: 0,
+        storyCount: 0,
+        ownerId: "",
         createdAt: Date(),
         hasSensitiveTopics: true,
         allowsConflictingPerspectives: true
@@ -158,7 +255,11 @@ struct TeenProfile: View {
                 }
             }
         }
-        .sheet(isPresented: $showAchievements) { MilestonesModal(milestones: ProfileData.sample.achievements) }
+        .sheet(isPresented: $showAchievements) {
+            if case .loaded(let data) = loadingState {
+                MilestonesModal(milestones: data.achievements)
+            }
+        }
         .sheet(isPresented: $showInvite) { ShareCollectionsModal() }
         .sheet(isPresented: $showAddElder) { AddElderModal() }
         .sheet(isPresented: $showManageMembers) { ManageMembersModal() }
@@ -175,6 +276,20 @@ struct TeenProfile: View {
                 break
             }
             navigationCoordinator.clearPendingAction()
+        }
+        .onChange(of: loadingState) { _, newState in
+            if case .loaded(let data) = newState {
+                familyData = FamilyData(
+                    id: data.familyInfo.id,
+                    name: data.familyInfo.name,
+                    memberCount: data.familyMembers.count,
+                    storyCount: data.totalStories,
+                    ownerId: data.familyInfo.id,
+                    createdAt: Date(),
+                    hasSensitiveTopics: true,
+                    allowsConflictingPerspectives: true
+                )
+            }
         }
     }
 }

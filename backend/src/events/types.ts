@@ -60,6 +60,9 @@ export type EventType =
   | 'response.audio.uploaded'
   | 'response.transcribed'
   | 'response.transcription.failed'
+  | 'response.ocr.requested'
+  | 'response.ocr.completed'
+  | 'response.ocr.failed'
 
   // AI processing events
   | 'ai.synthesis.started'
@@ -81,6 +84,11 @@ export type EventType =
   | 'wisdom.summary.requested'
   | 'wisdom.summary.completed'
   | 'wisdom.summary.failed'
+
+  // Quote events
+  | 'quote.generation.requested'
+  | 'quote.generation.completed'
+  | 'quote.generation.failed'
 
 // ----------------------------------------------------------------------------
 // STORY EVENTS
@@ -170,6 +178,30 @@ export interface ResponseTranscribedEvent {
 }
 
 export interface ResponseTranscriptionFailedEvent {
+  responseId: string
+  error: string
+  retryable: boolean
+  attemptNumber: number
+}
+
+export interface ResponseOcrRequestedEvent {
+  responseId: string
+  fileKey: string
+  fileUrl: string
+  fileSize: number
+  mimeType: string
+  fileType: 'image' | 'document'
+}
+
+export interface ResponseOcrCompletedEvent {
+  responseId: string
+  storyId: string | null
+  extractedText: string
+  confidence?: number
+  pageCount?: number
+}
+
+export interface ResponseOcrFailedEvent {
   responseId: string
   error: string
   retryable: boolean
@@ -298,6 +330,31 @@ export interface WisdomSummaryCompletedEvent {
 
 export interface WisdomSummaryFailedEvent {
   primaryStoryId: string
+  error: string
+  retryable: boolean
+}
+
+// ============================================================================
+// QUOTE EVENTS
+// ============================================================================
+
+export interface QuoteGenerationRequestedEvent {
+  responseId: string
+  storyId: string | null
+  triggeredBy: 'response.transcribed' | 'story.completed'
+}
+
+export interface QuoteGenerationCompletedEvent {
+  quoteId: string
+  responseId: string
+  storyId: string | null
+  quoteText: string
+  authorName: string
+  authorRole: string
+}
+
+export interface QuoteGenerationFailedEvent {
+  responseId: string
   error: string
   retryable: boolean
 }

@@ -48,12 +48,12 @@ export class WisdomSummarizerClient {
   constructor(config: { openaiApiKey: string; modelId?: string; bedrockRegion?: string }) {
     if (!config.openaiApiKey || config.openaiApiKey.includes('placeholder')) {
       throw new AIServiceError(
-        'OPENAI_API_KEY is required for wisdom summarization',
+        'AWS_BEARER_TOKEN_BEDROCK is required for wisdom summarization',
         'wisdom-summarizer'
       );
     }
 
-    this.modelId = config.modelId || 'openai.gpt-4o';
+    this.modelId = config.modelId || 'openai.gpt-oss-20b-1:0';
 
     const bedrockRegion = config.bedrockRegion || 'us-west-2';
     const bedrockEndpoint = `https://bedrock-runtime.${bedrockRegion}.amazonaws.com/openai/v1`;

@@ -34,6 +34,7 @@ export interface HandlerContext {
     SUPABASE_URL: string
     SUPABASE_KEY: string
     OPENAI_API_KEY: string
+    AWS_BEARER_TOKEN_BEDROCK: string
     BEDROCK_REGION: string
     CARTESIA_API_KEY: string
     TWILIO_ACCOUNT_SID: string
@@ -53,6 +54,7 @@ export const EVENT_HANDLERS: Record<
 > = {
   // Response events
   'response.audio.uploaded': handleResponseAudioUploaded,
+  'response.transcribed': handleResponseTranscribed,
 
   // AI events
   'ai.synthesis.started': handleAISynthesisStarted,
@@ -63,6 +65,9 @@ export const EVENT_HANDLERS: Record<
   'wisdom.request.created': handleWisdomRequestCreated,
   'wisdom.request.notification.sent': handleWisdomRequestNotificationSent,
   'wisdom.summary.requested': handleWisdomSummaryRequested,
+
+  // Quote events
+  'quote.generation.requested': handleQuoteGenerationRequested,
 }
 
 // ----------------------------------------------------------------------------
@@ -76,7 +81,7 @@ export const EVENT_HANDLERS: Record<
  * 1. Downloads the audio from R2
  * 2. Sends to Cartesia for transcription
  * 3. Updates the response with transcription text
- * 4. Publishes response.transcribed event
+ * 4. Publishes response.transcribed event (triggers quote generation)
  */
 async function handleResponseAudioUploaded(
   envelope: EventEnvelope,
@@ -107,6 +112,26 @@ async function handleResponseAudioUploaded(
     )
     if (!updateResult.success) return updateResult
 
+    // Publish response.transcribed event to trigger quote generation
+    await ctx.env.QUEUE?.send({
+      id: crypto.randomUUID(),
+      type: 'response.transcribed',
+      timestamp: new Date().toISOString(),
+      version: '1.0',
+      data: {
+        responseId,
+        storyId: responseResult.data.story_id,
+        transcriptionText: transcriptionResult.text,
+        durationSeconds: transcriptionResult.duration_seconds,
+      },
+      metadata: {
+        source: 'worker',
+        causationId: envelope.id,
+        userId: envelope.metadata?.userId,
+        familyId: envelope.metadata?.familyId,
+      },
+    })
+
     return {
       success: true,
       shouldRetry: false,
@@ -119,6 +144,155 @@ async function handleResponseAudioUploaded(
     return {
       success: false,
       shouldRetry: true,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+/**
+ * Handles: response.transcribed
+ *
+ * When a response is transcribed:
+ * 1. If no prompt_id exists, AI-generate one from the transcription
+ * 2. If no story_id exists, auto-create a story
+ * 3. Trigger quote generation
+ */
+async function handleResponseTranscribed(
+  envelope: EventEnvelope,
+  ctx: HandlerContext
+): Promise<EventHandlerResult> {
+  const { responseId, transcriptionText } = envelope.data as {
+    responseId: string
+    storyId: string | null
+    transcriptionText: string
+    durationSeconds: number
+    confidence?: number
+  }
+
+  console.log('[handleResponseTranscribed] START - responseId:', responseId, 'familyId:', envelope.metadata?.familyId)
+
+  try {
+    // Fetch response to check if prompt_id and story_id exist
+    const responseResult = await fetchResponseById(ctx, responseId)
+    if (!responseResult.success) {
+      console.error('[handleResponseTranscribed] Response not found:', responseId)
+      return { success: false, shouldRetry: false, error: 'Response not found' }
+    }
+
+    const response = responseResult.data
+    let promptId = response.prompt_id
+    let storyId = response.story_id
+
+    console.log('[handleResponseTranscribed] Current state - promptId:', promptId, 'storyId:', storyId, 'textLength:', transcriptionText?.length)
+
+    // Step 1: If no prompt_id, generate one from the transcription
+    if (!promptId && transcriptionText && transcriptionText.length >= 20) {
+      console.log('[handleResponseTranscribed] Generating prompt from transcription...')
+      const promptText = await ctx.llm.generatePromptFromTranscription(transcriptionText)
+
+      // Create the prompt in the database
+      const { data: newPrompt, error: promptError } = await ctx.supabase
+        .from('prompts')
+        .insert({
+          text: promptText,
+          family_id: envelope.metadata?.familyId || response.user_id,
+          created_by: response.user_id,
+          scheduled_for: null,
+        })
+        .select()
+        .single()
+
+      if (!promptError && newPrompt) {
+        promptId = newPrompt.id
+        await ctx.supabase
+          .from('responses')
+          .update({ prompt_id: promptId })
+          .eq('id', responseId)
+
+        console.log(`[Prompt Generation] Generated prompt "${promptText}" (id: ${promptId}) for response ${responseId}`)
+      } else {
+        console.error('[Prompt Generation] Failed to create prompt:', promptError)
+      }
+    }
+
+    // Step 2: If no story_id, auto-create a story
+    if (!storyId && promptId) {
+      const familyId = envelope.metadata?.familyId
+
+      console.log('[handleResponseTranscribed] Auto-creating story - familyId:', familyId, 'promptId:', promptId)
+
+      if (familyId) {
+        // Create a new story for this response
+        const { data: newStory, error: storyError } = await ctx.supabase
+          .from('stories')
+          .insert({
+            prompt_id: promptId,
+            family_id: familyId,
+            voice_count: 1,
+            is_completed: false,
+          })
+          .select()
+          .single()
+
+        if (!storyError && newStory) {
+          storyId = newStory.id
+
+          // Update the response with the new story_id
+          await ctx.supabase
+            .from('responses')
+            .update({ story_id: storyId })
+            .eq('id', responseId)
+
+          console.log(`[Story Auto-Creation] Created story ${storyId} for response ${responseId}`)
+        } else {
+          console.error('[Story Auto-Creation] Failed to create story:', storyError)
+        }
+      } else {
+        console.warn('[Story Auto-Creation] No familyId in metadata, skipping story creation')
+      }
+    }
+
+    // Only generate quote if transcription is meaningful (>50 chars)
+    if (!transcriptionText || transcriptionText.length < 50) {
+      console.log('[handleResponseTranscribed] Text too short, skipping quote generation')
+      return { success: true, shouldRetry: false }
+    }
+
+    // Publish quote generation request event
+    await ctx.env.QUEUE?.send({
+      id: crypto.randomUUID(),
+      type: 'quote.generation.requested',
+      timestamp: new Date().toISOString(),
+      version: '1.0',
+      data: {
+        responseId,
+        storyId: storyId || null,
+        triggeredBy: 'response.transcribed',
+      },
+      metadata: {
+        source: 'worker',
+        causationId: envelope.id,
+        userId: envelope.metadata?.userId,
+        familyId: envelope.metadata?.familyId,
+      },
+    })
+
+    console.log('[handleResponseTranscribed] COMPLETE - promptId:', promptId, 'storyId:', storyId)
+
+    return {
+      success: true,
+      shouldRetry: false,
+      metadata: {
+        quoteGenerationTriggered: true,
+        promptId,
+        storyId,
+      },
+    }
+  } catch (error) {
+    console.error('[handleResponseTranscribed] ERROR:', error)
+    return {
+      success: false,
+      shouldRetry: false,
       error: error instanceof Error ? error.message : 'Unknown error',
     }
   }
@@ -639,6 +813,110 @@ async function handleWisdomSummaryRequested(
       },
     }
   } catch (error) {
+    return {
+      success: false,
+      shouldRetry: true,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+// ----------------------------------------------------------------------------
+// QUOTE HANDLERS
+// ----------------------------------------------------------------------------
+
+/**
+ * Handles: quote.generation.requested
+ *
+ * When a quote is requested:
+ * 1. Fetch response with transcription and speaker info
+ * 2. Use AI to extract meaningful quote
+ * 3. Save quote to database
+ */
+async function handleQuoteGenerationRequested(
+  envelope: EventEnvelope,
+  ctx: HandlerContext
+): Promise<EventHandlerResult> {
+  const { responseId, storyId, triggeredBy } = envelope.data as {
+    responseId: string
+    storyId: string | null
+    triggeredBy: 'response.transcribed' | 'story.completed'
+  }
+
+  try {
+    // Fetch response with profile info
+    const { data: response, error } = await ctx.supabase
+      .from('responses')
+      .select(`
+        id,
+        transcription_text,
+        story_id,
+        profiles(
+          id,
+          full_name,
+          role,
+          family_id
+        )
+      `)
+      .eq('id', responseId)
+      .single()
+
+    if (error || !response) {
+      return { success: false, shouldRetry: false, error: 'Response not found' }
+    }
+
+    const transcriptionText = response.transcription_text
+    if (!transcriptionText || transcriptionText.length < 50) {
+      return { success: false, shouldRetry: false, error: 'Transcription too short' }
+    }
+
+    // Use AI to extract quote
+    const { quote, confidence } = await ctx.llm.extractQuote(transcriptionText)
+
+    // Only save high-confidence quotes
+    if (confidence < 0.5) {
+      return {
+        success: true,
+        shouldRetry: false,
+        metadata: { skipped: 'low confidence', confidence },
+      }
+    }
+
+    // Create quote card
+    const { data: quoteCard, error: insertError } = await ctx.supabase
+      .from('quote_cards')
+      .insert({
+        quote_text: quote,
+        author_name: response.profiles?.full_name || 'Family Member',
+        author_role: response.profiles?.role || 'member',
+        story_id: storyId || response.story_id,
+        theme: 'classic',
+        background_color: '#FFFFFF',
+        text_color: '#000000',
+        created_by: response.profiles?.id,
+        family_id: response.profiles?.family_id,
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      console.error('[Quote] Failed to insert quote:', insertError)
+      return { success: false, shouldRetry: true, error: insertError.message }
+    }
+
+    console.log(`[Quote] Generated quote "${quote.substring(0, 50)}..." from ${response.profiles?.full_name}`)
+
+    return {
+      success: true,
+      shouldRetry: false,
+      metadata: {
+        quoteId: quoteCard.id,
+        quoteLength: quote.length,
+        confidence,
+      },
+    }
+  } catch (error) {
+    console.error('[Quote] Generation error:', error)
     return {
       success: false,
       shouldRetry: true,

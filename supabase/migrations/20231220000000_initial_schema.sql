@@ -192,17 +192,19 @@ CREATE POLICY "Users can insert reactions" ON reactions
 -- =========================================================================
 
 -- FUNCTION: handle_new_user
--- Handles the "Sign in with Apple" + "Invite Link" logic automatically.
+-- Handles the "Sign in with Apple" + "Invite Link" + "Anonymous/Guest" logic automatically.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
     v_invite_slug TEXT;
     v_family_id UUID;
     v_role user_role;
+    v_family_name TEXT;
+    v_full_name TEXT;
 BEGIN
     -- 1. Check if user came from an Invite Link (metadata passed from iOS app)
     v_invite_slug := new.raw_user_meta_data->>'invite_slug';
-    
+
     -- 2. Check if a specific role was requested (optional logic)
     IF new.raw_user_meta_data ? 'role' THEN
         v_role := (new.raw_user_meta_data->>'role')::user_role;
@@ -210,16 +212,23 @@ BEGIN
         v_role := 'member';
     END IF;
 
+    -- Extract name with fallback for anonymous users
+    v_full_name := COALESCE(
+        new.raw_user_meta_data->>'full_name',
+        new.raw_user_meta_data->>'name',
+        'Anonymous User'
+    );
+
     IF v_invite_slug IS NOT NULL THEN
         -- SCENARIO: Joining an existing family
         SELECT id INTO v_family_id FROM families WHERE invite_slug = v_invite_slug;
-        
+
         IF v_family_id IS NOT NULL THEN
             INSERT INTO public.profiles (auth_user_id, family_id, full_name, avatar_url, role)
             VALUES (
-                new.id, 
-                v_family_id, 
-                new.raw_user_meta_data->>'full_name', 
+                new.id,
+                v_family_id,
+                v_full_name,
                 new.raw_user_meta_data->>'avatar_url',
                 v_role
             );
@@ -228,17 +237,24 @@ BEGIN
         -- SCENARIO: Creating a NEW Family (This user is the Organizer)
         -- Generate a random 8-char slug for their family link
         v_invite_slug := lower(substring(encode(gen_random_bytes(16), 'hex'), 1, 8));
-        
+
+        -- Extract family name with fallback for anonymous users
+        v_family_name := COALESCE(
+            new.raw_user_meta_data->>'family_name',
+            new.raw_user_meta_data->>'full_name',
+            'My Family'
+        );
+
         INSERT INTO public.families (name, invite_slug)
-        VALUES (new.raw_user_meta_data->>'family_name', v_invite_slug)
+        VALUES (v_family_name, v_invite_slug)
         RETURNING id INTO v_family_id;
 
         -- Create Organizer Profile
         INSERT INTO public.profiles (auth_user_id, family_id, full_name, avatar_url, role)
         VALUES (
-            new.id, 
-            v_family_id, 
-            new.raw_user_meta_data->>'full_name', 
+            new.id,
+            v_family_id,
+            v_full_name,
             new.raw_user_meta_data->>'avatar_url',
             'organizer'
         );

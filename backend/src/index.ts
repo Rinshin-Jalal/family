@@ -44,6 +44,7 @@ type Bindings = {
   SUPABASE_KEY: string
   AUDIO_BUCKET: R2Bucket
   OPENAI_API_KEY: string
+  AWS_BEARER_TOKEN_BEDROCK: string
   BEDROCK_REGION: string
   // Twilio for elder notifications
   TWILIO_ACCOUNT_SID: string
@@ -128,7 +129,7 @@ export default {
     const supabase = getSupabaseFromEnv()
 
     const llm = createQwenTurboClient({
-      openaiApiKey: env.OPENAI_API_KEY,
+      openaiApiKey: env.AWS_BEARER_TOKEN_BEDROCK || env.OPENAI_API_KEY,
     })
 
     const cartesia = createCartesiaClient({
@@ -136,12 +137,12 @@ export default {
     })
 
     const wisdomTagger = createWisdomTaggerClient({
-      openaiApiKey: env.OPENAI_API_KEY,
+      openaiApiKey: env.AWS_BEARER_TOKEN_BEDROCK || env.OPENAI_API_KEY,
       bedrockRegion: env.BEDROCK_REGION,
     })
 
     const wisdomSummarizer = createWisdomSummarizerClient({
-      openaiApiKey: env.OPENAI_API_KEY,
+      openaiApiKey: env.AWS_BEARER_TOKEN_BEDROCK || env.OPENAI_API_KEY,
       bedrockRegion: env.BEDROCK_REGION,
     })
 

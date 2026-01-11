@@ -6,6 +6,8 @@
 
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth';
+import { createQwenTurboClient } from '../ai/llm';
+import { logger, getUserId } from '../utils/logger';
 
 const app = new Hono<{ Bindings: any; Variables: any }>();
 
@@ -460,6 +462,256 @@ app.get('/api/wisdom/summary/:storyId', authMiddleware, async (c) => {
       createdAt: summary.created_at,
     },
   })
+})
+
+/**
+ * GET /api/wisdom/topics/discussion
+ * Generate AI-powered discussion topics based on family's stories
+ */
+app.get('/api/wisdom/topics/discussion', authMiddleware, async (c) => {
+  const route = '/api/wisdom/topics/discussion'
+  const method = 'GET'
+  const userId = getUserId(c)
+
+  logger.logRequest(route, method, userId)
+
+  const supabase = c.get('supabase')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, family_id')
+    .eq('auth_user_id', userId)
+    .single()
+
+  if (!profile) {
+    logger.warn(`Profile not found for discussion topics`, { route, userId })
+    return c.json({ error: 'Profile not found' }, 404)
+  }
+
+  // Fetch family stories with their tags
+  const { data: stories, error: storiesError } = await supabase
+    .from('stories')
+    .select(`
+      id,
+      title,
+      summary_text,
+      voice_count,
+      story_tags(
+        emotion_tags,
+        situation_tags,
+        lesson_tags,
+        guidance_tags
+      )
+    `)
+    .eq('family_id', profile.family_id)
+    .eq('is_completed', true)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  if (storiesError) {
+    logger.logDBError('SELECT', 'stories', storiesError, { route, userId, familyId: profile.family_id })
+  }
+
+  if (!stories?.length) {
+    logger.info(`No stories found, returning fallback topics`, { route, userId, familyId: profile.family_id })
+    // Return fallback topics if no stories
+    return c.json({
+      topics: [
+        {
+          question: "What's your favorite childhood memory?",
+          category: "Childhood",
+          reasoning: "Start with foundational stories to build your family's memory collection",
+          relatedStoryCount: 0,
+        },
+        {
+          question: "What tradition means the most to you and why?",
+          category: "Traditions",
+          reasoning: "Traditions connect generations and create lasting family identity",
+          relatedStoryCount: 0,
+        },
+      ],
+    })
+  }
+
+  try {
+    // Initialize LLM client
+    const llm = createQwenTurboClient({
+      openaiApiKey: c.env.OPENAI_API_KEY,
+      bedrockRegion: c.env.BEDROCK_REGION,
+    })
+
+    logger.info(`Generating AI discussion topics`, { route, userId, storyCount: stories.length })
+
+    // Format stories for AI
+    const familyStories = stories.map((s: any) => ({
+      title: s.title || 'Untitled Story',
+      summaryText: s.summary_text || '',
+      voiceCount: s.voice_count || 0,
+      tags: [
+        ...(s.story_tags?.[0]?.emotion_tags || []),
+        ...(s.story_tags?.[0]?.situation_tags || []),
+        ...(s.story_tags?.[0]?.lesson_tags || []),
+      ],
+    }))
+
+    // Generate topics using AI
+    const result = await llm.generateDiscussionTopics(familyStories)
+
+    logger.info(`Discussion topics generated successfully`, { route, userId, topicCount: result.topics.length })
+    return c.json({
+      topics: result.topics.slice(0, 5), // Return top 5 topics
+      storyCount: stories.length,
+    })
+  } catch (error) {
+    logger.error(`Failed to generate discussion topics`, error, { route, userId, familyId: profile.family_id })
+    return c.json({ error: 'Failed to generate topics' }, 500)
+  }
+})
+
+/**
+ * POST /api/wisdom/search/semantic
+ * Supermemory-style semantic search using embeddings
+ * Finds stories/quotes that match the meaning of the query, not just keywords
+ */
+app.post('/api/wisdom/search/semantic', authMiddleware, async (c) => {
+  const route = '/api/wisdom/search/semantic'
+  const method = 'POST'
+  const userId = getUserId(c)
+
+  logger.logRequest(route, method, userId)
+
+  const supabase = c.get('supabase')
+  const body = await c.req.json()
+  const { query, limit = 10 } = body
+
+  if (!query || query.length < 3) {
+    logger.warn(`Invalid semantic search query`, { route, userId, queryLength: query?.length })
+    return c.json({ error: 'Query must be at least 3 characters' }, 400)
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, family_id')
+    .eq('auth_user_id', userId)
+    .single()
+
+  if (!profile) {
+    logger.warn(`Profile not found for semantic search`, { route, userId })
+    return c.json({ error: 'Profile not found' }, 404)
+  }
+
+  try {
+    // Initialize LLM client for embeddings
+    const llm = createQwenTurboClient({
+      openaiApiKey: c.env.OPENAI_API_KEY,
+      bedrockRegion: c.env.BEDROCK_REGION,
+    })
+
+    logger.info(`Generating embedding for semantic search`, { route, userId, query })
+
+    // Generate embedding for query
+    const queryEmbedding = await llm.generateEmbedding(query)
+
+    // Fetch all stories and quotes from family
+    const { data: stories } = await supabase
+      .from('stories')
+      .select('id, title, summary_text, created_at')
+      .eq('family_id', profile.family_id)
+      .eq('is_completed', true)
+      .limit(100)
+
+    const { data: quotes } = await supabase
+      .from('quote_cards')
+      .select('id, quote_text, author_name, author_role, story_id, created_at')
+      .eq('family_id', profile.family_id)
+      .limit(100)
+
+    // Calculate semantic similarity for each result
+    const results: Array<{
+      id: string
+      type: 'story' | 'quote'
+      title: string
+      content: string
+      author?: string
+      role?: string
+      storyId?: string
+      similarity: number
+      createdAt: string
+    }> = []
+
+    // Calculate cosine similarity
+    const cosineSimilarity = (a: number[], b: number[]): number => {
+      let dotProduct = 0
+      let normA = 0
+      let normB = 0
+      for (let i = 0; i < Math.min(a.length, b.length); i++) {
+        dotProduct += a[i] * b[i]
+        normA += a[i] * a[i]
+        normB += b[i] * b[i]
+      }
+      return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
+    }
+
+    // Process stories
+    for (const story of stories || []) {
+      const text = `${story.title} ${story.summary_text || ''}`.substring(0, 500)
+      const embedding = await llm.generateEmbedding(text)
+      const similarity = cosineSimilarity(queryEmbedding, embedding)
+
+      if (similarity > 0.3) { // Threshold for relevance
+        results.push({
+          id: story.id,
+          type: 'story',
+          title: story.title || 'Untitled Story',
+          content: story.summary_text || '',
+          similarity,
+          createdAt: story.created_at,
+        })
+      }
+    }
+
+    // Process quotes
+    for (const quote of quotes || []) {
+      const embedding = await llm.generateEmbedding(quote.quote_text)
+      const similarity = cosineSimilarity(queryEmbedding, embedding)
+
+      if (similarity > 0.3) {
+        results.push({
+          id: quote.id,
+          type: 'quote',
+          title: quote.quote_text.substring(0, 100) + '...',
+          content: quote.quote_text,
+          author: quote.author_name,
+          role: quote.author_role,
+          storyId: quote.story_id,
+          similarity,
+          createdAt: quote.created_at,
+        })
+      }
+    }
+
+    // Sort by similarity and return top results
+    results.sort((a, b) => b.similarity - a.similarity)
+
+    logger.info(`Semantic search completed`, { route, userId, query, resultCount: results.length })
+
+    // Log the search
+    await supabase.from('wisdom_search_logs').insert({
+      user_id: profile.id,
+      search_query: query,
+      stories_found: results.length,
+      search_type: 'semantic',
+    })
+
+    return c.json({
+      query,
+      results: results.slice(0, limit),
+      count: results.length,
+    })
+  } catch (error) {
+    logger.error(`Semantic search failed`, error, { route, userId, query })
+    return c.json({ error: 'Search failed' }, 500)
+  }
 })
 
 export default app

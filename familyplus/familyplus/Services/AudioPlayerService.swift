@@ -83,6 +83,9 @@ class AudioPlayerService: ObservableObject {
         // Setup audio session for playback
         setupAudioSession()
 
+        // Observe player item status for errors
+        observePlayerItemStatus(playerItem)
+
         // Get duration
         Task {
             await loadDuration(for: playerItem)
@@ -101,6 +104,24 @@ class AudioPlayerService: ObservableObject {
     func play() {
         guard let player = player else {
             print("⚠️ No audio loaded to play")
+            return
+        }
+        
+        // Check if player item is ready and has no errors
+        guard let currentItem = player.currentItem,
+              currentItem.status == .readyToPlay else {
+            print("⚠️ Player item not ready or has error (status: \(player.currentItem?.status.rawValue ?? -1))")
+            
+            // If failed, clear state
+            if player.currentItem?.status == .failed {
+                isPlaying = false
+                playerState.isPlaying = false
+                playerState.clear()
+                
+                if let error = player.currentItem?.error {
+                    print("❌ Player error: \(error.localizedDescription)")
+                }
+            }
             return
         }
 
@@ -241,6 +262,44 @@ class AudioPlayerService: ObservableObject {
         }
     }
 
+    private func observePlayerItemStatus(_ item: AVPlayerItem) {
+        // Observe status changes to detect errors
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                self?.handlePlaybackError(notification)
+            }
+        }
+        
+        // Also observe for new error log entries
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemNewErrorLogEntry,
+            object: item,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                self?.handlePlaybackError(notification)
+            }
+        }
+    }
+    
+    private func handlePlaybackError(_ notification: Notification) {
+        print("❌ Audio playback error: \(notification)")
+        
+        // Stop playback and clear state
+        isPlaying = false
+        playerState.isPlaying = false
+        playerState.clear()
+        
+        // Show error to user (could be enhanced with a proper error state)
+        if let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error {
+            print("❌ Error details: \(error.localizedDescription)")
+        }
+    }
+
     private func observePlaybackEnd() {
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
@@ -330,9 +389,11 @@ extension AudioPlayerService {
     ///   - responses: Array of story segments to play as a playlist
     ///   - startId: ID of the response to start playing from
     func playFromHere(_ responses: [StorySegmentData], startId: String) {
-        // Build playlist items
+        // Build playlist items - only include actual audio responses
         let items = responses.compactMap { response -> PlaylistItem? in
-            guard let urlString = response.mediaUrl,
+            // Skip non-audio responses (text files, documents, etc.)
+            guard response.hasAudio,
+                  let urlString = response.mediaUrl,
                   let url = URL(string: urlString) else { return nil }
             return PlaylistItem(
                 id: response.id,

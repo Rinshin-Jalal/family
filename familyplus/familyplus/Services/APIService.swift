@@ -12,13 +12,13 @@ import SwiftUI
 
 final class APIService {
     static let shared = APIService()
-    
+
     /// Backend API base URL
     /// - For local dev: http://localhost:8787
     /// - For production: Set your deployed Cloudflare Worker URL
     /// - Can be overridden via App Configuration or Environment
     private let baseURL: String
-    
+
     private let session: URLSession
     
     private init() {
@@ -51,7 +51,12 @@ final class APIService {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        // Add user ID from auth token for backend validation
+        // Get Supabase access token for Authorization header
+        if let accessToken = try? await SupabaseService.shared.getAccessToken() {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
+
+        // Also add user ID for legacy middleware support
         if let userId = UserDefaults.standard.string(forKey: "auth_user_id") {
             request.setValue(userId, forHTTPHeaderField: "X-User-ID")
         }
@@ -60,35 +65,86 @@ final class APIService {
     }
     
     // MARK: - Stories API
-    
+
     /// Get family stories
     func getStories() async throws -> [StoryData] {
-        let request = await createRequest(endpoint: "/api/stories")
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode([StoryData].self, from: data)
+        let endpoint = "/api/stories"
+        Logger.logRequest(endpoint: endpoint, method: "GET")
+
+        do {
+            let request = await createRequest(endpoint: endpoint)
+            let (data, response) = try await session.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.logResponse(endpoint: endpoint, statusCode: httpResponse.statusCode)
+            }
+
+            let result = try JSONDecoder().decode([StoryData].self, from: data)
+            Logger.debug("[Stories] Fetched \(result.count) stories")
+            return result
+        } catch let error as DecodingError {
+            Logger.logDecodingError(endpoint: endpoint, error: error)
+            throw error
+        } catch {
+            Logger.logNetworkError(endpoint: endpoint, error: error)
+            throw error
+        }
     }
     
     /// Get story by ID
     func getStory(id: UUID) async throws -> StoryDetailData {
-        let request = await createRequest(endpoint: "/api/stories/\(id.uuidString)")
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(StoryDetailData.self, from: data)
+        let endpoint = "/api/stories/\(id.uuidString)"
+        Logger.logRequest(endpoint: endpoint, method: "GET")
+
+        do {
+            let request = await createRequest(endpoint: endpoint)
+            let (data, response) = try await session.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.logResponse(endpoint: endpoint, statusCode: httpResponse.statusCode)
+            }
+
+            return try JSONDecoder().decode(StoryDetailData.self, from: data)
+        } catch let error as DecodingError {
+            Logger.logDecodingError(endpoint: endpoint, error: error)
+            throw error
+        } catch {
+            Logger.logNetworkError(endpoint: endpoint, error: error)
+            throw error
+        }
     }
-    
+
     /// Create new story
     func createStory(promptId: UUID) async throws -> StoryData {
-        let body = CreateStoryAPIRequest(prompt_id: promptId.uuidString)
-        var request = await createRequest(endpoint: "/api/stories", method: "POST")
-        request.httpBody = try JSONEncoder().encode(body)
-        let (data, _) = try await session.data(for: request)
-        let result = try JSONDecoder().decode(StoryData.self, from: data)
+        let endpoint = "/api/stories"
+        Logger.logRequest(endpoint: endpoint, method: "POST")
 
-        // Track value analytics: story captured via prompt/type method
-        Task { @MainActor in
-            ValueAnalyticsService.shared.trackStoryCapture(method: .type)
+        do {
+            let body = CreateStoryAPIRequest(prompt_id: promptId.uuidString)
+            var request = await createRequest(endpoint: endpoint, method: "POST")
+            request.httpBody = try JSONEncoder().encode(body)
+            let (data, response) = try await session.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.logResponse(endpoint: endpoint, statusCode: httpResponse.statusCode)
+            }
+
+            let result = try JSONDecoder().decode(StoryData.self, from: data)
+            Logger.info("[Stories] Created story: \(result.id)")
+
+            // Track value analytics: story captured via prompt/type method
+            Task { @MainActor in
+                ValueAnalyticsService.shared.trackStoryCapture(method: .type)
+            }
+
+            return result
+        } catch let error as DecodingError {
+            Logger.logDecodingError(endpoint: endpoint, error: error)
+            throw error
+        } catch {
+            Logger.logAPIError(endpoint: endpoint, error: error)
+            throw error
         }
-
-        return result
     }
     
     // MARK: - Family API
@@ -174,7 +230,7 @@ final class APIService {
     // MARK: - Responses API (Audio Upload)
     
     /// Upload audio response
-    func uploadResponse(promptId: UUID, storyId: UUID?, audioData: Data, filename: String, source: String) async throws -> ResponseData {
+    func uploadResponse(promptId: UUID, storyId: UUID?, audioData: Data, filename: String, source: String, replyToResponseId: String? = nil) async throws -> ResponseData {
         let boundary = UUID().uuidString
 
         var body = Data()
@@ -205,6 +261,14 @@ final class APIService {
         body.append("Content-Disposition: form-data; name=\"source\"\r\n\r\n".data(using: .utf8)!)
         body.append(source.data(using: .utf8)!)
         body.append("\r\n".data(using: .utf8)!)
+
+        // Add reply_to_response_id (optional)
+        if let replyToResponseId = replyToResponseId {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"reply_to_response_id\"\r\n\r\n".data(using: .utf8)!)
+            body.append(replyToResponseId.data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
 
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
@@ -436,15 +500,93 @@ final class APIService {
         var request = await createRequest(endpoint: "/api/wisdom/tags/\(storyId.uuidString)", method: "PUT")
         request.httpBody = try JSONEncoder().encode(body)
         let (_, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             throw APIError.updateFailed
         }
     }
-    
+
+    // MARK: - Podcasts
+
+    /// Generate podcast for a story
+    func generatePodcast(storyId: UUID) async throws {
+        var request = await createRequest(endpoint: "/api/stories/\(storyId.uuidString)/generate-podcast", method: "POST")
+        let (_, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.updateFailed
+        }
+    }
+
+    /// Get podcast status for a story
+    func getPodcastStatus(storyId: UUID) async throws -> PodcastStatusResponse {
+        let request = await createRequest(endpoint: "/api/stories/\(storyId.uuidString)/podcast-status")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(PodcastStatusResponse.self, from: data)
+    }
+
+    // MARK: - Discussion Topics
+
+    /// Get AI-generated discussion topics based on family's stories
+    func getDiscussionTopics() async throws -> DiscussionTopicsResponse {
+        let endpoint = "/api/wisdom/topics/discussion"
+        Logger.logRequest(endpoint: endpoint, method: "GET")
+
+        do {
+            let request = await createRequest(endpoint: endpoint)
+            let (data, response) = try await session.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.logResponse(endpoint: endpoint, statusCode: httpResponse.statusCode)
+            }
+
+            let result = try JSONDecoder().decode(DiscussionTopicsResponse.self, from: data)
+            Logger.info("[Wisdom] Generated \(result.topics.count) discussion topics")
+            return result
+        } catch let error as DecodingError {
+            Logger.logDecodingError(endpoint: endpoint, error: error)
+            throw error
+        } catch {
+            Logger.logAPIError(endpoint: endpoint, error: error)
+            throw error
+        }
+    }
+
+    // MARK: - Semantic Search
+
+    /// Supermemory-style semantic search using embeddings
+    func semanticSearch(query: String, limit: Int = 10) async throws -> SemanticSearchResponse {
+        let endpoint = "/api/wisdom/search/semantic"
+        Logger.logRequest(endpoint: endpoint, method: "POST")
+        Logger.debug("[Wisdom] Semantic search query: \(query)")
+
+        do {
+            let body = SemanticSearchRequest(query: query, limit: limit)
+            var request = await createRequest(endpoint: endpoint, method: "POST")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(body)
+            let (data, response) = try await session.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.logResponse(endpoint: endpoint, statusCode: httpResponse.statusCode)
+            }
+
+            let result = try JSONDecoder().decode(SemanticSearchResponse.self, from: data)
+            Logger.info("[Wisdom] Semantic search returned \(result.results.count) results")
+            return result
+        } catch let error as DecodingError {
+            Logger.logDecodingError(endpoint: endpoint, error: error)
+            throw error
+        } catch {
+            Logger.logAPIError(endpoint: endpoint, error: error)
+            throw error
+        }
+    }
+
     // MARK: - Quote Cards API
-    
+
     /// Generate a quote card from a story response
     func generateQuoteCard(
         storyId: UUID,
@@ -453,24 +595,60 @@ final class APIService {
         backgroundColor: String? = nil,
         textColor: String? = nil
     ) async throws -> QuoteCardResponse {
-        let body = GenerateQuoteRequest(
-            story_id: storyId.uuidString,
-            response_id: responseId.uuidString,
-            theme: theme,
-            background_color: backgroundColor,
-            text_color: textColor
-        )
-        var request = await createRequest(endpoint: "/api/quotes/generate", method: "POST")
-        request.httpBody = try JSONEncoder().encode(body)
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(QuoteCardResponse.self, from: data)
+        let endpoint = "/api/quotes/generate"
+        Logger.logRequest(endpoint: endpoint, method: "POST")
+
+        do {
+            let body = GenerateQuoteRequest(
+                story_id: storyId.uuidString,
+                response_id: responseId.uuidString,
+                theme: theme,
+                background_color: backgroundColor,
+                text_color: textColor
+            )
+            var request = await createRequest(endpoint: endpoint, method: "POST")
+            request.httpBody = try JSONEncoder().encode(body)
+            let (data, response) = try await session.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.logResponse(endpoint: endpoint, statusCode: httpResponse.statusCode)
+            }
+
+            let result = try JSONDecoder().decode(QuoteCardResponse.self, from: data)
+            Logger.info("[Quotes] Generated quote card: \(result.id)")
+            return result
+        } catch let error as DecodingError {
+            Logger.logDecodingError(endpoint: endpoint, error: error)
+            throw error
+        } catch {
+            Logger.logAPIError(endpoint: endpoint, error: error)
+            throw error
+        }
     }
     
     /// Get popular quote cards for the user's family
     func getPopularQuoteCards(limit: Int = 10) async throws -> QuoteCardsResponse {
-        let request = await createRequest(endpoint: "/api/quotes/popular?limit=\(limit)")
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(QuoteCardsResponse.self, from: data)
+        let endpoint = "/api/quotes/popular?limit=\(limit)"
+        Logger.logRequest(endpoint: endpoint, method: "GET")
+
+        do {
+            let request = await createRequest(endpoint: endpoint)
+            let (data, response) = try await session.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.logResponse(endpoint: endpoint, statusCode: httpResponse.statusCode)
+            }
+
+            let result = try JSONDecoder().decode(QuoteCardsResponse.self, from: data)
+            Logger.debug("[Quotes] Fetched \(result.quotes.count) popular quotes")
+            return result
+        } catch let error as DecodingError {
+            Logger.logDecodingError(endpoint: endpoint, error: error)
+            throw error
+        } catch {
+            Logger.logAPIError(endpoint: endpoint, error: error)
+            throw error
+        }
     }
     
     /// Get a specific quote card
@@ -773,7 +951,7 @@ public struct PromptData: Identifiable, Codable {
 
 public struct ResponseData: Identifiable, Codable {
     public var id: String
-    public var promptId: String
+    public var promptId: String?
     public var storyId: String?
     public var userId: String
     public var source: String
@@ -782,8 +960,8 @@ public struct ResponseData: Identifiable, Codable {
     public var durationSeconds: Int?
     public var processingStatus: String
     public var createdAt: String
-    
-    public init(id: String, promptId: String, storyId: String?, userId: String, source: String, mediaUrl: String?, transcriptionText: String?, durationSeconds: Int?, processingStatus: String, createdAt: String) {
+
+    public init(id: String, promptId: String?, storyId: String?, userId: String, source: String, mediaUrl: String?, transcriptionText: String?, durationSeconds: Int?, processingStatus: String, createdAt: String) {
         self.id = id
         self.promptId = promptId
         self.storyId = storyId
@@ -826,6 +1004,16 @@ struct FamilyMemberData: Identifiable, Codable {
     let avatarUrl: String?
     let role: String
     let phoneNumber: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case authUserId = "auth_user_id"
+        case familyId = "family_id"
+        case fullName = "full_name"
+        case avatarUrl = "avatar_url"
+        case role
+        case phoneNumber = "phone_number"
+    }
 }
 
 struct StoryData: Identifiable, Codable {
@@ -840,7 +1028,21 @@ struct StoryData: Identifiable, Codable {
     let createdAt: String
     let promptText: String?
     let promptCategory: String?
-    
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case promptId = "prompt_id"
+        case familyId = "family_id"
+        case title
+        case summaryText = "summary_text"
+        case coverImageUrl = "cover_image_url"
+        case voiceCount = "voice_count"
+        case isCompleted = "is_completed"
+        case createdAt = "created_at"
+        case promptText = "prompt_text"
+        case promptCategory = "prompt_category"
+    }
+
     var storytellerColorName: String {
         guard let promptCategory = promptCategory else { return "blue" }
         switch promptCategory.lowercased() {
@@ -850,7 +1052,7 @@ struct StoryData: Identifiable, Codable {
         default: return "blue"
         }
     }
-    
+
     var createdAtDate: Date {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -875,6 +1077,20 @@ struct StorySegmentData: Identifiable, Codable {
     let role: String
     let avatarUrl: String?
     let replyToResponseId: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case source
+        case mediaUrl = "media_url"
+        case transcriptionText = "transcription_text"
+        case durationSeconds = "duration_seconds"
+        case createdAt = "created_at"
+        case fullName = "full_name"
+        case role
+        case avatarUrl = "avatar_url"
+        case replyToResponseId = "reply_to_response_id"
+    }
     
     var storytellerColorName: String {
         switch role {
@@ -908,6 +1124,49 @@ struct StorySegmentData: Identifiable, Codable {
     
     var isReply: Bool {
         replyToResponseId != nil
+    }
+    
+    /// Check if this response has actual audio content (not text/document files)
+    var hasAudio: Bool {
+        guard let mediaUrl = mediaUrl, !mediaUrl.isEmpty else { 
+            #if DEBUG
+            print("[hasAudio] No mediaUrl for response \(id)")
+            #endif
+            return false 
+        }
+        let lowercased = mediaUrl.lowercased()
+        
+        // Only check file extensions - be strict about what we consider audio
+        // Explicitly exclude text and document files
+        if lowercased.hasSuffix(".txt") ||
+           lowercased.hasSuffix(".pdf") ||
+           lowercased.hasSuffix(".doc") ||
+           lowercased.hasSuffix(".docx") ||
+           lowercased.hasSuffix(".md") {
+            #if DEBUG
+            print("[hasAudio] ❌ Excluded non-audio file: \(mediaUrl)")
+            #endif
+            return false
+        }
+        
+        // Check for actual audio file extensions
+        let isAudio = lowercased.hasSuffix(".m4a") ||
+                      lowercased.hasSuffix(".mp3") ||
+                      lowercased.hasSuffix(".wav") ||
+                      lowercased.hasSuffix(".ogg") ||
+                      lowercased.hasSuffix(".aac") ||
+                      lowercased.hasSuffix(".flac") ||
+                      lowercased.hasSuffix(".webm")
+        
+        #if DEBUG
+        if isAudio {
+            print("[hasAudio] ✅ Audio file detected: \(mediaUrl)")
+        } else {
+            print("[hasAudio] ❌ Not recognized as audio: \(mediaUrl)")
+        }
+        #endif
+        
+        return isAudio
     }
 }
 
@@ -1072,13 +1331,14 @@ struct QuoteCardData: Identifiable, Codable {
     let id: String
     let quoteText: String
     let authorName: String
-    let authorRole: String?
+    let authorRole: String
     let theme: String
     let imageUrl: String?
+    let storyId: String?
     let viewsCount: Int
     let sharesCount: Int
     let savesCount: Int
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case quoteText = "quote_text"
@@ -1086,6 +1346,7 @@ struct QuoteCardData: Identifiable, Codable {
         case authorRole = "author_role"
         case theme
         case imageUrl = "image_url"
+        case storyId = "story_id"
         case viewsCount = "views_count"
         case sharesCount = "shares_count"
         case savesCount = "saves_count"
@@ -1223,4 +1484,55 @@ struct ShareRequest: Codable {
 struct ShareComparisonResponse: Codable {
     let shareUrl: String
     let imageUrl: String?
+}
+
+// MARK: - Podcast Models
+
+struct PodcastStatusResponse: Codable {
+    let storyId: String
+    let status: String
+    let readyClips: Int
+    let totalClips: Int
+    let totalDuration: Double
+    let isReady: Bool
+}
+
+// MARK: - Discussion Topics Models
+
+struct DiscussionTopic: Codable, Identifiable {
+    let id = UUID()
+    let question: String
+    let category: String
+    let reasoning: String
+    let relatedStoryCount: Int
+}
+
+struct DiscussionTopicsResponse: Codable {
+    let topics: [DiscussionTopic]
+    let storyCount: Int?
+}
+
+// MARK: - Semantic Search Models
+
+struct SemanticSearchRequest: Codable {
+    let query: String
+    let limit: Int
+}
+
+struct SemanticSearchResult: Codable, Identifiable {
+    let id: String
+    let type: String  // "story" or "quote"
+    let title: String
+    let content: String
+    let author: String?
+    let role: String?
+    let storyId: String?
+    let similarity: Double
+    let createdAt: String
+}
+
+struct SemanticSearchResponse: Codable {
+    let query: String
+    let results: [SemanticSearchResult]
+    let count: Int
 }

@@ -70,67 +70,25 @@ struct MainAppView_Previews: PreviewProvider {
 // MARK: - Story Model
 
 struct Story: Identifiable {
-    let id = UUID()
+    let id: String
     let title: String
     let storyteller: String
     let imageURL: String?
     let voiceCount: Int
     let timestamp: Date
     var storytellerColor: Color {
-        //        switch  {
-        //            case .elder:
-        //                return .storytellerOrange
-        //            case .parent:
-        //                return .storytellerBlue
-        //            case .teen:
-        //                return .storytellerPurple
-        //            case .child:
-        //                return .storytellerGreen
-        //            }
-        //        }
         .storytellerPurple
     }
-}
 
-// MARK: - Sample Stories
-
-extension Story {
-    static let sampleStories: [Story] = [
+    // Helper to create from StoryData (API model)
+    static func from(storyData: StoryData, memberName: String? = nil) -> Story {
         Story(
-            title: "The Summer Road Trip of '68",
-            storyteller: "Grandma Rose",
-            imageURL: nil,
-            voiceCount: 3,
-            timestamp: Date().addingTimeInterval(-3600),
-        ),
-        Story(
-            title: "My First Day at School",
-            storyteller: "Dad",
-            imageURL: nil,
-            voiceCount: 2,
-            timestamp: Date().addingTimeInterval(-7200),
-        ),
-        Story(
-            title: "The Best Birthday Ever",
-            storyteller: "Mia",
-            imageURL: nil,
-            voiceCount: 1,
-            timestamp: Date().addingTimeInterval(-10800),
-        ),
-        Story(
-            title: "When I Met Your Grandfather",
-            storyteller: "Grandma Rose",
-            imageURL: nil,
-            voiceCount: 4,
-            timestamp: Date().addingTimeInterval(-14400),
-        ),
-        Story(
-            title: "My Favorite Toy",
-            storyteller: "Leo",
-            imageURL: nil,
-            voiceCount: 1,
-            timestamp: Date().addingTimeInterval(-18000),
-
+            id: storyData.id,
+            title: storyData.title ?? storyData.promptText ?? "Untitled Story",
+            storyteller: memberName ?? "Family Member",
+            imageURL: storyData.coverImageUrl,
+            voiceCount: storyData.voiceCount,
+            timestamp: storyData.createdAtDate
         )
-    ]
+    }
 }

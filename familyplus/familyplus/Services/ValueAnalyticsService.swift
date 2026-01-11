@@ -250,6 +250,41 @@ final class ValueAnalyticsService: ObservableObject {
         track(.appClose)
     }
 
+    // MARK: - Onboarding Analytics (Psychology Flow)
+
+    func trackOnboardingQuizAnswer(question: String, answer: String) {
+        let eventData: [String: Any] = [
+            "event_type": "onboarding_quiz_answer",
+            "event_category": "onboarding",
+            "properties": [
+                "question": question,
+                "answer": answer
+            ],
+            "session_id": sessionId.uuidString,
+            "is_value_metric": false,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ]
+
+        Task {
+            await sendEvent(eventData)
+        }
+    }
+
+    func trackCustomEvent(name: String, properties: [String: Any] = [:]) {
+        let eventData: [String: Any] = [
+            "event_type": name,
+            "event_category": "custom",
+            "properties": properties,
+            "session_id": sessionId.uuidString,
+            "is_value_metric": true,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ]
+
+        Task {
+            await sendEvent(eventData)
+        }
+    }
+
     private func updateMetrics(for event: ValueAnalyticsEvent) {
         switch event {
         case .storyCapture:

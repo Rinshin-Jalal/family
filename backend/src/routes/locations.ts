@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { getSupabaseFromContext } from '../utils/supabase'
+import { logger, getUserId } from '../utils/logger'
 
 type Bindings = {
   SUPABASE_URL: string
@@ -10,10 +11,16 @@ const app = new Hono<{ Bindings: Bindings }>()
 
 // GET /locations - Get all location tags for user's family
 app.get('/api/locations', async (c) => {
+  const route = '/api/locations'
+  const method = 'GET'
+
+  logger.logRequest(route, method)
+
   const supabase = getSupabaseFromContext(c)
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
+    logger.logAuthError('getUser', authError, { route })
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
@@ -25,6 +32,7 @@ app.get('/api/locations', async (c) => {
     .single()
 
   if (profileError || !profile) {
+    logger.logDBError('SELECT', 'profiles', profileError, { route, userId: user.id })
     return c.json({ error: 'Profile not found' }, 404)
   }
 
@@ -47,9 +55,11 @@ app.get('/api/locations', async (c) => {
     ))
 
   if (error) {
+    logger.logDBError('SELECT', 'location_tags', error, { route, userId: user.id, familyId: profile.family_id })
     return c.json({ error: error.message }, 500)
   }
 
+  logger.info(`Locations fetched successfully`, { route, userId: user.id, count: locations?.length || 0 })
   return c.json(locations)
 })
 
@@ -77,6 +87,11 @@ app.get('/api/locations/:storyId', async (c) => {
 
 // POST /locations - Create a new location tag
 app.post('/api/locations', async (c) => {
+  const route = '/api/locations'
+  const method = 'POST'
+
+  logger.logRequest(route, method)
+
   const supabase = getSupabaseFromContext(c)
   const body = await c.req.json<{
     story_id: string
@@ -90,6 +105,7 @@ app.post('/api/locations', async (c) => {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
+    logger.logAuthError('getUser', authError, { route })
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
@@ -108,9 +124,11 @@ app.post('/api/locations', async (c) => {
     .single()
 
   if (error) {
+    logger.logDBError('INSERT', 'location_tags', error, { route, userId: user.id, storyId: body.story_id })
     return c.json({ error: error.message }, 500)
   }
 
+  logger.info(`Location tag created`, { route, userId: user.id, locationId: data.id })
   return c.json(data, 201)
 })
 

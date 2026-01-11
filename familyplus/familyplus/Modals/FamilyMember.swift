@@ -38,10 +38,15 @@ struct FamilyMember: Identifiable {
         case offline
     }
 
-    static let sampleMembers: [FamilyMember] = [
-        FamilyMember(name: "Grandma Rose", avatarEmoji: "❤️", storyCount: 15, status: .offline, isElder: true),
-        FamilyMember(name: "Dad",  avatarEmoji: "👨", storyCount: 12, status: .online),
-        FamilyMember(name: "Leo",  avatarEmoji: "🎸", storyCount: 8, status: .away),
-        FamilyMember(name: "Mia", avatarEmoji: "🌟", storyCount: 7, status: .online)
-    ]
+    // Create from API data
+    static func from(memberData: FamilyMemberData, stories: [StoryData] = []) -> FamilyMember {
+        let memberStories = stories.filter { $0.familyId == memberData.id }
+        return FamilyMember(
+            name: memberData.fullName ?? "Family Member",
+            avatarEmoji: "👤", // Default - could load from avatarUrl
+            storyCount: memberStories.count,
+            status: .online, // Default - TODO: implement real status
+            isElder: memberData.role.lowercased().contains("elder")
+        )
+    }
 }

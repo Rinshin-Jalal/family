@@ -63,12 +63,12 @@ export class WisdomTaggerClient {
   constructor(config: { openaiApiKey: string; modelId?: string; bedrockRegion?: string }) {
     if (!config.openaiApiKey || config.openaiApiKey.includes('placeholder')) {
       throw new AIServiceError(
-        'OPENAI_API_KEY is required for wisdom tagging',
+        'AWS_BEARER_TOKEN_BEDROCK is required for wisdom tagging',
         'wisdom-tagger'
       );
     }
 
-    this.modelId = config.modelId || 'openai.gpt-4o';
+    this.modelId = config.modelId || 'openai.gpt-oss-20b-1:0';
 
     // Use direct OpenAI or Bedrock endpoint
     const bedrockRegion = config.bedrockRegion || 'us-west-2';

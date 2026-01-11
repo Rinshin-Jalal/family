@@ -45,14 +45,56 @@ export const profileMiddleware = async (c: any, next: any) => {
   const user = c.get('user')
   const supabase = c.get('supabase')
 
-  const { data: profile, error } = await supabase
+  let { data: profile, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('auth_user_id', user.id)
     .single()
 
+  // Auto-create profile if it doesn't exist
   if (error || !profile) {
-    return c.json({ error: 'Profile not found' }, 404)
+    try {
+      // Generate invite slug for new family
+      const inviteSlug = Buffer.from(crypto.randomUUID()).toString('hex').substring(0, 8)
+
+      // Create family first
+      const { data: family, error: familyError } = await supabase
+        .from('families')
+        .insert({
+          name: 'My Family',
+          invite_slug: inviteSlug,
+        })
+        .select()
+        .single()
+
+      if (familyError || !family) {
+        console.error('[ProfileMiddleware] Failed to create family:', familyError)
+        return c.json({ error: 'Failed to create family', details: familyError?.message }, 500)
+      }
+
+      // Create profile
+      const { data: newProfile, error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          auth_user_id: user.id,
+          family_id: family.id,
+          full_name: user.user_metadata?.full_name || user.user_metadata?.name || 'Anonymous User',
+          role: 'organizer',
+        })
+        .select()
+        .single()
+
+      if (profileError || !newProfile) {
+        console.error('[ProfileMiddleware] Failed to create profile:', profileError)
+        return c.json({ error: 'Failed to create profile', details: profileError?.message }, 500)
+      }
+
+      profile = newProfile
+      console.log('[ProfileMiddleware] Auto-created profile and family for user:', user.id)
+    } catch (err) {
+      console.error('[ProfileMiddleware] Exception during profile creation:', err)
+      return c.json({ error: 'Failed to initialize user profile', details: err instanceof Error ? err.message : 'Unknown error' }, 500)
+    }
   }
 
   c.set('profile' as const, profile)

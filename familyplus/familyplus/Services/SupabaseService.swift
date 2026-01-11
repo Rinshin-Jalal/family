@@ -22,13 +22,13 @@ final class SupabaseService {
 
     private init() {
         #if DEBUG
-        // Local Supabase for development
-        let url = URL(string: "http://127.0.0.1:54321")!
-        let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+        // Development Supabase
+        let url = URL(string: "https://subsznzkruecxudxpbzw.supabase.co")!
+        let anonKey = "sb_publishable_wIMCgcwD-dyDwCkB0PhNlA_-ACMyTZQ"
         #else
-        // Production Supabase - REPLACE with real credentials
-        let url = URL(string: "https://your-project.supabase.co")!
-        let anonKey = "your-anon-key"
+        // Production Supabase
+        let url = URL(string: "https://subsznzkruecxudxpbzw.supabase.co")!
+        let anonKey = "sb_publishable_wIMCgcwD-dyDwCkB0PhNlA_-ACMyTZQ"
         #endif
 
         self.client = SupabaseClient(
@@ -42,6 +42,16 @@ final class SupabaseService {
     /// Get current user session
     func getCurrentSession() async throws -> AuthSession? {
         return try await client.auth.session
+    }
+
+    /// Sign in anonymously (guest auth for testing)
+    func signInAnonymously() async throws -> AuthSession {
+        let session = try await client.auth.signInAnonymously()
+
+        // Store user ID for backend API requests
+        UserDefaults.standard.set(session.user.id.uuidString, forKey: "auth_user_id")
+
+        return session
     }
 
     /// Sign in with Apple OAuth

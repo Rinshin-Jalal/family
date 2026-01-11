@@ -2,7 +2,7 @@
 //  WisdomSearchView.swift
 //  StoryRide
 //
-//  Search for wisdom by asking questions
+//  Search for wisdom by asking questions - Now with Supermemory-style semantic search!
 //
 
 import SwiftUI
@@ -12,13 +12,13 @@ struct WisdomSearchView: View {
     @Environment(\.theme) private var theme
     @State private var searchText: String = ""
     @State private var isSearching: Bool = false
-    @State private var searchResults: [WisdomSearchResult] = []
+    @State private var searchResults: [SemanticSearchResult] = []
     @State private var errorMessage: String?
     @State private var showNoResults: Bool = false
-    
+
     let onStorySelected: ((UUID) -> Void)?
     let onRequestStory: (() -> Void)?
-    
+
     init(
         onStorySelected: ((UUID) -> Void)? = nil,
         onRequestStory: (() -> Void)? = nil
@@ -26,12 +26,16 @@ struct WisdomSearchView: View {
         self.onStorySelected = onStorySelected
         self.onRequestStory = onRequestStory
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             searchHeader
-            
-            if showNoResults && !isSearching {
+
+            if isSearching {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .padding()
+            } else if showNoResults {
                 noResultsView
             } else if !searchResults.isEmpty {
                 searchResultsList
@@ -43,19 +47,20 @@ struct WisdomSearchView: View {
             searchText = ""
         }
     }
-    
+
     private var searchHeader: some View {
         VStack(spacing: 12) {
             Text("Ask the Family")
                 .font(theme.headlineFont)
                 .foregroundColor(theme.textColor)
-            
-            Text("Find wisdom from your family's stories")
+
+            Text("Find wisdom using semantic search - understands meaning, not just keywords!")
                 .font(theme.bodyFont)
                 .foregroundColor(theme.textColor.opacity(0.7))
-            
+                .multilineTextAlignment(.center)
+
             HStack(spacing: 12) {
-                TextField("Ask: \"How did family handle...\"", text: $searchText)
+                TextField("Ask: \"What did grandpa say about love?\"", text: $searchText)
                     .font(theme.bodyFont)
                     .padding()
                     .background(theme.cardBackgroundColor)
@@ -63,61 +68,89 @@ struct WisdomSearchView: View {
                     .foregroundColor(theme.textColor)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                
+                    .onSubmit {
+                        performSearch()
+                    }
+
                 Button(action: performSearch) {
-                    Image(systemName: "magnifyingglass")
-                        .font(theme.headlineFont)
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(searchText.isEmpty ? theme.accentColor.opacity(0.5) : theme.accentColor)
-                        .clipShape(Circle())
+                    if isSearching {
+                        ProgressView()
+                            .foregroundColor(.white)
+                            .padding()
+                    } else {
+                        Image(systemName: "magnifyingglass")
+                            .font(theme.headlineFont)
+                            .foregroundColor(.white)
+                            .padding()
+                    }
                 }
                 .disabled(searchText.isEmpty || isSearching)
             }
             .padding(.horizontal)
+
+            // Quick search suggestions
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(["childhood memories", "family traditions", "advice about love", "grandparents", "holiday stories"], id: \.self) { suggestion in
+                        Button(action: {
+                            searchText = suggestion
+                            performSearch()
+                        }) {
+                            Text(suggestion)
+                                .font(.caption)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(theme.accentColor.opacity(0.1))
+                                .foregroundColor(theme.accentColor)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
         }
         .padding(.vertical)
     }
-    
+
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             Spacer()
-            
-            Image(systemName: "bubble.left.and.bubble.right")
+
+            Image(systemName: "brain.head.profile")
                 .font(.system(size: 60))
                 .foregroundColor(theme.accentColor.opacity(0.5))
-            
-            Text("Ask your family")
+
+            Text("Semantic Memory Search")
                 .font(theme.headlineFont)
                 .foregroundColor(theme.textColor)
-            
-            Text("Search for wisdom by asking questions like:\n\"How did grandparents meet?\"\n\"Family advice about money\"")
+
+            Text("Ask anything to find relevant stories and wisdom.\nSearches by meaning, not just keywords!")
                 .font(theme.bodyFont)
                 .foregroundColor(theme.textColor.opacity(0.7))
                 .multilineTextAlignment(.center)
-            
+
             Spacer()
         }
         .padding()
     }
-    
+
     private var noResultsView: some View {
         VStack(spacing: 16) {
             Spacer()
-            
+
             Image(systemName: "questionmark.circle")
                 .font(.system(size: 60))
                 .foregroundColor(theme.accentColor.opacity(0.5))
-            
+
             Text("No stories found")
                 .font(theme.headlineFont)
                 .foregroundColor(theme.textColor)
-            
+
             Text("Would you like to request stories from your family about this topic?")
                 .font(theme.bodyFont)
                 .foregroundColor(theme.textColor.opacity(0.7))
                 .multilineTextAlignment(.center)
-            
+
             Button(action: { onRequestStory?() }) {
                 Text("Request Stories")
                     .font(theme.headlineFont)
@@ -128,19 +161,19 @@ struct WisdomSearchView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .padding(.horizontal, 40)
-            
+
             Spacer()
         }
         .padding()
     }
-    
+
     private var searchResultsList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                ForEach(searchResults, id: \.storyId) { result in
-                    WisdomResultCard(result: result)
+                ForEach(searchResults) { result in
+                    SemanticResultCard(result: result)
                         .onTapGesture {
-                            if let uuid = UUID(uuidString: result.storyId) {
+                            if result.type == "story", let uuid = UUID(uuidString: result.id) {
                                 onStorySelected?(uuid)
                             }
                         }
@@ -149,87 +182,107 @@ struct WisdomSearchView: View {
             .padding()
         }
     }
-    
+
     private func performSearch() {
         guard !searchText.isEmpty else { return }
-        
+
         isSearching = true
         showNoResults = false
         searchResults = []
         errorMessage = nil
-        
-        // Mock search results for now
+
         Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            await MainActor.run {
-                // Add mock results
-                searchResults = [
-                    WisdomSearchResult(
-                        storyId: UUID().uuidString,
-                        title: "Sample Story",
-                        summaryText: "This is a sample story summary.",
-                        coverImageUrl: nil,
-                        promptText: nil,
-                        emotionTags: ["Nostalgia", "Love"],
-                        situationTags: nil,
-                        lessonTags: nil,
-                        matchScore: 0.85
-                    )
-                ]
-                showNoResults = searchResults.isEmpty
-                isSearching = false
+            do {
+                // Use real semantic search API
+                let response = try await APIService.shared.semanticSearch(query: searchText, limit: 10)
+                await MainActor.run {
+                    searchResults = response.results
+                    showNoResults = searchResults.isEmpty
+                    isSearching = false
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showNoResults = true
+                    isSearching = false
+                }
             }
         }
     }
 }
 
-struct WisdomResultCard: View {
+struct SemanticResultCard: View {
     @Environment(\.theme) private var theme
-    let result: WisdomSearchResult
-    
+    let result: SemanticSearchResult
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Header with type badge and match score
             HStack {
-                if let title = result.title {
-                    Text(title)
-                        .font(theme.headlineFont)
-                        .foregroundColor(theme.textColor)
-                }
-                Spacer()
-                if let score = result.matchScore, score > 0 {
-                    Text("\(Int(score * 100))% match")
+                HStack(spacing: 6) {
+                    Image(systemName: result.type == "quote" ? "quote.bubble.fill" : "book.fill")
                         .font(.caption)
-                        .foregroundColor(theme.accentColor)
+                    Text(result.type == "quote" ? "Quote" : "Story")
+                        .font(.caption)
+                        .fontWeight(.semibold)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(result.type == "quote" ? Color.pink.opacity(0.2) : Color.blue.opacity(0.2))
+                .foregroundColor(result.type == "quote" ? .pink : .blue)
+                .clipShape(Capsule())
+
+                Spacer()
+
+                // Similarity score
+                Text("\(Int(result.similarity * 100))% match")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            
-            if let summary = result.summaryText {
-                Text(summary)
-                    .font(theme.bodyFont)
-                    .foregroundColor(theme.textColor.opacity(0.8))
-                    .lineLimit(3)
-            }
-            
-            if let tags = result.emotionTags, !tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(tags.prefix(5), id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption2)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.pink.opacity(0.2))
-                                .foregroundColor(.pink)
-                                .clipShape(Capsule())
+
+            // Quote-specific display
+            if result.type == "quote" {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\"\(result.content)\"")
+                        .font(theme.bodyFont)
+                        .foregroundColor(theme.textColor)
+                        .italic()
+
+                    if let author = result.author {
+                        HStack(spacing: 6) {
+                            Text("— \(author)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            if let role = result.role {
+                                Text("(\(role.capitalized))")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                 }
+            } else {
+                // Story display
+                VStack(alignment: .leading, spacing: 8) {
+                    if !result.title.isEmpty {
+                        Text(result.title)
+                            .font(theme.headlineFont)
+                            .foregroundColor(theme.textColor)
+                    }
+
+                    Text(result.content)
+                        .font(theme.bodyFont)
+                        .foregroundColor(theme.textColor.opacity(0.8))
+                        .lineLimit(3)
+                }
             }
-            
+
+            // Action hint
             HStack {
-                Image(systemName: "play.circle.fill")
+                Image(systemName: result.type == "quote" ? "square.and.arrow.up" : "play.circle.fill")
+                    .font(.caption)
                     .foregroundColor(theme.accentColor)
-                Text("Listen to story")
+                Text(result.type == "quote" ? "Tap to share" : "Tap to listen")
                     .font(.caption)
                     .foregroundColor(theme.accentColor)
                 Spacer()

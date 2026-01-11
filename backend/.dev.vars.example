@@ -1,0 +1,14 @@
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-key-here
+
+# AWS Bedrock Configuration (OpenAI-compatible API)
+AWS_BEARER_TOKEN_BEDROCK=your-aws-bearer-token-here
+AWS_REGION=us-west-2
+
+# Twilio Configuration (for Elder phone calls)
+twilio_account_sid=your-twilio-account-sid
+twilio_auth_token=your-twilio-auth-token
+
+# Optional: OpenAI API Key (fallback if not using Bedrock)
+OPENAI_API_KEY=your-openai-api-key-here

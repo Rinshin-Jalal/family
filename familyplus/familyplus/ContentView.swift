@@ -53,23 +53,32 @@ struct MainNavigationFlow: View {
         ZStack {
             // Main navigation content
             if showOnboarding {
-                SimpleOnboardingContainerView {
-                    // Only hide onboarding if auth actually succeeded
-                    if authService.isAuthenticated {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            showOnboarding = false
-                        }
-                        UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                    }
-                }
+                // Empty background - onboarding covers everything
+                Color.clear
             } else {
                 MainTabView(selectedTab: $navigationCoordinator.selectedTab)
                     .environmentObject(navigationCoordinator)
             }
 
-            // Theme toggle (for demo purposes)
-            ThemeToggleView()
-                .padding()
+            // Fullscreen onboarding overlay
+            if showOnboarding {
+                AuthOnboardingView {
+                    // Onboarding complete - hide onboarding
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        showOnboarding = false
+                    }
+                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                }
+                .ignoresSafeArea(.all)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .zIndex(9999)
+            }
+
+            // Theme toggle (hide during onboarding)
+            if !showOnboarding {
+                ThemeToggleView()
+                    .padding()
+            }
         }
         .themed(theme)
         .onAppear {

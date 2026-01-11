@@ -10,6 +10,13 @@ compatibility_flags = [ "nodejs_compat" ]
 binding = "AUDIO_BUCKET"
 bucket_name = "family-plus-audio"
 
+# ----------------------------------------------------------------------------
+# BACKGROUND PROCESSING
+# ----------------------------------------------------------------------------
+# Currently using synchronous processing (inline after response creation).
+# Future: Integrate trigger.dev or similar for true async background jobs.
+# ----------------------------------------------------------------------------
+
 [observability]
 enabled = true
 

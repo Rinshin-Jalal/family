@@ -13,6 +13,8 @@
 
 import { client } from '@trigger.dev/sdk'
 import { createAudioProcessor, DEFAULT_AUDIO_PROCESSOR_CONFIG } from '../ai/audio-processor'
+import { createCartesiaClient, DEFAULT_VOICES } from '../ai/cartesia'
+import { generateStorageKey } from '../ai/r2'
 import type { Database } from '../types'
 import { getSupabaseFromEnv } from '../utils/supabase'
 
@@ -54,6 +56,11 @@ async function fetchStoryWithResponses(storyId: string) {
         audio_key,
         transcription_text,
         duration_seconds,
+        tts_audio_key,
+        tts_generated_at,
+        tts_duration_seconds,
+        tts_voice_id,
+        user_id,
         profiles(full_name, role)
       )
     `)
@@ -94,6 +101,133 @@ async function updateStoryStatus(
   }
 }
 
+/**
+ * Generate TTS audio for responses without audio
+ *
+ * For responses that have transcription_text but no audio recording,
+ * this function generates TTS audio using Cartesia and uploads to Supabase storage.
+ */
+async function generateTTSForResponse(
+  response: any,
+  userId: string
+): Promise<{ url: string; duration: number }> {
+  // Check if TTS audio already exists
+  if (response.tts_audio_key) {
+    // Return existing TTS audio URL from Supabase
+    const { data: { publicUrl } } = supabase.storage
+      .from('audio')
+      .getPublicUrl(response.tts_audio_key)
+
+    return {
+      url: publicUrl,
+      duration: response.tts_duration_seconds || 0,
+    }
+  }
+
+  // Check if we have transcription text
+  if (!response.transcription_text) {
+    throw new Error(`Response ${response.id} has no transcription text for TTS`)
+  }
+
+  // Initialize Cartesia client
+  const cartesia = createCartesiaClient({
+    apiKey: process.env.CARTESIA_API_KEY!,
+  })
+
+  // Select voice based on user profile (could be enhanced to store voice preference)
+  const voice = DEFAULT_VOICES.narrator // Default narrator voice
+
+  // Generate TTS audio
+  const ttsResult = await cartesia.textToSpeech(response.transcription_text, {
+    voice,
+    outputFormat: 'mp3',
+  })
+
+  // Upload to Supabase storage
+  const storageKey = generateStorageKey('audio', userId, `tts-${response.id}.mp3`)
+  const buffer = Buffer.from(ttsResult.audioBuffer)
+
+  const { data, error } = await supabase.storage
+    .from('audio')
+    .upload(storageKey, buffer, {
+      contentType: 'audio/mpeg',
+      upsert: false,
+    })
+
+  if (error) {
+    throw new Error(`Failed to upload TTS audio: ${error.message}`)
+  }
+
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('audio')
+    .getPublicUrl(storageKey)
+
+  // Update response with TTS metadata
+  await supabase
+    .from('responses')
+    .update({
+      tts_audio_key: storageKey,
+      tts_generated_at: new Date().toISOString(),
+      tts_duration_seconds: ttsResult.duration,
+    })
+    .eq('id', response.id)
+
+  return {
+    url: publicUrl,
+    duration: ttsResult.duration,
+  }
+}
+
+/**
+ * Prepare audio clips from responses (handles both audio and TTS)
+ */
+async function prepareAudioClips(responses: any[]) {
+  const audioClips: Array<{
+    id: string
+    url: string
+    speakerName: string
+    duration: number
+  }> = []
+
+  for (const response of responses) {
+    // Skip responses with no transcription
+    if (!response.transcription_text) {
+      console.log(`Skipping response ${response.id} - no transcription`)
+      continue
+    }
+
+    // Case 1: Has original audio recording
+    if (response.media_url && !response.media_url.includes('tts-')) {
+      audioClips.push({
+        id: response.id,
+        url: response.media_url,
+        speakerName: response.profiles?.full_name || 'Unknown',
+        duration: response.duration_seconds || 0,
+      })
+      continue
+    }
+
+    // Case 2: No audio but has transcription - generate TTS
+    try {
+      console.log(`Generating TTS for response ${response.id} - ${response.transcription_text?.substring(0, 50)}...`)
+      const ttsAudio = await generateTTSForResponse(response, response.user_id || 'unknown')
+
+      audioClips.push({
+        id: response.id,
+        url: ttsAudio.url,
+        speakerName: response.profiles?.full_name || 'Unknown',
+        duration: ttsAudio.duration,
+      })
+    } catch (error) {
+      console.error(`Failed to generate TTS for response ${response.id}:`, error)
+      // Continue with other responses
+    }
+  }
+
+  return audioClips
+}
+
 // ============================================================================
 // JOB: GENERATE PODCAST
 // ============================================================================
@@ -121,25 +255,20 @@ client.defineJob({
       // Step 2: Fetch story and all responses
       const story = await fetchStoryWithResponses(payload.storyId)
 
-      // Step 3: Prepare audio clips
-      const audioClips = story.responses
-        .filter(r => r.media_url && r.transcription_text)
-        .map(r => ({
-          id: r.id,
-          url: r.media_url!,
-          speakerName: r.profiles?.full_name || 'Unknown',
-          duration: r.duration_seconds,
-        }))
+      // Step 3: Prepare audio clips (handles both original audio and TTS)
+      console.log(`Preparing audio clips for story ${payload.storyId}...`)
+      const audioClips = await prepareAudioClips(story.responses)
 
       if (audioClips.length === 0) {
-        throw new Error('No audio clips found for podcast generation')
+        throw new Error('No audio clips found for podcast generation - all responses lack transcriptions')
       }
 
-      // Step 4: Initialize audio processor
+      console.log(`Generated ${audioClips.length} audio clips for podcast`)
+
+      // Step 4: Initialize audio processor with Supabase storage
       const processor = createAudioProcessor({
         ...DEFAULT_AUDIO_PROCESSOR_CONFIG,
-        provider: 'replicate',
-        replicateApiKey: process.env.REPLICATE_API_TOKEN,
+        supabase,
       })
 
       // Step 5: Generate podcast
@@ -173,6 +302,7 @@ client.defineJob({
         storyId: payload.storyId,
         podcastUrl: result.podcastUrl,
         duration: result.duration,
+        audioClipsCount: audioClips.length,
       }
 
     } catch (error) {
@@ -213,21 +343,20 @@ client.defineJob({
       // Step 2: Fetch story and all responses
       const story = await fetchStoryWithResponses(payload.storyId)
 
-      // Step 3: Prepare audio clips (including new one)
-      const audioClips = story.responses
-        .filter(r => r.media_url && r.transcription_text)
-        .map(r => ({
-          id: r.id,
-          url: r.media_url!,
-          speakerName: r.profiles?.full_name || 'Unknown',
-          duration: r.duration_seconds,
-        }))
+      // Step 3: Prepare audio clips (handles both original audio and TTS)
+      console.log(`Preparing audio clips for story ${payload.storyId} regeneration...`)
+      const audioClips = await prepareAudioClips(story.responses)
 
-      // Step 4: Initialize audio processor
+      if (audioClips.length === 0) {
+        throw new Error('No audio clips found for podcast regeneration')
+      }
+
+      console.log(`Regenerating podcast with ${audioClips.length} audio clips`)
+
+      // Step 4: Initialize audio processor with Supabase storage
       const processor = createAudioProcessor({
         ...DEFAULT_AUDIO_PROCESSOR_CONFIG,
-        provider: 'replicate',
-        replicateApiKey: process.env.REPLICATE_API_TOKEN,
+        supabase,
       })
 
       // Step 5: Generate podcast with incremented version
@@ -254,6 +383,7 @@ client.defineJob({
         podcastUrl: result.podcastUrl,
         duration: result.duration,
         version: payload.previousVersion + 1,
+        audioClipsCount: audioClips.length,
       }
 
     } catch (error) {

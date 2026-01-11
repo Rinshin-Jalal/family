@@ -147,41 +147,65 @@ struct SettingsView: View {
         }
     }
     
-    // MARK: - Mock Data Loading (replace with actual API calls)
-    
+    // MARK: - Data Loading
+
     private func loadUserProfile() async throws -> UserProfile {
-        try await Task.sleep(nanoseconds: 300_000_000)
+        // TODO: Add dedicated profile endpoint to API
+        // For now, construct from family member data
+        let members = try await APIService.shared.getFamilyMembers()
+
+        // Get userId from UserDefaults (set by SupabaseService during auth)
+        let storedUserId = UserDefaults.standard.string(forKey: "auth_user_id")
+
+        // Try to find current user by auth_user_id, fall back to organizer, then first member
+        let currentUser = members.first(where: { $0.authUserId == storedUserId })
+            ?? members.first(where: { $0.role == "organizer" })
+            ?? members.first
+
+        guard let user = currentUser else {
+            throw NSError(domain: "SettingsView", code: -1, userInfo: [NSLocalizedDescriptionKey: "No family members found"])
+        }
+
         return UserProfile(
-            id: "user-123",
-            name: "Alex",
-            email: "alex@example.com",
-            avatarEmoji: "🎸",
+            id: user.id,
+            name: user.fullName ?? "Family Member",
+            email: "", // TODO: Get from auth
+            avatarEmoji: "👤",
             theme: .dark,
-            joinedAt: Date().addingTimeInterval(-86400 * 90)
+            joinedAt: Date() // TODO: Get from API
         )
     }
-    
+
     private func loadFamilyInfo() async throws -> FamilySettingsInfo {
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let family = try await APIService.shared.getFamily()
+        let members = try await APIService.shared.getFamilyMembers()
+
         return FamilySettingsInfo(
-            id: "family-123",
-            name: "The Rodriguez Family",
-            memberCount: 4,
-            inviteSlug: "abc12345"
+            id: family.id,
+            name: family.name,
+            memberCount: members.count,
+            inviteSlug: family.invite_slug
         )
     }
-    
+
     private func loadUserStats() async throws -> UserStats {
-        try await Task.sleep(nanoseconds: 150_000_000)
+        // Calculate from actual stories
+        let stories = try await APIService.shared.getStories()
+        let totalRecordings = stories.reduce(0.0) { $0 + Double($1.voiceCount) }
+
+        // TODO: Implement topic tagging in backend
+        let favoriteTopics: [String] = []
+
         return UserStats(
-            totalStories: 42,
-            totalRecordings: 156,
-            favoriteTopics: ["Childhood", "Travel", "Music"]
+            totalStories: stories.count,
+            totalRecordings: totalRecordings,
+            favoriteTopics: favoriteTopics.isEmpty ? ["Family", "Memories", "Stories"] : favoriteTopics
         )
     }
-    
+
     private func loadUserSettings() async throws -> UserSettings {
-        try await Task.sleep(nanoseconds: 250_000_000)
+        // TODO: Add settings endpoints to API
+        // For now, return defaults
         return UserSettings(
             notifications: NotificationSettings(
                 pushEnabled: true,
@@ -257,8 +281,18 @@ struct EditProfileSheet: View {
                         .disabled(isSaving)
                 }
             }
-            .onAppear {
-                name = "Alex"
+            .task {
+                // Load current user's name from API
+                do {
+                    let members = try await APIService.shared.getFamilyMembers()
+                    let storedUserId = UserDefaults.standard.string(forKey: "auth_user_id")
+                    let currentUser = members.first(where: { $0.authUserId == storedUserId })
+                        ?? members.first(where: { $0.role == "organizer" })
+                        ?? members.first
+                    name = currentUser?.fullName ?? ""
+                } catch {
+                    print("[EditProfile] Failed to load: \(error)")
+                }
             }
         }
     }
@@ -349,9 +383,14 @@ struct FamilySettingsSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .onAppear {
-                familyName = "The Rodriguez Family"
-                inviteSlug = "abc12345"
+            .task {
+                do {
+                    let family = try await APIService.shared.getFamily()
+                    familyName = family.name
+                    inviteSlug = family.invite_slug
+                } catch {
+                    print("[FamilySettings] Failed to load: \(error)")
+                }
             }
         }
     }
@@ -374,44 +413,6 @@ struct ProfileSettingsData {
     let family: FamilySettingsInfo
     let stats: UserStats
     let settings: UserSettings
-    
-    static let sample = ProfileSettingsData(
-        user: UserProfile(
-            id: "user-123",
-            name: "Alex",
-            email: "alex@example.com",
-            avatarEmoji: "🎸",
-            theme: .dark,
-            joinedAt: Date().addingTimeInterval(-86400 * 90)
-        ),
-        family: FamilySettingsInfo(
-            id: "family-123",
-            name: "The Rodriguez Family",
-            memberCount: 4,
-            inviteSlug: "abc12345"
-        ),
-        stats: UserStats(
-            totalStories: 42,
-            totalRecordings: 156,
-            favoriteTopics: ["Childhood", "Travel", "Music"]
-        ),
-        settings: UserSettings(
-            notifications: NotificationSettings(
-                pushEnabled: true,
-                emailEnabled: true
-            ),
-            privacy: PrivacySettings(
-                shareWithFamily: true,
-                allowSuggestions: true,
-                dataRetention: .forever
-            ),
-            preferences: PreferenceSettings(
-                autoPlayAudio: true,
-                defaultPromptCategory: "story",
-                hapticsEnabled: true
-            )
-        )
-    )
 }
 
 struct UserProfile: Identifiable {

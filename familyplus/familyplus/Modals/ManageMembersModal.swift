@@ -19,9 +19,10 @@ struct ManageMembersModal: View {
     @State private var showRemoveConfirmation = false
     @State private var showElderPreferences = false
     @State private var showInviteModal = false
+    @State private var isLoading = false
 
-    // Sample data - TODO: Replace with actual API data
-    @State private var members: [FamilyMember] = FamilyMember.sampleMembers
+    // Load from API
+    @State private var members: [FamilyMember] = []
 
     var filteredMembers: [FamilyMember] {
         if searchText.isEmpty {
@@ -42,7 +43,9 @@ struct ManageMembersModal: View {
                         .padding(.top, 8)
                         .padding(.bottom, 16)
 
-                    if filteredMembers.isEmpty {
+                    if isLoading {
+                        ProgressView()
+                    } else if filteredMembers.isEmpty {
                         EmptySearchState(searchText: searchText)
                     } else {
                         // Member List
@@ -135,6 +138,32 @@ struct ManageMembersModal: View {
         }
         .sheet(isPresented: $showInviteModal) {
             InviteFamilyModal()
+        }
+        .onAppear {
+            loadMembers()
+        }
+    }
+
+    private func loadMembers() {
+        isLoading = true
+        Task {
+            do {
+                let membersData = try await APIService.shared.getFamilyMembers()
+                let stories = try await APIService.shared.getStories()
+
+                let loadedMembers = membersData.map { member in
+                    FamilyMember.from(memberData: member, stories: stories)
+                }
+
+                await MainActor.run {
+                    members = loadedMembers
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                }
+            }
         }
     }
 

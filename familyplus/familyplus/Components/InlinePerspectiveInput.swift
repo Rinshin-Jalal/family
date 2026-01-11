@@ -25,6 +25,7 @@ struct InlinePerspectiveInput: View {
     let onRecordingUpdate: (TimeInterval) -> Void
     let onRecordingComplete: (TimeInterval) -> Void
     let onCancel: () -> Void
+    var onAttachment: (() -> Void)? = nil  // Optional attachment callback
 
     private var recordingState: RecordingState {
         if isRecording { return .recording }
@@ -143,15 +144,21 @@ struct InlinePerspectiveInput: View {
 
     private var inputBarView: some View {
         HStack(spacing: 12) {
-            // Attachment button (icon-only)
-            Button(action: {}) {
-                Image(systemName: "plus")
-                    .font(.title2)
-                    .foregroundColor(theme.secondaryTextColor)
+            Button(action: {
+                onAttachment?()
+            }) {
+                VStack(spacing: 2) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(theme.accentColor.opacity(0.8))
+                    Text("More")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(theme.secondaryTextColor)
+                }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.plain)
+            .frame(width: 44)
 
-            // Text input
             HStack(spacing: 8) {
                 TextField("", text: $inputText, axis: .vertical)
                     .font(.system(size: 16))
@@ -160,7 +167,6 @@ struct InlinePerspectiveInput: View {
                     .lineLimit(1...4)
                     .frame(height: 36)
 
-                // Conditional send button (appears when has content)
                 if !inputText.isEmpty {
                     Button(action: {
                         onSend(inputText)
@@ -177,16 +183,18 @@ struct InlinePerspectiveInput: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
 
-
-            // Mic button (press-and-hold to record)
             Button(action: {}) {
-                ZStack {
+                VStack(spacing: 2) {
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundColor(theme.accentColor)
+                    Text("Hold")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(theme.secondaryTextColor)
                 }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.plain)
+            .frame(width: 44)
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0)
                     .onChanged { isPressing in

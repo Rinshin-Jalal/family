@@ -19,6 +19,10 @@ struct CaptureMemorySheet: View {
     var initialPrompt: PromptData? = nil
     var initialMode: InputMode = .recording
     var storyId: UUID? = nil
+    var replyToResponseId: String? = nil  // For threaded replies
+    var replyToName: String? = nil  // Name of person being replied to
+    var replyToText: String? = nil  // Preview of message being replied to
+    var hidePromptSection: Bool = false  // Hide prompt when replying
     
     // Prompt state
     @State private var selectedPrompt: PromptData?
@@ -70,8 +74,15 @@ struct CaptureMemorySheet: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
-                        // Prompt Hero Section
-                        promptHeroSection
+                        // Reply Context (when replying to someone)
+                        if let replyName = replyToName {
+                            replyContextSection(name: replyName, text: replyToText)
+                        }
+                        
+                        // Prompt Hero Section (hide when replying)
+                        if !hidePromptSection {
+                            promptHeroSection
+                        }
                         
                         // Mode Selector
                         inputModeSelector
@@ -160,7 +171,7 @@ struct CaptureMemorySheet: View {
                 .padding(.vertical, 12)
             
             HStack {
-                Text("Capture Memory")
+                Text(replyToName != nil ? "Add Your Reply" : "Capture Memory")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(theme.textColor)
                 
@@ -178,6 +189,40 @@ struct CaptureMemorySheet: View {
         }
     }
 
+    // Reply Context Section
+    private func replyContextSection(name: String, text: String?) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrowshape.turn.up.left.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.accentColor)
+                
+                Text("Replying to \(name)")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(theme.textColor)
+            }
+            
+            if let text = text, !text.isEmpty {
+                Text(text)
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .lineLimit(3)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(theme.secondaryTextColor.opacity(0.08))
+                    .cornerRadius(12)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.accentColor.opacity(0.08))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(theme.accentColor.opacity(0.2), lineWidth: 1)
+        )
+    }
+    
     private var promptHeroSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label("STORY STARTER", systemImage: "sparkles")
@@ -735,11 +780,6 @@ struct CaptureMemorySheet: View {
     }
     
     private func uploadRecording() {
-        guard hasValidPrompt() else {
-            uploadError = "Please select or enter a prompt first"
-            return
-        }
-        
         guard let audioURL = audioRecorder.currentRecordingURL else {
             uploadError = "No recording found"
             return
@@ -759,7 +799,8 @@ struct CaptureMemorySheet: View {
                     storyId: storyId,
                     audioData: audioData,
                     filename: filename,
-                    source: "app_audio"
+                    source: "app_audio",
+                    replyToResponseId: replyToResponseId
                 )
                 
                 uploadProgress = 1.0
@@ -796,11 +837,6 @@ struct CaptureMemorySheet: View {
     }
     
     private func uploadAudioFile() {
-        guard hasValidPrompt() else {
-            uploadError = "Please select or enter a prompt first"
-            return
-        }
-        
         guard let audioURL = selectedAudioFile else {
             uploadError = "No audio file selected"
             return
@@ -820,7 +856,8 @@ struct CaptureMemorySheet: View {
                     storyId: storyId,
                     audioData: audioData,
                     filename: filename,
-                    source: "app_audio"
+                    source: "app_audio",
+                    replyToResponseId: replyToResponseId
                 )
                 
                 uploadProgress = 1.0
@@ -897,11 +934,6 @@ struct CaptureMemorySheet: View {
     }
     
     private func uploadDocument() {
-        guard hasValidPrompt() else {
-            uploadError = "Please select or enter a prompt first"
-            return
-        }
-        
         guard let text = extractedText, !text.isEmpty else {
             uploadError = "No text extracted from document"
             return
@@ -937,11 +969,6 @@ struct CaptureMemorySheet: View {
     }
     
     private func uploadImage() {
-        guard hasValidPrompt() else {
-            uploadError = "Please select or enter a prompt first"
-            return
-        }
-        
         guard let image = selectedImage else {
             uploadError = "No image selected"
             return
@@ -981,11 +1008,6 @@ struct CaptureMemorySheet: View {
     }
     
     private func uploadText() {
-        guard hasValidPrompt() else {
-            uploadError = "Please select or enter a prompt first"
-            return
-        }
-        
         guard !memoryText.isEmpty else {
             uploadError = "Please enter some text"
             return

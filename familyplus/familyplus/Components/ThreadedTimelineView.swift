@@ -379,12 +379,12 @@ struct ThreadedResponseCard: View {
     // Legacy timestamp formatting (e.g., "Recorded in 2019")
     var legacyTimestamp: String {
         guard let date = ISO8601DateFormatter().date(from: response.createdAt) else {
-            return "Recently"
+            return ""
         }
 
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy"
-        return "Recorded in \(formatter.string(from: date))"
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter.string(from: date)
     }
 
     var formattedDuration: String {
@@ -445,21 +445,23 @@ struct ThreadedResponseCard: View {
 
                 Spacer()
 
-                // Duration badge
-                HStack(spacing: 4) {
-                    Image(systemName: "waveform")
-                        .font(.caption2)
-                    Text(formattedDuration)
-                        .font(.caption)
-                        .monospacedDigit()
+                // Duration badge (only show for audio responses)
+                if response.hasAudio {
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform")
+                            .font(.caption2)
+                        Text(formattedDuration)
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                    .foregroundColor(response.storytellerColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(response.storytellerColor.opacity(0.15))
+                    ).glassEffect()
                 }
-                .foregroundColor(response.storytellerColor)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(response.storytellerColor.opacity(0.15))
-                ).glassEffect()
             }
 
             // Transcription (if available)
@@ -477,16 +479,18 @@ struct ThreadedResponseCard: View {
 
             // Action Buttons
             HStack(spacing: 16) {
-                // Play button
-                Button(action: onPlay) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 18))
-                        Text("Play")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(response.storytellerColor)
-                }.buttonStyle(.glass)
+                // Play button (only show for audio responses)
+                if response.hasAudio {
+                    Button(action: onPlay) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 18))
+                            Text("Play")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundColor(response.storytellerColor)
+                    }.buttonStyle(.glass)
+                }
 
                 // Reply button
                 Button(action: onReply) {
@@ -609,7 +613,7 @@ struct ChronologicalResponseCard: View {
     let onPlay: (StorySegmentData) -> Void
     let onShowMemoryContext: (StorySegmentData) -> Void
 
-    @State private var isExpanded = false
+    @State private var isExpanded = true  // Start expanded by default
     @State private var animationProgress: CGFloat = 0
     @State private var textExpanded = false
 
@@ -801,7 +805,8 @@ struct CollapsedContent: View {
                         }
                     }
 
-                    if let duration = response.durationSeconds {
+                    // Duration (only show for audio responses)
+                    if response.hasAudio, let duration = response.durationSeconds {
                         Text(formatDuration(duration))
                             .font(.caption)
                             .foregroundColor(theme.secondaryTextColor)
@@ -896,7 +901,7 @@ struct ExpandedContent: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             if let parent = parentResponse {
                 HStack(spacing: 6) {
                     Image(systemName: "arrowshape.turn.up.left.fill")
@@ -912,76 +917,12 @@ struct ExpandedContent: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                response.storytellerColor,
-                                response.storytellerColor.opacity(0.7)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(String(response.fullName.prefix(1)))
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Text(response.fullName)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(theme.textColor)
-
-                        // Playing indicator
-                        if isCurrentlyPlaying {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(response.storytellerColor)
-                                    .frame(width: 8, height: 8)
-                                    .opacity(pulseAnimation ? 0.5 : 1)
-
-                                Text("Playing")
-                                    .font(.caption)
-                                    .foregroundColor(response.storytellerColor)
-                            }
-                        }
-                    }
-
-                    Text(legacyTimestamp)
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor)
-                }
-
-                Spacer()
-
-                if let duration = response.durationSeconds {
-                    HStack(spacing: 4) {
-                        Image(systemName: "waveform")
-                            .font(.caption2)
-                        Text(formatDuration(duration))
-                            .font(.caption)
-                            .monospacedDigit()
-                    }
-                    .foregroundColor(response.storytellerColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(response.storytellerColor.opacity(0.15))
-                    )
-                }
-            }
-
             if let transcription = response.transcriptionText, !transcription.isEmpty {
                 Text(transcription)
-                    .font(.system(size: 15))
+                    .font(.system(size: 17, weight: .regular))
                     .foregroundColor(theme.textColor)
-                    .lineLimit(textExpanded ? nil : 3)
+                    .lineSpacing(4)
+                    .lineLimit(textExpanded ? nil : 4)
                     .onTapGesture {
                         withAnimation(reduceMotion ? .none : .spring(response: 0.3, dampingFraction: 0.8)) {
                             textExpanded.toggle()
@@ -996,16 +937,73 @@ struct ExpandedContent: View {
                     }
             }
 
-            HStack(spacing: 16) {
-                Button(action: onPlay) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(response.storytellerColor.opacity(0.2))
+                    .frame(width: 28, height: 28)
+                    .overlay(
+                        Text(String(response.fullName.prefix(1)))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(response.storytellerColor)
+                    )
+
+                VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 18))
-                        Text("Play")
-                            .font(.system(size: 14, weight: .medium))
+                        Text(response.fullName)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.secondaryTextColor)
+
+                        if isCurrentlyPlaying {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(response.storytellerColor)
+                                    .frame(width: 6, height: 6)
+                                    .opacity(pulseAnimation ? 0.5 : 1)
+
+                                Text("Playing")
+                                    .font(.caption2)
+                                    .foregroundColor(response.storytellerColor)
+                            }
+                        }
                     }
-                    .foregroundColor(response.storytellerColor)
-                }.buttonStyle(.glass)
+
+                    Text(legacyTimestamp)
+                        .font(.caption2)
+                        .foregroundColor(theme.secondaryTextColor.opacity(0.7))
+                }
+
+                Spacer()
+
+                if response.hasAudio, let duration = response.durationSeconds {
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform")
+                            .font(.caption2)
+                        Text(formatDuration(duration))
+                            .font(.caption2)
+                            .monospacedDigit()
+                    }
+                    .foregroundColor(response.storytellerColor.opacity(0.8))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(response.storytellerColor.opacity(0.1))
+                    )
+                }
+            }
+
+            HStack(spacing: 24) {
+                if response.hasAudio {
+                    Button(action: onPlay) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 18))
+                            Text("Play")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundColor(theme.accentColor)
+                    }.buttonStyle(.glass)
+                }
 
                 Button(action: onReply) {
                     HStack(spacing: 6) {
@@ -1014,19 +1012,18 @@ struct ExpandedContent: View {
                         Text("Reply")
                             .font(.system(size: 14, weight: .medium))
                     }
-                    .foregroundColor(theme.secondaryTextColor)
+                    .foregroundColor(theme.accentColor.opacity(0.7))
                 }.buttonStyle(.glass)
 
                 Spacer()
 
-                // Memory Context button
                 Button(action: { onShowMemoryContext(response) }) {
-                    Image(systemName: "info")
+                    Image(systemName: "info.circle")
                         .font(.system(size: 16))
-                        .foregroundColor(theme.secondaryTextColor.opacity(0.6))
+                        .foregroundColor(theme.secondaryTextColor.opacity(0.5))
                 }.buttonStyle(.glass)
             }
-            .padding(.top, 4)
+            .padding(.top, 2)
         }
 
         .padding(16)
