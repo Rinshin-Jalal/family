@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { authMiddleware, profileMiddleware } from '../middleware/auth'
 import { processResponseTask } from '../../trigger/process-response-task'
+import { transcribeResponseTask } from '../../trigger/transcribe-response-task'
 
 const app = new Hono()
 
@@ -25,32 +26,13 @@ app.post('/api/responses', authMiddleware, profileMiddleware, async (c) => {
 
     console.log('[responses] File received:', !!file, file?.name, file?.type, file?.size)
 
-    const promptIdRaw = formData.get('prompt_id') as string | null
     const storyId = formData.get('story_id') as string | null
     const source = (formData.get('source') as string) || 'app_audio'
 
-    console.log('[responses] Source:', source, 'promptId:', promptIdRaw, 'storyId:', storyId)
+    console.log('[responses] Source:', source, 'storyId:', storyId)
 
     // Direct text content (if not uploading a file)
     const textContentDirect = formData.get('text') as string | null
-
-    // prompt_id is optional - convert empty string to null
-    const promptIdRawClean = promptIdRaw && promptIdRaw.trim() !== '' ? promptIdRaw : null
-
-    // Validate prompt_id exists in database, otherwise use null
-    let promptId: string | null = promptIdRawClean
-    if (promptIdRawClean) {
-      const { data: prompt, error: promptError } = await supabase
-        .from('prompts')
-        .select('id')
-        .eq('id', promptIdRawClean)
-        .single()
-
-      if (promptError || !prompt) {
-        console.warn(`[responses] Prompt ${promptIdRawClean} not found, using null`)
-        promptId = null
-      }
-    }
 
     // Determine file type and process accordingly
     let textContent: string | null = textContentDirect
@@ -148,7 +130,6 @@ app.post('/api/responses', authMiddleware, profileMiddleware, async (c) => {
     const { data: response, error } = await supabase
       .from('responses')
       .insert({
-        prompt_id: promptId,
         story_id: storyId,
         user_id: profile.id,
         source: source,
@@ -164,31 +145,65 @@ app.post('/api/responses', authMiddleware, profileMiddleware, async (c) => {
       return c.json({ error: error.message }, 500)
     }
 
-    // Process prompt+story creation using trigger.dev (background task)
-    console.log('[responses] Triggering background task for prompt+story creation...')
+    // Trigger background tasks based on response type
+    console.log('[responses] Triggering background tasks for response', response.id)
 
-    // Trigger the background task (fire and forget)
-    if (textContent) {
-      console.log('[responses] task object:', !!processResponseTask, 'trigger function:', typeof processResponseTask?.trigger)
+    try {
+      // Case 1: Audio file - trigger transcription
+      if (mediaUrl && !textContent && processingStatus === 'pending') {
+        console.log('[responses] Audio file detected - triggering transcription task...')
 
-      try {
+        const audioKey = mediaKey || mediaUrl.split('https://your-r2-domain.com/')[1]
+        const handle = await transcribeResponseTask.trigger({
+          responseId: response.id,
+          audioKey: audioKey || mediaKey,
+          audioUrl: mediaUrl,
+          userId: profile.id,
+          familyId: profile.family_id,
+        })
+        console.log('[responses] ✅ Transcription task triggered:', handle.id)
+      }
+
+      // Case 2: Text content with NO story_id - create new story
+      else if (textContent && !storyId) {
+        console.log('[responses] Text content without story_id - triggering story creation task...')
+
         const handle = await processResponseTask.trigger({
           responseId: response.id,
           transcriptionText: textContent,
           familyId: profile.family_id,
           userId: profile.id,
         })
-        console.log('[responses] ✅ Background task triggered:', handle.id)
-      } catch (err) {
-        console.error('[responses] ❌ Failed to trigger task:', err)
-        console.error('[responses] Error details:', JSON.stringify(err))
+        console.log('[responses] ✅ Story creation task triggered:', handle.id)
       }
+
+      // Case 3: Text content added to existing story - trigger quote generation only
+      // Note: Wisdom tagging is NOT triggered here to avoid re-processing all responses
+      // Wisdom should be triggered selectively when appropriate (e.g., story completion, major updates)
+      else if (textContent && storyId) {
+        console.log('[responses] Text content for existing story - triggering quote task only...')
+
+        // Trigger quote generation (always run for new content)
+        const { generateQuoteTask } = await import('../../trigger/quote-task')
+        const quoteHandle = await generateQuoteTask.trigger({
+          responseId: response.id,
+          storyId: storyId,
+          triggeredBy: 'response.transcribed',
+        })
+        console.log('[responses] ✅ Quote generation task triggered:', quoteHandle.id)
+
+        // Wisdom tagging skipped - would re-process all responses in the story
+        // Use manual trigger or separate endpoint if you want to refresh wisdom tags
+      }
+    } catch (err) {
+      console.error('[responses] ❌ Failed to trigger background task:', err)
+      console.error('[responses] Error details:', JSON.stringify(err))
+      // Don't return error - response was already saved
     }
 
     // Return immediately with camelCase keys for Swift
     return c.json({
       id: response.id,
-      promptId: response.prompt_id,
       storyId: response.story_id,
       userId: response.user_id,
       source: response.source,
@@ -207,12 +222,11 @@ app.post('/api/responses', authMiddleware, profileMiddleware, async (c) => {
 /**
  * Manually trigger transcription for a response
  *
- * This endpoint is kept for backward compatibility but internally
- * it just publishes the same event that the upload handler would.
+ * This endpoint triggers the trigger.dev transcription task.
  */
-app.post('/api/responses/:id/transcribe', async (c) => {
+app.post('/api/responses/:id/transcribe', authMiddleware, profileMiddleware, async (c) => {
   const supabase = c.get('supabase')
-  const queue = c.get('queue')
+  const profile = c.get('profile')
   const responseId = c.req.param('id')
 
   // 1. Get the response
@@ -234,35 +248,26 @@ app.post('/api/responses/:id/transcribe', async (c) => {
     return c.json({ error: 'No audio file found' }, 400)
   }
 
-  // 3. Publish event to trigger transcription
-  await queue.send({
-    type: 'response.audio.uploaded',
-    data: {
+  // 3. Trigger transcription task with trigger.dev
+  try {
+    const handle = await transcribeResponseTask.trigger({
       responseId: response.id,
       audioKey,
       audioUrl: response.media_url,
-      fileSize: 0,  // Unknown
-      duration: 0,  // Unknown
-      mimeType: 'audio/wav',  // Default assumption
-    },
-    metadata: {
-      source: 'api',
-    },
-  })
+      userId: profile.id,
+      familyId: profile.family_id,
+    })
 
-  // 4. Return the response in camelCase format
-  return c.json({
-    id: response.id,
-    promptId: response.prompt_id,
-    storyId: response.story_id,
-    userId: response.user_id,
-    source: response.source,
-    mediaUrl: response.media_url,
-    transcriptionText: response.transcription_text,
-    durationSeconds: response.duration_seconds,
-    processingStatus: response.processing_status || 'pending',
-    createdAt: response.created_at,
-  })
+    return c.json({
+      success: true,
+      message: 'Transcription started',
+      taskId: handle.id,
+      responseId: response.id,
+    })
+  } catch (error) {
+    console.error('[responses] Failed to trigger transcription:', error)
+    return c.json({ error: 'Failed to start transcription' }, 500)
+  }
 })
 
 /**

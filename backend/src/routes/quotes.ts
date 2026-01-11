@@ -105,6 +105,52 @@ app.get('/api/quotes/popular', authMiddleware, async (c) => {
 })
 
 /**
+ * GET /api/stories/:storyId/quotes
+ * Get all quote cards for a specific story
+ */
+app.get('/api/stories/:storyId/quotes', authMiddleware, async (c) => {
+  const supabase = c.get('supabase')
+  const storyId = c.req.param('storyId')
+  const userId = c.get('userId')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('family_id')
+    .eq('auth_user_id', userId)
+    .single()
+
+  if (!profile) {
+    return c.json({ error: 'Profile not found' }, 404)
+  }
+
+  const { data: quotes, error } = await supabase
+    .from('quote_cards')
+    .select(`
+      id,
+      quote_text,
+      author_name,
+      author_role,
+      story_id,
+      theme,
+      background_color,
+      text_color,
+      created_at
+    `)
+    .eq('story_id', storyId)
+    .eq('family_id', profile.family_id)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    return c.json({ error: 'Failed to fetch quotes' }, 500)
+  }
+
+  return c.json({
+    quotes: quotes || [],
+    count: quotes?.length || 0
+  })
+})
+
+/**
  * GET /api/quotes/:id
  * Get a specific quote card
  */

@@ -49,7 +49,6 @@ async function fetchStoryWithResponses(storyId: string) {
     .from('stories')
     .select(`
       *,
-      prompt:prompts(text),
       responses(
         id,
         media_url,
@@ -275,7 +274,7 @@ client.defineJob({
       const result = await processor.generatePodcast({
         storyId: payload.storyId,
         audioClips,
-        storySummary: story.prompt?.text,
+        storySummary: story.prompt_text || story.title || 'Family Story',
         addMusic: true,
         musicStyle: 'warm',  // Could be AI-selected based on content
       })
@@ -363,7 +362,7 @@ client.defineJob({
       const result = await processor.generatePodcast({
         storyId: payload.storyId,
         audioClips,
-        storySummary: story.prompt?.text,
+        storySummary: story.prompt_text || story.title || 'Family Story',
         addMusic: true,
         musicStyle: 'warm',
       })

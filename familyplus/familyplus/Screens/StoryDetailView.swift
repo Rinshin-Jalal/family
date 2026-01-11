@@ -208,6 +208,10 @@ struct FullStoryDetail: View {
     @State private var showPodcastAlert = false
     @State private var podcastAlertMessage = ""
 
+    // MARK: - Story Quotes State
+    @State private var storyQuotes: [QuoteCardData] = []
+    @State private var isLoadingQuotes = false
+
     // Memory context panel state
     @State private var showMemoryContext = false
     @State private var contextForResponse: StorySegmentData?
@@ -439,6 +443,44 @@ struct FullStoryDetail: View {
                             .padding(.vertical, 4)
                         }
 
+                        // Story Quotes Section
+                        if !storyQuotes.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "quote.bubble.fill")
+                                        .font(.caption)
+                                        .foregroundColor(theme.accentColor)
+                                    Text("Family Wisdom")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(theme.secondaryTextColor)
+                                }
+
+                                VStack(alignment: .leading, spacing: 16) {
+                                    ForEach(storyQuotes.prefix(3)) { quote in
+                                        StoryQuoteItem(
+                                            quoteText: quote.quoteText,
+                                            authorName: quote.authorName,
+                                            authorRole: quote.authorRole
+                                        )
+
+                                        if quote.id != storyQuotes.prefix(3).last?.id {
+                                            Divider()
+                                        }
+                                    }
+                                }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(theme.cardBackgroundColor)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(theme.accentColor.opacity(0.1), lineWidth: 1)
+                                        )
+                                )
+                            }
+                            .padding(.vertical, 8)
+                        }
+
                         // Reply indicator (shows when replying to someone)
                         if let replyTo = replyingTo {
                             HStack {
@@ -558,22 +600,8 @@ struct FullStoryDetail: View {
             }
         }
         .sheet(isPresented: $showCaptureSheet) {
-            let promptData: PromptData? = {
-                // Create a PromptData from the story's prompt text
-                if let promptText = storyPromptText, !promptText.isEmpty {
-                    return PromptData(
-                        id: UUID().uuidString,
-                        text: promptText,
-                        category: nil,
-                        isCustom: false,
-                        createdAt: ISO8601DateFormatter().string(from: Date())
-                    )
-                }
-                return nil
-            }()
-            
             CaptureMemorySheet(
-                initialPrompt: promptData,  // Pass the story's prompt
+                initialPromptText: storyPromptText,  // Pass the story's prompt text directly
                 initialMode: captureInitialMode,
                 storyId: UUID(uuidString: story.id),
                 replyToResponseId: replyingTo?.id,
@@ -619,6 +647,7 @@ struct FullStoryDetail: View {
 
         Task {
             await fetchResponses()
+            await fetchQuotes()
         }
     }
 
@@ -632,6 +661,7 @@ struct FullStoryDetail: View {
         }
 
         await fetchResponses()
+        await fetchQuotes()
 
         // Haptic feedback for refresh complete
         if theme.enableHaptics {
@@ -663,6 +693,27 @@ struct FullStoryDetail: View {
         }
     }
 
+    /// Fetches quotes from the API
+    @MainActor
+    private func fetchQuotes() async {
+        isLoadingQuotes = true
+
+        do {
+            guard let storyUUID = UUID(uuidString: story.id) else {
+                print("Invalid story ID: \(story.id)")
+                isLoadingQuotes = false
+                return
+            }
+
+            let quotesResponse = try await APIService.shared.getStoryQuotes(storyId: storyUUID)
+            self.storyQuotes = quotesResponse.quotes
+            isLoadingQuotes = false
+        } catch {
+            print("Failed to load quotes: \(error)")
+            isLoadingQuotes = false
+        }
+    }
+
     private func playResponse(_ response: StorySegmentData) {
         // Safety check: only play if response has actual audio
         guard response.hasAudio else {
@@ -685,7 +736,7 @@ struct FullStoryDetail: View {
 
         Task {
             do {
-                try await APIService.shared.generatePodcast(storyId: story.id)
+                try await APIService.shared.generatePodcast(storyId: UUID(uuidString: story.id) ?? UUID())
 
                 await MainActor.run {
                     isGeneratingPodcast = false
@@ -1603,6 +1654,48 @@ struct PromptMemoryHeader: View {
                 )
                 .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
         )
+    }
+}
+
+// MARK: - Story Quote Item Component
+
+struct StoryQuoteItem: View {
+    let quoteText: String
+    let authorName: String
+    let authorRole: String
+    @Environment(\.theme) var theme
+
+    var roleColor: Color {
+        switch authorRole.lowercased() {
+        case "elder": return .storytellerElder
+        case "parent", "organizer": return .storytellerParent
+        case "child": return .storytellerChild
+        case "teen": return .storytellerTeen
+        default: return .storytellerPurple
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\"\(quoteText)\"")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(theme.textColor)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 6) {
+                Text("— \(authorName)")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+
+                Text(authorRole.capitalized)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(roleColor.opacity(0.8))
+                    .clipShape(Capsule())
+            }
+        }
     }
 }
 

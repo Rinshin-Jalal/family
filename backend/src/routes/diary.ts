@@ -276,28 +276,17 @@ app.post('/api/diary/:uploadId/create-story', authMiddleware, profileMiddleware,
   const title = customTitle || generateTitleFromText(textToUse)
   const summary = generateSummaryFromText(textToUse)
 
-  // 3. Create prompt (optional - for linking to prompt system)
-  const { data: prompt } = await supabase
-    .from('prompts')
-    .insert({
-      family_id: profile.family_id,
-      user_id: profile.id,
-      text: `Diary entry: ${title}`,
-      category: 'diary',
-      is_used: true,
-    })
-    .select()
-    .single()
-
-  // 4. Create story
+  // 3. Create story directly with prompt_text
   const { data: story, error: storyError } = await supabase
     .from('stories')
     .insert({
       family_id: profile.family_id,
-      prompt_id: prompt?.id,
       title,
-      summary,
-      is_complete: true,
+      summary_text: summary,
+      prompt_text: `Diary entry: ${title}`,
+      prompt_category: 'diary',
+      prompt_is_custom: true,
+      is_completed: true,
       voice_count: 0,
     })
     .select()
@@ -307,21 +296,20 @@ app.post('/api/diary/:uploadId/create-story', authMiddleware, profileMiddleware,
     return c.json({ error: storyError.message }, 500)
   }
 
-  // 5. Link upload to story
+  // 4. Link upload to story
   await supabase
     .from('diary_uploads')
     .update({ story_id: story.id })
     .eq('id', uploadId)
 
-  // 6. Create a text response with the extracted content
+  // 5. Create a text response with the extracted content
   await supabase
     .from('responses')
     .insert({
       story_id: story.id,
       user_id: profile.id,
-      prompt_id: prompt?.id,
       source: 'diary_ocr',
-      transcript: textToUse,
+      transcription_text: textToUse,
       processing_status: 'completed',
     })
 

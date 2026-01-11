@@ -34,14 +34,14 @@ export const createStoryTask = task({
     minTimeoutInMs: 1000,
     maxTimeoutInMs: 10000,
   },
-  run: async (payload: { responseId: string; promptId: string; familyId: string; transcriptionText?: string }, { ctx }) => {
+  run: async (payload: { responseId: string; promptText: string; familyId: string; transcriptionText?: string }, { ctx }) => {
     const supabase = createSupabaseClient();
     const bedrock = createBedrockClient();
 
     // Generate title and summary for the story using AI
     let storyTitle = "Untitled Story";
     let storySummary = null;
-    
+
     if (payload.transcriptionText) {
       try {
         const completion = await bedrock.chat.completions.create({
@@ -73,12 +73,12 @@ Respond with JSON only.`,
           const jsonResponse = JSON.parse(message.content);
           const generatedTitle = jsonResponse.title?.trim();
           const generatedSummary = jsonResponse.summary?.trim();
-          
+
           if (generatedTitle && generatedTitle.length > 3) {
             storyTitle = generatedTitle;
             console.log(`✓ AI-generated title: ${storyTitle}`);
           }
-          
+
           if (generatedSummary && generatedSummary.length > 10) {
             storySummary = generatedSummary;
             console.log(`✓ AI-generated summary: ${storySummary}`);
@@ -89,14 +89,16 @@ Respond with JSON only.`,
       }
     }
 
-    // Create a new story for this response
+    // Create a new story with embedded prompt fields
     const { data: newStory, error: storyError } = await supabase
       .from("stories")
       .insert({
-        prompt_id: payload.promptId,
         family_id: payload.familyId,
         title: storyTitle,
         summary_text: storySummary,
+        prompt_text: payload.promptText,
+        prompt_category: categorizePrompt(payload.promptText),
+        prompt_is_custom: true,
         voice_count: 1,
         is_completed: false,
       })
@@ -106,6 +108,8 @@ Respond with JSON only.`,
     if (storyError || !newStory) {
       throw new Error(`Failed to create story: ${JSON.stringify(storyError)}`);
     }
+
+    console.log(`✓ Story created: ${newStory.id}`);
 
     // Update the response with the new story_id
     const { error: updateError } = await supabase
@@ -121,7 +125,29 @@ Respond with JSON only.`,
       success: true,
       storyId: newStory.id,
       responseId: payload.responseId,
-      promptId: payload.promptId,
     };
   },
 });
+
+// Helper function to categorize prompts
+function categorizePrompt(promptText: string): string {
+  const lower = promptText.toLowerCase();
+
+  if (lower.includes('childhood') || lower.includes('when you were') || lower.includes('growing up')) {
+    return 'childhood';
+  }
+  if (lower.includes('holiday') || lower.includes('christmas') || lower.includes('thanksgiving')) {
+    return 'holidays';
+  }
+  if (lower.includes('funny') || lower.includes('laugh') || lower.includes('embarrassing')) {
+    return 'funny';
+  }
+  if (lower.includes('love') || lower.includes('relationship') || lower.includes('met')) {
+    return 'love';
+  }
+  if (lower.includes('work') || lower.includes('job') || lower.includes('career')) {
+    return 'career';
+  }
+
+  return 'life'; // Default category
+}

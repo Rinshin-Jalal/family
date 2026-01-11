@@ -29,7 +29,6 @@ app.post('/api/stories/:id/export/pdf', authMiddleware, profileMiddleware, async
     .from('stories')
     .select(`
       *,
-      prompt:prompts(text, category),
       story_panels(image_url, caption, order_index),
       responses(transcription_text, profiles(full_name))
     `)
@@ -168,7 +167,6 @@ app.post('/api/stories/:id/export/json', authMiddleware, profileMiddleware, asyn
     .from('stories')
     .select(`
       *,
-      prompt:prompts(*),
       responses(*),
       story_panels(*)
     `)

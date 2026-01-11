@@ -37,6 +37,11 @@ final class APIService {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60
+        
+        // Disable caching to ensure fresh data on every request
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        
         self.session = URLSession(configuration: config)
     }
     
@@ -68,7 +73,9 @@ final class APIService {
 
     /// Get family stories
     func getStories() async throws -> [StoryData] {
-        let endpoint = "/api/stories"
+        // Add cache-busting timestamp to force fresh data
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+        let endpoint = "/api/stories?_cb=\(timestamp)"
         Logger.logRequest(endpoint: endpoint, method: "GET")
 
         do {
@@ -115,12 +122,16 @@ final class APIService {
     }
 
     /// Create new story
-    func createStory(promptId: UUID) async throws -> StoryData {
+    func createStory(promptText: String? = nil, promptCategory: String? = nil) async throws -> StoryData {
         let endpoint = "/api/stories"
         Logger.logRequest(endpoint: endpoint, method: "POST")
 
         do {
-            let body = CreateStoryAPIRequest(prompt_id: promptId.uuidString)
+            let body = CreateStoryAPIRequest(
+                prompt_text: promptText,
+                prompt_category: promptCategory,
+                prompt_is_custom: promptText != nil
+            )
             var request = await createRequest(endpoint: endpoint, method: "POST")
             request.httpBody = try JSONEncoder().encode(body)
             let (data, response) = try await session.data(for: request)
@@ -209,28 +220,12 @@ final class APIService {
         return try JSONDecoder().decode(CoverGenerationResponse.self, from: data)
     }
 
-    // MARK: - Prompts API
-    
-    /// Get family prompts
-    func getPrompts() async throws -> [PromptData] {
-        let request = await createRequest(endpoint: "/api/prompts")
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode([PromptData].self, from: data)
-    }
-    
-    /// Create custom prompt
-    func createPrompt(text: String, category: String) async throws -> PromptData {
-        let body = CreatePromptRequest(text: text, category: category)
-        var request = await createRequest(endpoint: "/api/prompts", method: "POST")
-        request.httpBody = try JSONEncoder().encode(body)
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(PromptData.self, from: data)
-    }
-    
+    // Prompts API removed - prompts now embedded in stories
+
     // MARK: - Responses API (Audio Upload)
-    
+
     /// Upload audio response
-    func uploadResponse(promptId: UUID, storyId: UUID?, audioData: Data, filename: String, source: String, replyToResponseId: String? = nil) async throws -> ResponseData {
+    func uploadResponse(storyId: UUID?, audioData: Data, filename: String, source: String, replyToResponseId: String? = nil) async throws -> ResponseData {
         let boundary = UUID().uuidString
 
         var body = Data()
@@ -240,12 +235,6 @@ final class APIService {
         body.append("Content-Disposition: form-data; name=\"audio\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: audio/mpeg\r\n\r\n".data(using: .utf8)!)
         body.append(audioData)
-        body.append("\r\n".data(using: .utf8)!)
-
-        // Add prompt_id
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"prompt_id\"\r\n\r\n".data(using: .utf8)!)
-        body.append(promptId.uuidString.data(using: .utf8)!)
         body.append("\r\n".data(using: .utf8)!)
 
         // Add story_id (optional)
@@ -650,7 +639,32 @@ final class APIService {
             throw error
         }
     }
-    
+
+    /// Get quote cards for a specific story
+    func getStoryQuotes(storyId: UUID) async throws -> QuoteCardsResponse {
+        let endpoint = "/api/stories/\(storyId.uuidString)/quotes"
+        Logger.logRequest(endpoint: endpoint, method: "GET")
+
+        do {
+            let request = await createRequest(endpoint: endpoint)
+            let (data, response) = try await session.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                Logger.logResponse(endpoint: endpoint, statusCode: httpResponse.statusCode)
+            }
+
+            let result = try JSONDecoder().decode(QuoteCardsResponse.self, from: data)
+            Logger.debug("[Quotes] Fetched \(result.quotes.count) quotes for story \(storyId)")
+            return result
+        } catch let error as DecodingError {
+            Logger.logDecodingError(endpoint: endpoint, error: error)
+            throw error
+        } catch {
+            Logger.logAPIError(endpoint: endpoint, error: error)
+            throw error
+        }
+    }
+
     /// Get a specific quote card
     func getQuoteCard(id: UUID) async throws -> QuoteCardDetailResponse {
         let request = await createRequest(endpoint: "/api/quotes/\(id.uuidString)")
@@ -871,7 +885,9 @@ enum APIError: LocalizedError {
 // MARK: - Request Models
 
 struct CreateStoryAPIRequest: Codable {
-    let prompt_id: String
+    let prompt_text: String?
+    let prompt_category: String?
+    let prompt_is_custom: Bool?
 }
 
 struct CompleteStoryRequest: Codable {
@@ -881,10 +897,7 @@ struct CompleteStoryRequest: Codable {
     let voice_count: Int
 }
 
-struct CreatePromptRequest: Codable {
-    let text: String
-    let category: String
-}
+// CreatePromptRequest removed - prompts now embedded in stories
 
 struct AddElderRequest: Codable {
     let name: String
@@ -927,31 +940,10 @@ struct PreferenceSettingsRequest: Codable {
 
 // MARK: - Response Models
 
-public struct PromptData: Identifiable, Codable {
-    public var id: String
-    public var text: String
-    public var category: String?
-    public var isCustom: Bool
-    public var createdAt: String
-
-    public init(id: String, text: String, category: String?, isCustom: Bool, createdAt: String) {
-        self.id = id
-        self.text = text
-        self.category = category
-        self.isCustom = isCustom
-        self.createdAt = createdAt
-    }
-
-    public var createdAtDate: Date {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: createdAt) ?? Date()
-    }
-}
+// PromptData removed - prompts now embedded in StoryData
 
 public struct ResponseData: Identifiable, Codable {
     public var id: String
-    public var promptId: String?
     public var storyId: String?
     public var userId: String
     public var source: String
@@ -961,9 +953,8 @@ public struct ResponseData: Identifiable, Codable {
     public var processingStatus: String
     public var createdAt: String
 
-    public init(id: String, promptId: String?, storyId: String?, userId: String, source: String, mediaUrl: String?, transcriptionText: String?, durationSeconds: Int?, processingStatus: String, createdAt: String) {
+    public init(id: String, storyId: String?, userId: String, source: String, mediaUrl: String?, transcriptionText: String?, durationSeconds: Int?, processingStatus: String, createdAt: String) {
         self.id = id
-        self.promptId = promptId
         self.storyId = storyId
         self.userId = userId
         self.source = source
@@ -1018,7 +1009,6 @@ struct FamilyMemberData: Identifiable, Codable {
 
 struct StoryData: Identifiable, Codable {
     let id: String
-    let promptId: String?
     let familyId: String
     let title: String?
     let summaryText: String?
@@ -1028,10 +1018,11 @@ struct StoryData: Identifiable, Codable {
     let createdAt: String
     let promptText: String?
     let promptCategory: String?
+    let promptIsCustom: Bool?
+    let promptScheduledFor: String?
 
     enum CodingKeys: String, CodingKey {
         case id
-        case promptId = "prompt_id"
         case familyId = "family_id"
         case title
         case summaryText = "summary_text"
@@ -1041,6 +1032,8 @@ struct StoryData: Identifiable, Codable {
         case createdAt = "created_at"
         case promptText = "prompt_text"
         case promptCategory = "prompt_category"
+        case promptIsCustom = "prompt_is_custom"
+        case promptScheduledFor = "prompt_scheduled_for"
     }
 
     var storytellerColorName: String {

@@ -213,7 +213,6 @@ app.get('/api/public/s/:token', async (c) => {
       .from('stories')
       .select(`
         *,
-        prompt:prompts(text, category),
         responses(
           id,
           user_id,
@@ -258,7 +257,6 @@ app.get('/api/public/s/:token', async (c) => {
           notes,
           stories(
             *,
-            prompt:prompts(text, category),
             story_panels(
               id,
               image_url,

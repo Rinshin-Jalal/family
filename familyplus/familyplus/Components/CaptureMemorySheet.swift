@@ -10,22 +10,19 @@ import UniformTypeIdentifiers
 import PDFKit
 import Combine
 
-// Import Services for APIService and PromptData
-
 struct CaptureMemorySheet: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
-    
-    var initialPrompt: PromptData? = nil
+
+    var initialPromptText: String? = nil
     var initialMode: InputMode = .recording
     var storyId: UUID? = nil
     var replyToResponseId: String? = nil  // For threaded replies
     var replyToName: String? = nil  // Name of person being replied to
     var replyToText: String? = nil  // Preview of message being replied to
     var hidePromptSection: Bool = false  // Hide prompt when replying
-    
+
     // Prompt state
-    @State private var selectedPrompt: PromptData?
     @State private var customPromptText = ""
     @State private var isLoadingPrompts = false
     
@@ -147,8 +144,8 @@ struct CaptureMemorySheet: View {
             Text("Your family story has been safely tucked away.")
         })
         .onAppear {
-            if let initialPrompt = initialPrompt {
-                selectedPrompt = initialPrompt
+            if let initialPrompt = initialPromptText {
+                customPromptText = initialPrompt
             }
             inputMode = initialMode
         }
@@ -229,21 +226,11 @@ struct CaptureMemorySheet: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(theme.accentColor)
                 .tracking(1.5)
-            
-            if let prompt = selectedPrompt {
-                Text(prompt.text)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(theme.textColor)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                TextField("What's on your mind?", text: $customPromptText, axis: .vertical)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(theme.textColor)
-                    .lineLimit(3)
-                    .onChange(of: customPromptText) { _, _ in
-                        if !customPromptText.isEmpty { selectedPrompt = nil }
-                    }
-            }
+
+            TextField("What's on your mind?", text: $customPromptText, axis: .vertical)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(theme.textColor)
+                .lineLimit(3)
         }
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -742,19 +729,11 @@ struct CaptureMemorySheet: View {
         let seconds = Int(audioRecorder.recordingDuration) % 60
         return String(format: "%02d:%02d", minutes, seconds)
     }
-    
+
     private func hasValidPrompt() -> Bool {
-        return selectedPrompt != nil || !customPromptText.isEmpty
+        return !customPromptText.isEmpty
     }
-    
-    private func getPromptId() -> UUID {
-        if let prompt = selectedPrompt {
-            return UUID(uuidString: prompt.id) ?? UUID()
-        }
-        // Create a temporary prompt for custom text
-        return UUID()
-    }
-    
+
     // MARK: - Actions
     
     private func toggleRecording() {
@@ -792,10 +771,7 @@ struct CaptureMemorySheet: View {
             do {
                 let audioData = try Data(contentsOf: audioURL)
                 let filename = audioURL.lastPathComponent
-                let promptId = getPromptId()
-                
                 _ = try await APIService.shared.uploadResponse(
-                    promptId: promptId,
                     storyId: storyId,
                     audioData: audioData,
                     filename: filename,
@@ -849,10 +825,7 @@ struct CaptureMemorySheet: View {
             do {
                 let audioData = try Data(contentsOf: audioURL)
                 let filename = audioURL.lastPathComponent
-                let promptId = getPromptId()
-                
                 _ = try await APIService.shared.uploadResponse(
-                    promptId: promptId,
                     storyId: storyId,
                     audioData: audioData,
                     filename: filename,
@@ -951,7 +924,6 @@ struct CaptureMemorySheet: View {
                 let promptId = getPromptId()
                 
                 _ = try await APIService.shared.uploadResponse(
-                    promptId: promptId,
                     storyId: storyId,
                     audioData: textData,
                     filename: filename,
@@ -990,7 +962,6 @@ struct CaptureMemorySheet: View {
                 // Backend currently expects 'audio' but we'll send it as generic response for now
                 // or ideally we would use a dedicated image endpoint
                 _ = try await APIService.shared.uploadResponse(
-                    promptId: promptId,
                     storyId: storyId,
                     audioData: imageData,
                     filename: filename,
@@ -1023,7 +994,6 @@ struct CaptureMemorySheet: View {
                 let promptId = getPromptId()
                 
                 _ = try await APIService.shared.uploadResponse(
-                    promptId: promptId,
                     storyId: storyId,
                     audioData: textData,
                     filename: filename,

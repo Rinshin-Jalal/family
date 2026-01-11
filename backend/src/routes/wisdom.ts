@@ -7,6 +7,7 @@
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth';
 import { createQwenTurboClient } from '../ai/llm';
+import { EmbeddingsClient } from '../ai/embeddings';
 import { logger, getUserId } from '../utils/logger';
 
 const app = new Hono<{ Bindings: any; Variables: any }>();
@@ -95,23 +96,17 @@ app.get('/api/wisdom/search', authMiddleware, async (c) => {
       p_limit: limit,
     })
 
-  if (error) {
-    // Fallback to simple search
-    const { data: fallback } = await supabase
-      .from('stories')
-      .select('id, title, summary_text, cover_image_url')
-      .eq('family_id', profile.family_id)
-      .ilike('summary_text', `%${searchQuery}%`)
-      .limit(limit)
+   if (error) {
+     // Fallback to simple search
+     const { data: fallback } = await supabase
+       .from('stories')
+       .select('id, title, summary_text, cover_image_url')
+       .eq('family_id', profile.family_id)
+       .ilike('summary_text', `%${searchQuery}%`)
+       .limit(limit)
 
-    await supabase.from('wisdom_search_logs').insert({
-      user_id: profile.id,
-      search_query: searchQuery,
-      stories_found: fallback?.length || 0,
-    })
-
-    return c.json({ query: searchQuery, stories: fallback || [], count: fallback?.length || 0 })
-  }
+     return c.json({ query: searchQuery, stories: fallback || [], count: fallback?.length || 0 })
+   }
 
   await supabase.from('wisdom_search_logs').insert({
     user_id: profile.id,
@@ -120,6 +115,55 @@ app.get('/api/wisdom/search', authMiddleware, async (c) => {
   })
 
   return c.json({ query: searchQuery, stories: stories || [], count: stories?.length || 0 })
+})
+
+/**
+ * GET /api/wisdom/search/responses
+ * Search responses by wisdom tags (NEW - response-level search)
+ * Searches across response_tags for emotion_tags, situation_tags, lesson_tags, etc.
+ */
+app.get('/api/wisdom/search/responses', authMiddleware, async (c) => {
+  const supabase = c.get('supabase')
+  const searchQuery = c.req.query('q')
+  const limit = parseInt(c.req.query('limit') || '10')
+
+  if (!searchQuery) {
+    return c.json({ error: 'Search query required' }, 400)
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, family_id')
+    .eq('auth_user_id', c.get('userId'))
+    .single()
+
+  if (!profile) {
+    return c.json({ error: 'Profile not found' }, 404)
+  }
+
+  // Search responses by wisdom tags using PostgreSQL
+  const { data: responses, error } = await supabase
+    .rpc('search_wisdom_in_responses', {
+      p_family_id: profile.family_id,
+      p_search_query: searchQuery,
+      p_limit: limit,
+    })
+
+  if (error) {
+    return c.json({ error: error.message }, 500)
+  }
+
+  await supabase.from('wisdom_search_logs').insert({
+    user_id: profile.id,
+    search_query: searchQuery,
+    stories_found: responses?.length || 0,
+  })
+
+  return c.json({ 
+    query: searchQuery, 
+    responses: responses || [], 
+    count: responses?.length || 0 
+  })
 })
 
 /**
@@ -570,8 +614,8 @@ app.get('/api/wisdom/topics/discussion', authMiddleware, async (c) => {
 
 /**
  * POST /api/wisdom/search/semantic
- * Supermemory-style semantic search using embeddings
- * Finds stories/quotes that match the meaning of the query, not just keywords
+ * PGVECTOR-powered semantic search
+ * Uses pre-computed embeddings stored in database for instant search
  */
 app.post('/api/wisdom/search/semantic', authMiddleware, async (c) => {
   const route = '/api/wisdom/search/semantic'
@@ -601,32 +645,50 @@ app.post('/api/wisdom/search/semantic', authMiddleware, async (c) => {
   }
 
   try {
-    // Initialize LLM client for embeddings
-    const llm = createQwenTurboClient({
-      openaiApiKey: c.env.OPENAI_API_KEY,
-      bedrockRegion: c.env.BEDROCK_REGION,
+    // Initialize embeddings client
+    const embeddings = new EmbeddingsClient({
+      openaiApiKey: c.env.AWS_BEARER_TOKEN_BEDROCK,
+      bedrockRegion: c.env.AWS_REGION,
     })
 
-    logger.info(`Generating embedding for semantic search`, { route, userId, query })
+    logger.info(`Generating query embedding`, { route, userId, queryLength: query.length })
 
-    // Generate embedding for query
-    const queryEmbedding = await llm.generateEmbedding(query)
+    // Generate embedding for query (only 1 API call!)
+    const queryEmbedding = await embeddings.embed(query)
 
-    // Fetch all stories and quotes from family
-    const { data: stories } = await supabase
-      .from('stories')
-      .select('id, title, summary_text, created_at')
-      .eq('family_id', profile.family_id)
-      .eq('is_completed', true)
-      .limit(100)
+    // Convert to PostgreSQL vector format
+    const pgVector = '[' + queryEmbedding.embedding.join(', ') + ']'
 
-    const { data: quotes } = await supabase
-      .from('quote_cards')
-      .select('id, quote_text, author_name, author_role, story_id, created_at')
-      .eq('family_id', profile.family_id)
-      .limit(100)
+    logger.info(`Searching with pgvector`, { route, userId })
 
-    // Calculate semantic similarity for each result
+    // Search stories using pgvector (instant!)
+    const { data: stories, error: storiesError } = await supabase
+      .rpc('semantic_search_stories', {
+        p_family_id: profile.family_id,
+        p_query_embedding: pgVector as any,
+        p_limit: limit / 2, // Split limit between stories and quotes
+        p_min_similarity: 0.3,
+      })
+
+    if (storiesError) {
+      logger.error(`Story search error`, { route, userId, error: storiesError })
+      // Fallback: return empty results instead of failing
+    }
+
+    // Search quotes using pgvector (instant!)
+    const { data: quotes, error: quotesError } = await supabase
+      .rpc('semantic_search_quotes', {
+        p_family_id: profile.family_id,
+        p_query_embedding: pgVector as any,
+        p_limit: limit / 2,
+        p_min_similarity: 0.3,
+      })
+
+    if (quotesError) {
+      logger.error(`Quote search error`, { route, userId, error: quotesError })
+    }
+
+    // Combine and format results
     const results: Array<{
       id: string
       type: 'story' | 'quote'
@@ -639,74 +701,50 @@ app.post('/api/wisdom/search/semantic', authMiddleware, async (c) => {
       createdAt: string
     }> = []
 
-    // Calculate cosine similarity
-    const cosineSimilarity = (a: number[], b: number[]): number => {
-      let dotProduct = 0
-      let normA = 0
-      let normB = 0
-      for (let i = 0; i < Math.min(a.length, b.length); i++) {
-        dotProduct += a[i] * b[i]
-        normA += a[i] * a[i]
-        normB += b[i] * b[i]
-      }
-      return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
-    }
-
-    // Process stories
+    // Add stories
     for (const story of stories || []) {
-      const text = `${story.title} ${story.summary_text || ''}`.substring(0, 500)
-      const embedding = await llm.generateEmbedding(text)
-      const similarity = cosineSimilarity(queryEmbedding, embedding)
-
-      if (similarity > 0.3) { // Threshold for relevance
-        results.push({
-          id: story.id,
-          type: 'story',
-          title: story.title || 'Untitled Story',
-          content: story.summary_text || '',
-          similarity,
-          createdAt: story.created_at,
-        })
-      }
+      results.push({
+        id: story.id,
+        type: 'story',
+        title: story.title || 'Untitled Story',
+        content: story.summary_text || '',
+        similarity: story.similarity || 0,
+        createdAt: story.created_at,
+      })
     }
 
-    // Process quotes
+    // Add quotes
     for (const quote of quotes || []) {
-      const embedding = await llm.generateEmbedding(quote.quote_text)
-      const similarity = cosineSimilarity(queryEmbedding, embedding)
-
-      if (similarity > 0.3) {
-        results.push({
-          id: quote.id,
-          type: 'quote',
-          title: quote.quote_text.substring(0, 100) + '...',
-          content: quote.quote_text,
-          author: quote.author_name,
-          role: quote.author_role,
-          storyId: quote.story_id,
-          similarity,
-          createdAt: quote.created_at,
-        })
-      }
+      results.push({
+        id: quote.id,
+        type: 'quote',
+        title: quote.quote_text?.substring(0, 100) + '...' || '',
+        content: quote.quote_text || '',
+        author: quote.author_name,
+        role: quote.author_role,
+        storyId: quote.story_id,
+        similarity: quote.similarity || 0,
+        createdAt: quote.created_at,
+      })
     }
 
-    // Sort by similarity and return top results
+    // Sort by similarity and limit
     results.sort((a, b) => b.similarity - a.similarity)
+    const finalResults = results.slice(0, limit)
 
-    logger.info(`Semantic search completed`, { route, userId, query, resultCount: results.length })
-
-    // Log the search
-    await supabase.from('wisdom_search_logs').insert({
-      user_id: profile.id,
-      search_query: query,
-      stories_found: results.length,
-      search_type: 'semantic',
-    })
+     logger.info(`Semantic search completed (pgvector)`, { 
+       route, 
+       userId, 
+       query, 
+       resultCount: finalResults.length,
+       storyCount: (stories as any[])?.length || 0,
+       quoteCount: (quotes as any[])?.length || 0,
+     })
 
     return c.json({
       query,
-      results: results.slice(0, limit),
-      count: results.length,
+      results: finalResults,
+      count: finalResults.length,
     })
   } catch (error) {
     logger.error(`Semantic search failed`, error, { route, userId, query })

@@ -19,7 +19,6 @@ app.get('/api/stories', authMiddleware, profileMiddleware, async (c) => {
     .from('stories')
     .select(`
       *,
-      prompt:prompts(text, category),
       profiles:responses(user_id, source, duration_seconds)
     `)
     .eq('family_id', profile.family_id)
@@ -48,7 +47,6 @@ app.get('/api/stories/:id', async (c) => {
     .from('stories')
     .select(`
       *,
-      prompt:prompts(text, category),
       responses(
         id,
         user_id,
@@ -92,7 +90,6 @@ app.get('/api/stories/:id', async (c) => {
   return c.json({
     story: {
       id: storyData.id,
-      prompt_id: storyData.prompt_id,
       family_id: storyData.family_id,
       title: storyData.title,
       summary_text: storyData.summary_text,
@@ -100,8 +97,8 @@ app.get('/api/stories/:id', async (c) => {
       voice_count: storyData.voice_count,
       is_completed: storyData.is_completed,
       created_at: storyData.created_at,
-      prompt_text: storyData.prompt?.text,
-      prompt_category: storyData.prompt?.category,
+      prompt_text: storyData.prompt_text,
+      prompt_category: storyData.prompt_category,
     },
     responses,
   })
@@ -121,8 +118,10 @@ app.post('/api/stories', authMiddleware, profileMiddleware, async (c) => {
   const { data: story, error } = await supabase
     .from('stories')
     .insert({
-      prompt_id: body.prompt_id,
       family_id: profile.family_id,
+      prompt_text: body.prompt_text || null,
+      prompt_category: body.prompt_category || null,
+      prompt_is_custom: body.prompt_is_custom || false,
       voice_count: 1,
       is_completed: false,
     })
@@ -284,7 +283,7 @@ app.post('/api/stories/:id/generate-podcast', authMiddleware, profileMiddleware,
   // Verify story belongs to user's family
   const { data: story, error: storyError } = await supabase
     .from('stories')
-    .select('id, family_id, prompt_id, podcast_status')
+    .select('id, family_id, prompt_text, podcast_status')
     .eq('id', storyId)
     .single()
 
@@ -319,20 +318,13 @@ app.post('/api/stories/:id/generate-podcast', authMiddleware, profileMiddleware,
       return c.json({ error: 'No responses found for this story' }, 400)
     }
 
-    // Get prompt text
-    const { data: prompt } = await supabase
-      .from('prompts')
-      .select('text')
-      .eq('id', story.prompt_id)
-      .single()
-
     // Send event to trigger.dev
     const event = await triggerdev.sendEvent({
       name: 'story.ready.for.podcast',
       payload: {
         storyId,
         responseIds: responses.map((r: any) => r.id),
-        promptText: prompt?.text || '',
+        promptText: story.prompt_text || '',
       },
     })
 
@@ -387,7 +379,7 @@ app.post('/api/stories/:id/generate-cover', authMiddleware, profileMiddleware, a
   // Verify story belongs to user's family
   const { data: story, error: storyError } = await supabase
     .from('stories')
-    .select('id, title, summary_text, family_id, prompt_id')
+    .select('id, title, summary_text, family_id, prompt_text')
     .eq('id', storyId)
     .single()
 
@@ -402,13 +394,6 @@ app.post('/api/stories/:id/generate-cover', authMiddleware, profileMiddleware, a
   }
 
   try {
-    // Get prompt text for context
-    const { data: prompt } = await supabase
-      .from('prompts')
-      .select('text')
-      .eq('id', story.prompt_id)
-      .single()
-
     // Initialize DALL-E client
     const dalle = createDalleClient({
       apiKey: c.env.OPENAI_API_KEY,
@@ -424,7 +409,7 @@ app.post('/api/stories/:id/generate-cover', authMiddleware, profileMiddleware, a
     const { r2Url, revisedPrompt } = await dalle.generateAndUploadCover(
       {
         title: story.title || 'Family Story',
-        summary: story.summary_text || prompt?.text || 'A heartwarming family story',
+        summary: story.summary_text || story.prompt_text || 'A heartwarming family story',
         style: 'warm',
       },
       storyId,

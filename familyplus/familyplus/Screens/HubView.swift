@@ -173,22 +173,16 @@ struct HubView: View {
                     ZStack {
                         Circle()
                             .fill(theme.accentColor)
-                            .frame(width: 72, height: 72)
-                            .shadow(color: theme.accentColor.opacity(0.3), radius: 10, x: 0, y: 5)
+                            .frame(width: 64, height: 64)
+                            .shadow(color: theme.accentColor.opacity(0.3), radius: 12, x: 0, y: 6)
 
-                        VStack(spacing: 2) {
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 28, weight: .bold))
-                                .foregroundColor(.white)
-                            
-                            Text("Record")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.white)
-                        }
+                        Image(systemName: "plus")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(.white)
                     }
                 }
                 .padding(.trailing, 24)
-                .padding(.bottom, 100)
+                .padding(.bottom, 120)
             }
             .navigationTitle("Family Library")
             .navigationBarTitleDisplayMode(.large)
@@ -243,10 +237,16 @@ struct HubView: View {
 
     // Async version for pull-to-refresh
     private func refreshDashboard() async {
+        print("[HubView] 🔄 Starting refresh...")
         do {
             let stories = try await APIService.shared.getStories()
+            print("[HubView] ✅ Fetched \(stories.count) stories")
+            
             let family = try await APIService.shared.getFamily()
+            print("[HubView] ✅ Fetched family")
+            
             let members = try await APIService.shared.getFamilyMembers()
+            print("[HubView] ✅ Fetched \(members.count) members")
 
             let quotesResponse = try? await APIService.shared.getPopularQuoteCards(limit: 10)
             let quotes = quotesResponse?.quotes.map { quote in
@@ -260,9 +260,11 @@ struct HubView: View {
                     createdAt: Date()
                 )
             } ?? []
+            print("[HubView] ✅ Fetched \(quotes.count) quotes")
 
             let topicsResponse = try? await APIService.shared.getDiscussionTopics()
             let discussionTopics = topicsResponse?.topics ?? []
+            print("[HubView] ✅ Fetched \(discussionTopics.count) discussion topics")
 
             let archivistData = ArchivistData(
                 stories: stories,
@@ -271,10 +273,12 @@ struct HubView: View {
                 quotes: quotes,
                 discussionTopics: discussionTopics
             )
+            print("[HubView] ✅ Created new ArchivistData with \(stories.count) stories")
 
             await MainActor.run {
                 withAnimation(.snappy) {
                     loadingState = .loaded(archivistData)
+                    print("[HubView] ✅ Updated loadingState - view should refresh!")
                 }
             }
         } catch {
@@ -342,13 +346,14 @@ struct QuickActionHero: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("What's on your mind today?")
-                .font(.system(size: 20, weight: .bold))
+            Text("What's on your mind?")
+                .font(theme.headlineFont)
                 .foregroundColor(theme.textColor)
                 .padding(.horizontal, theme.screenPadding)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
+                    // Primary Action: Record
                     Button(action: {
                         onAction(.recording)
                     }) {
@@ -356,10 +361,11 @@ struct QuickActionHero: View {
                             ZStack {
                                 Circle()
                                     .fill(theme.accentColor)
-                                    .frame(width: 60, height: 60)
+                                    .frame(width: 64, height: 64)
+                                    .shadow(color: theme.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
                                 
                                 Image(systemName: "mic.fill")
-                                    .font(.system(size: 24))
+                                    .font(.system(size: 28))
                                     .foregroundColor(.white)
                             }
                             
@@ -367,103 +373,31 @@ struct QuickActionHero: View {
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundColor(theme.textColor)
                         }
-                        .frame(width: 110)
+                        .frame(width: 120)
                         .padding(.vertical, 16)
-                        .background(
-                            LinearGradient(
-                                colors: [Color.warmYellow.opacity(0.1), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
                         .background(theme.cardBackgroundColor)
-                        .cornerRadius(16)
-                        .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
-                    }
-                    .buttonStyle(.plain)
-
-                    QuickActionButton(icon: "camera.fill", label: "Add Photo", color: theme.accentColor) {
-                        onAction(.imageUpload)
-                    }
-                    QuickActionButton(icon: "text.bubble.fill", label: "Write Story", color: theme.accentColor) {
-                        onAction(.typing)
-                    }
-                    QuickActionButton(icon: "folder.fill", label: "Upload Audio", color: theme.accentColor) {
-                        onAction(.audioUpload)
-                    }
-                }
-                .padding(.horizontal, theme.screenPadding)
-            }
-        }
-    }
-}
-
-struct QuickActionButton: View {
-    let icon: String
-    let label: String
-    let color: Color
-    let action: () -> Void
-    @Environment(\.theme) var theme
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(color.opacity(0.1))
-                        .frame(width: 50, height: 50)
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 20))
-                        .foregroundColor(color)
-                }
-                
-                Text(label)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(theme.textColor)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(width: 80)
-            .padding(.vertical, 12)
-            .background(theme.cardBackgroundColor)
-            .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
-        }
-        .buttonStyle(.plain)
-    }
-}
-                            
-                            Text("Record Voice")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(theme.textColor)
-                        }
-                        .frame(width: 110)
-                        .padding(.vertical, 16)
-                        .background(
-                            LinearGradient(
-                                colors: [Color.warmYellow.opacity(0.1), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
+                        .cornerRadius(20)
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(theme.accentColor.opacity(0.1), lineWidth: 1)
                         )
-                        .background(theme.cardBackgroundColor)
-                        .cornerRadius(16)
-                        .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
                     }
                     .buttonStyle(.plain)
 
                     // Secondary Actions
-                    QuickActionButton(icon: "camera.fill", label: "Add Photo", color: theme.accentColor) {
+                    QuickActionButton(icon: "camera", label: "Add Photo", color: theme.accentColor) {
                         onAction(.imageUpload)
                     }
-                    QuickActionButton(icon: "text.bubble.fill", label: "Write Story", color: theme.accentColor) {
+                    QuickActionButton(icon: "text.bubble", label: "Write Story", color: theme.accentColor) {
                         onAction(.typing)
                     }
-                    QuickActionButton(icon: "folder.fill", label: "Upload Audio", color: theme.accentColor) {
+                    QuickActionButton(icon: "arrow.up.doc", label: "Upload Audio", color: theme.accentColor) {
                         onAction(.audioUpload)
                     }
                 }
                 .padding(.horizontal, theme.screenPadding)
+                .padding(.vertical, 10) // Space for shadows
             }
         }
     }
@@ -478,27 +412,26 @@ struct QuickActionButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(color.opacity(0.1))
-                        .frame(width: 50, height: 50)
+                        .strokeBorder(color.opacity(0.3), lineWidth: 1.5)
+                        .background(Circle().fill(Color.clear))
+                        .frame(width: 48, height: 48)
                     
                     Image(systemName: icon)
-                        .font(.system(size: 20))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(color)
                 }
                 
                 Text(label)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(theme.textColor)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.secondaryTextColor)
                     .multilineTextAlignment(.center)
             }
-            .frame(width: 80)
+            .frame(width: 84)
             .padding(.vertical, 12)
-            .background(theme.cardBackgroundColor)
-            .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
+            .background(Color.clear) // Transparent background for secondary
         }
         .buttonStyle(.plain)
     }
@@ -1051,36 +984,6 @@ struct ContributionRowContent: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 4) {
-                Spacer()
-                
-                HStack(spacing: 4) {
-                    Image(systemName: "mic.fill")
-                    Text(contribution.formattedDuration)
-                }
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(theme.textColor.opacity(0.7))
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .contentShape(Rectangle())
-    }
-}
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(contribution.storyTitle)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(theme.textColor)
-                
-                Text("by \(contribution.storyteller) • \(contribution.timeAgo)")
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.secondaryTextColor)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                // Empty spacer to align with new layout
                 Spacer()
                 
                 HStack(spacing: 4) {
