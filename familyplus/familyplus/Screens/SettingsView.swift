@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Auth
 
 // MARK: - Settings View
 
@@ -520,6 +519,166 @@ struct SettingsContent: View {
     let onSignOut: () -> Void
 
     var body: some View {
+        switch theme.role {
+        case .child:
+            ChildSettingsContent(
+                data: data,
+                onEditProfile: onEditProfile,
+                onFamilySettings: onFamilySettings,
+                onExportData: onExportData,
+                onDeleteAccount: onDeleteAccount,
+                onSignOut: onSignOut
+            )
+        case .parent:
+            ParentSettingsContent(
+                data: data,
+                onEditProfile: onEditProfile,
+                onFamilySettings: onFamilySettings,
+                onExportData: onExportData,
+                onDeleteAccount: onDeleteAccount,
+                onSignOut: onSignOut
+            )
+        case .teen:
+            TeenSettingsContent(
+                data: data,
+                onEditProfile: onEditProfile,
+                onFamilySettings: onFamilySettings,
+                onExportData: onExportData,
+                onDeleteAccount: onDeleteAccount,
+                onSignOut: onSignOut
+            )
+        case .elder:
+            ElderNotAvailableView()
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Persona-Specific Settings Variants
+
+// MARK: - Child Settings (80x80pt targets, bright, audio-focused)
+
+struct ChildSettingsContent: View {
+    let data: ProfileSettingsData
+    @Environment(\.theme) var theme
+    let onEditProfile: () -> Void
+    let onFamilySettings: () -> Void
+    let onExportData: () -> Void
+    let onDeleteAccount: () -> Void
+    let onSignOut: () -> Void
+
+    var body: some View {
+        List {
+            // Profile Header Section - Larger for child
+            Section {
+                VStack(spacing: 20) {
+                    // Avatar - Much larger
+                    ZStack {
+                        Circle()
+                            .fill(theme.accentColor.opacity(0.15))
+                            .frame(width: 100, height: 100)
+                        Text(data.user.avatarEmoji)
+                            .font(.system(size: 48))
+                    }
+
+                    VStack(spacing: 8) {
+                        Text(data.user.name)
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(theme.textColor)
+                        Text("👨‍👩‍👧‍👦 Family Member")
+                            .font(.system(size: 18))
+                            .foregroundColor(theme.secondaryTextColor)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            }
+
+            // Main Actions - Big touch targets (80x80pt)
+            Section {
+                Button(action: onEditProfile) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 32))
+                        Text("Edit Profile")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 80)
+                    .background(theme.accentColor.opacity(0.1))
+                    .cornerRadius(12)
+                    .foregroundColor(theme.accentColor)
+                }
+
+                Button(action: onFamilySettings) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "person.3.fill")
+                            .font(.system(size: 32))
+                        Text("Family")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 80)
+                    .background(theme.accentColor.opacity(0.1))
+                    .cornerRadius(12)
+                    .foregroundColor(theme.accentColor)
+                }
+            }
+
+            // Audio Settings (Child-specific)
+            Section("Sound & Voice") {
+                SettingsToggleRow(
+                    icon: "speaker.wave.2.fill",
+                    title: "Sound Effects",
+                    subtitle: "Beeps and sounds",
+                    isOn: .constant(true)
+                )
+
+                SettingsToggleRow(
+                    icon: "waveform",
+                    title: "Voice Prompts",
+                    subtitle: "App speaks to you",
+                    isOn: .constant(true)
+                )
+            }
+
+            // Sign Out - Big button for child
+            Section {
+                Button(action: onSignOut) {
+                    HStack {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Sign Out")
+                            .font(.system(size: 18, weight: .bold))
+                        Spacer()
+                    }
+                    .padding(.vertical, 16)
+                    .foregroundColor(.red)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+    }
+}
+
+// MARK: - Parent Settings (48x48pt targets, full features)
+
+struct ParentSettingsContent: View {
+    let data: ProfileSettingsData
+    @Environment(\.theme) var theme
+    let onEditProfile: () -> Void
+    let onFamilySettings: () -> Void
+    let onExportData: () -> Void
+    let onDeleteAccount: () -> Void
+    let onSignOut: () -> Void
+
+    var body: some View {
         List {
             // Profile Header Section
             Section {
@@ -632,6 +791,146 @@ struct SettingsContent: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Teen Settings (44x44pt targets, dark minimalist)
+
+struct TeenSettingsContent: View {
+    let data: ProfileSettingsData
+    @Environment(\.theme) var theme
+    let onEditProfile: () -> Void
+    let onFamilySettings: () -> Void
+    let onExportData: () -> Void
+    let onDeleteAccount: () -> Void
+    let onSignOut: () -> Void
+
+    var body: some View {
+        List {
+            // Minimal header - just avatar and name
+            Section {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(theme.accentColor.opacity(0.1))
+                            .frame(width: 56, height: 56)
+                        Text(data.user.avatarEmoji)
+                            .font(.system(size: 24))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(data.user.name)
+                            .font(.headline)
+                            .foregroundColor(theme.textColor)
+                        Text("\(data.stats.totalStories) stories")
+                            .font(.caption)
+                            .foregroundColor(theme.secondaryTextColor)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+            }
+
+            // Compact Profile Section
+            Section {
+                SettingsRow(
+                    icon: "person.circle",
+                    title: "Edit Profile",
+                    subtitle: "Name, avatar, theme"
+                ) {
+                    onEditProfile()
+                }
+
+                SettingsRow(
+                    icon: "person.3",
+                    title: "Family",
+                    subtitle: "\(data.family.memberCount) members"
+                ) {
+                    onFamilySettings()
+                }
+            }
+            
+            // Notifications Section
+            Section {
+                NotificationSection(settings: data.settings.notifications)
+            } header: {
+                Text("Notifications")
+                    .font(.caption)
+                    .foregroundColor(theme.secondaryTextColor)
+            }
+            
+            // Privacy Section - Minimal
+            Section {
+                PrivacySection(settings: data.settings.privacy, onExportData: onExportData, onDeleteAccount: onDeleteAccount)
+            } header: {
+                Text("Privacy")
+                    .font(.caption)
+                    .foregroundColor(theme.secondaryTextColor)
+            }
+            
+            // App Preferences
+            Section {
+                PreferencesSection(settings: data.settings.preferences)
+            } header: {
+                Text("Preferences")
+                    .font(.caption)
+                    .foregroundColor(theme.secondaryTextColor)
+            }
+            
+            // Sign Out Section - Minimal
+            Section {
+                SettingsRow(
+                    icon: "rectangle.portrait.and.arrow.right",
+                    title: "Sign Out",
+                    subtitle: "",
+                    isDestructive: true
+                ) {
+                    onSignOut()
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Elder Not Available
+
+struct ElderNotAvailableView: View {
+    @Environment(\.theme) var theme
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            Image(systemName: "phone.circle.fill")
+                .font(.system(size: 64))
+                .foregroundColor(theme.accentColor)
+            
+            VStack(spacing: 12) {
+                Text("Settings via Phone")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(theme.textColor)
+                    .multilineTextAlignment(.center)
+                
+                Text("Your family can manage your settings by phone. A family member can also adjust settings from their profile.")
+                    .font(.system(size: 18))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 24)
+            
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.backgroundColor.ignoresSafeArea())
     }
 }
 
