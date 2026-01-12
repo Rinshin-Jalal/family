@@ -52,7 +52,13 @@ app.post('/api/responses', authMiddleware, profileMiddleware, async (c) => {
           contentType: file.type,
         },
       })
-      mediaUrl = `https://your-r2-domain.com/${mediaKey}`
+      
+      // Generate R2 URL - use signedUrl in production or custom domain
+      // For now, store the key in database and generate signed URLs on retrieval
+      // Production: Configure custom domain in Cloudflare R2 settings
+      const accountId = c.env.CLOUDFLARE_ACCOUNT_ID || 'development'
+      const bucketName = 'family-plus-audio'
+      mediaUrl = `https://${bucketName}.r2.cloudflarestorage.com/${mediaKey}`
 
       // Detect file type by MIME type and extension
       const mimeType = file.type.toLowerCase()
