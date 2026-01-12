@@ -45,17 +45,22 @@ final class SupabaseService {
     }
 
     /// Sign in anonymously (guest auth for testing)
-    func signInAnonymously() async throws -> AuthSession {
+    func signInAnonymously(inviteCode: String? = nil) async throws -> AuthSession {
         let session = try await client.auth.signInAnonymously()
 
         // Store user ID for backend API requests
         UserDefaults.standard.set(session.user.id.uuidString, forKey: "auth_user_id")
 
+        // Store invite code for later use during profile creation
+        if let inviteCode = inviteCode {
+            UserDefaults.standard.set(inviteCode, forKey: "pending_invite_code")
+        }
+
         return session
     }
 
     /// Sign in with Apple OAuth
-    func signInWithApple(idToken: String, nonce: String) async throws -> AuthSession {
+    func signInWithApple(idToken: String, nonce: String, inviteCode: String? = nil) async throws -> AuthSession {
         let session = try await client.auth.signInWithIdToken(
             credentials: .init(
                 provider: .apple,
@@ -66,6 +71,11 @@ final class SupabaseService {
 
         // Store user ID for backend API requests
         UserDefaults.standard.set(session.user.id.uuidString, forKey: "auth_user_id")
+
+        // Store invite code for later use during profile creation
+        if let inviteCode = inviteCode {
+            UserDefaults.standard.set(inviteCode, forKey: "pending_invite_code")
+        }
 
         return session
     }

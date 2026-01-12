@@ -20,9 +20,22 @@
 		0E7D0AAF2EFC3398000574EF /* familyplus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = familyplus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0E01005D2F15225200B2F57C /* Exceptions for "familyplus" folder in "familyplus" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0E7D0AAE2EFC3398000574EF /* familyplus */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		0E7D0AB12EFC3398000574EF /* familyplus */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0E01005D2F15225200B2F57C /* Exceptions for "familyplus" folder in "familyplus" target */,
+			);
 			path = familyplus;
 			sourceTree = "<group>";
 		};
@@ -291,6 +304,8 @@
 				DEVELOPMENT_TEAM = 9AKL4J8794;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = familyplus/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = StoryRd;
 				INFOPLIST_KEY_NSCameraUsageDescription = "StoryLane needs camera access to capture photos for your stories";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "StoryLane needs microphone access to record your family stories";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "StoryLane needs access to your photo library to add photos to stories";
@@ -307,12 +322,16 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.rinshinjalal.familyplus;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -327,6 +346,8 @@
 				DEVELOPMENT_TEAM = 9AKL4J8794;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = familyplus/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = StoryRd;
 				INFOPLIST_KEY_NSCameraUsageDescription = "StoryLane needs camera access to capture photos for your stories";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "StoryLane needs microphone access to record your family stories";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "StoryLane needs access to your photo library to add photos to stories";
@@ -343,12 +364,16 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.rinshinjalal.familyplus;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

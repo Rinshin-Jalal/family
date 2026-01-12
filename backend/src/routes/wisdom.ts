@@ -11,25 +11,6 @@ import { EmbeddingsClient } from '../ai/embeddings';
 import { logger, getUserId } from '../utils/logger';
 
 const app = new Hono<{ Bindings: any; Variables: any }>();
-
-// Middleware to extract event publisher
-app.use('*', async (c, next) => {
-  const queue = c.env.QUEUE
-  c.set('eventPublisher', {
-    async publish(type: string, data: any, metadata?: any) {
-      await queue.send({
-        id: crypto.randomUUID(),
-        type,
-        timestamp: new Date().toISOString(),
-        version: '1.0',
-        data,
-        metadata: { source: 'api', ...metadata },
-      })
-    }
-  })
-  await next()
-})
-
 /**
  * POST /api/wisdom/tag/:storyId
  * Publishes event: wisdom.story.tag.requested
@@ -37,7 +18,6 @@ app.use('*', async (c, next) => {
  */
 app.post('/api/wisdom/tag/:storyId', authMiddleware, async (c) => {
   const supabase = c.get('supabase')
-  const eventPublisher = c.get('eventPublisher')
   const storyId = c.req.param('storyId')
   const userId = c.get('userId')
 
@@ -51,12 +31,6 @@ app.post('/api/wisdom/tag/:storyId', authMiddleware, async (c) => {
   if (error || !story) {
     return c.json({ error: 'Story not found' }, 404)
   }
-
-  // Publish tagging event - background worker will handle AI processing
-  await eventPublisher.publish('wisdom.story.tag.requested', {
-    storyId,
-    triggeredBy: 'manual_request',
-  }, { userId, familyId: story.family_id })
 
   return c.json({
     status: 'processing',
@@ -108,11 +82,7 @@ app.get('/api/wisdom/search', authMiddleware, async (c) => {
      return c.json({ query: searchQuery, stories: fallback || [], count: fallback?.length || 0 })
    }
 
-  await supabase.from('wisdom_search_logs').insert({
-    user_id: profile.id,
-    search_query: searchQuery,
-    stories_found: stories?.length || 0,
-  })
+
 
   return c.json({ query: searchQuery, stories: stories || [], count: stories?.length || 0 })
 })
@@ -153,18 +123,9 @@ app.get('/api/wisdom/search/responses', authMiddleware, async (c) => {
     return c.json({ error: error.message }, 500)
   }
 
-  await supabase.from('wisdom_search_logs').insert({
-    user_id: profile.id,
-    search_query: searchQuery,
-    stories_found: responses?.length || 0,
+      return c.json({ query: searchQuery, responses: responses || [], count: responses?.length || 0 })
   })
 
-  return c.json({ 
-    query: searchQuery, 
-    responses: responses || [], 
-    count: responses?.length || 0 
-  })
-})
 
 /**
  * POST /api/wisdom/request
@@ -316,82 +277,16 @@ app.patch('/api/wisdom/request/:requestId/respond', authMiddleware, async (c) =>
 })
 
 /**
- * GET /api/wisdom/tags/:storyId
- * Get tags for a story
+ * GET /api/wisdom/request
+ * Publishes event: wisdom.request.created
+ * Returns: 202 Accepted (notifications sent in background)
  */
-app.get('/api/wisdom/tags/:storyId', authMiddleware, async (c) => {
-  const supabase = c.get('supabase')
-  const storyId = c.req.param('storyId')
-
-  const { data: tags } = await supabase
-    .from('story_tags')
-    .select('*')
-    .eq('story_id', storyId)
-    .single()
-
-  if (!tags) {
-    return c.json({ storyId, tags: null, message: 'No tags found' })
-  }
-
-  return c.json({
-    storyId,
-    tags: {
-      emotions: tags.emotion_tags,
-      situations: tags.situation_tags,
-      lessons: tags.lesson_tags,
-      guidance: tags.guidance_tags,
-      keywords: tags.question_keywords,
-    },
-    confidence: tags.confidence,
-    source: tags.source,
-  })
-})
+// Story tags endpoint removed - story_tags table no longer exists
 
 /**
- * PUT /api/wisdom/tags/:storyId
- * Update tags manually
+ * PUT /api/wisdom/tags/:storyId (DEPRECATED - story_tags table removed)
  */
-app.put('/api/wisdom/tags/:storyId', authMiddleware, async (c) => {
-  const supabase = c.get('supabase')
-  const storyId = c.req.param('storyId')
-  const body = await c.req.json()
-  const { emotion_tags, situation_tags, lesson_tags, guidance_tags } = body
-  const userId = c.get('userId')
-
-  const { data: story } = await supabase
-    .from('stories')
-    .select('family_id')
-    .eq('id', storyId)
-    .single()
-
-  if (!story) {
-    return c.json({ error: 'Story not found' }, 404)
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('family_id')
-    .eq('auth_user_id', userId)
-    .single()
-
-  if (profile?.family_id !== story.family_id) {
-    return c.json({ error: 'Unauthorized' }, 403)
-  }
-
-  await supabase
-    .from('story_tags')
-    .upsert({
-      story_id: storyId,
-      emotion_tags: emotion_tags || [],
-      situation_tags: situation_tags || [],
-      lesson_tags: lesson_tags || [],
-      guidance_tags: guidance_tags || [],
-      source: 'manual',
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'story_id' })
-
-  return c.json({ success: true, storyId, message: 'Tags updated' })
-})
+// Story tags endpoints removed - story_tags table no longer exists
 
 /**
  * POST /api/wisdom/summarize
@@ -509,8 +404,8 @@ app.get('/api/wisdom/summary/:storyId', authMiddleware, async (c) => {
 })
 
 /**
- * GET /api/wisdom/topics/discussion
- * Generate AI-powered discussion topics based on family's stories
+ * GET /api/wisdom/requests/pending
+ * Get pending requests for current user
  */
 app.get('/api/wisdom/topics/discussion', authMiddleware, async (c) => {
   const route = '/api/wisdom/topics/discussion'
@@ -532,7 +427,7 @@ app.get('/api/wisdom/topics/discussion', authMiddleware, async (c) => {
     return c.json({ error: 'Profile not found' }, 404)
   }
 
-  // Fetch family stories with their tags
+  // Fetch family stories
   const { data: stories, error: storiesError } = await supabase
     .from('stories')
     .select(`
@@ -540,15 +435,9 @@ app.get('/api/wisdom/topics/discussion', authMiddleware, async (c) => {
       title,
       summary_text,
       voice_count,
-      story_tags(
-        emotion_tags,
-        situation_tags,
-        lesson_tags,
-        guidance_tags
-      )
+      is_completed
     `)
     .eq('family_id', profile.family_id)
-    .eq('is_completed', true)
     .order('created_at', { ascending: false })
     .limit(20)
 
@@ -557,31 +446,17 @@ app.get('/api/wisdom/topics/discussion', authMiddleware, async (c) => {
   }
 
   if (!stories?.length) {
-    logger.info(`No stories found, returning fallback topics`, { route, userId, familyId: profile.family_id })
-    // Return fallback topics if no stories
+    logger.info(`No stories found, returning empty topics`, { route, userId, familyId: profile.family_id })
     return c.json({
-      topics: [
-        {
-          question: "What's your favorite childhood memory?",
-          category: "Childhood",
-          reasoning: "Start with foundational stories to build your family's memory collection",
-          relatedStoryCount: 0,
-        },
-        {
-          question: "What tradition means the most to you and why?",
-          category: "Traditions",
-          reasoning: "Traditions connect generations and create lasting family identity",
-          relatedStoryCount: 0,
-        },
-      ],
+      topics: [],
     })
   }
 
   try {
     // Initialize LLM client
     const llm = createQwenTurboClient({
-      openaiApiKey: c.env.OPENAI_API_KEY,
-      bedrockRegion: c.env.BEDROCK_REGION,
+      openaiApiKey: c.env.AWS_BEARER_TOKEN_BEDROCK,
+      bedrockRegion: c.env.AWS_REGION || 'us-east-1',
     })
 
     logger.info(`Generating AI discussion topics`, { route, userId, storyCount: stories.length })
@@ -591,11 +466,7 @@ app.get('/api/wisdom/topics/discussion', authMiddleware, async (c) => {
       title: s.title || 'Untitled Story',
       summaryText: s.summary_text || '',
       voiceCount: s.voice_count || 0,
-      tags: [
-        ...(s.story_tags?.[0]?.emotion_tags || []),
-        ...(s.story_tags?.[0]?.situation_tags || []),
-        ...(s.story_tags?.[0]?.lesson_tags || []),
-      ],
+      tags: [], // story_tags removed
     }))
 
     // Generate topics using AI
@@ -603,7 +474,7 @@ app.get('/api/wisdom/topics/discussion', authMiddleware, async (c) => {
 
     logger.info(`Discussion topics generated successfully`, { route, userId, topicCount: result.topics.length })
     return c.json({
-      topics: result.topics.slice(0, 5), // Return top 5 topics
+      topics: result.topics.slice(0, 5),
       storyCount: stories.length,
     })
   } catch (error) {
@@ -647,8 +518,10 @@ app.post('/api/wisdom/search/semantic', authMiddleware, async (c) => {
   try {
     // Initialize embeddings client
     const embeddings = new EmbeddingsClient({
-      openaiApiKey: c.env.AWS_BEARER_TOKEN_BEDROCK,
-      bedrockRegion: c.env.AWS_REGION,
+        accessKeyId: c.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: c.env.AWS_SECRET_ACCESS_KEY,
+        sessionToken: c.env.AWS_SESSION_TOKEN,
+        region: c.env.BEDROCK_REGION,
     })
 
     logger.info(`Generating query embedding`, { route, userId, queryLength: query.length })
@@ -661,90 +534,41 @@ app.post('/api/wisdom/search/semantic', authMiddleware, async (c) => {
 
     logger.info(`Searching with pgvector`, { route, userId })
 
-    // Search stories using pgvector (instant!)
-    const { data: stories, error: storiesError } = await supabase
-      .rpc('semantic_search_stories', {
+    const { data: responses, error: responsesError } = await supabase
+      .rpc('semantic_search_responses', {
         p_family_id: profile.family_id,
         p_query_embedding: pgVector as any,
-        p_limit: limit / 2, // Split limit between stories and quotes
+        p_limit: limit,
         p_min_similarity: 0.3,
       })
 
-    if (storiesError) {
-      logger.error(`Story search error`, { route, userId, error: storiesError })
-      // Fallback: return empty results instead of failing
+    if (responsesError) {
+      logger.error(`Response search error`, { route, userId, error: responsesError })
     }
 
-    // Search quotes using pgvector (instant!)
-    const { data: quotes, error: quotesError } = await supabase
-      .rpc('semantic_search_quotes', {
-        p_family_id: profile.family_id,
-        p_query_embedding: pgVector as any,
-        p_limit: limit / 2,
-        p_min_similarity: 0.3,
-      })
+    const results = (responses || []).map((response: any) => ({
+      id: response.response_id,
+      type: 'response',
+      title: (response.transcription_text || '').substring(0, 80) + '...',
+      content: response.transcription_text || '',
+      author: response.author_name,
+      role: response.author_role,
+      storyId: response.story_id,
+      similarity: response.similarity,
+      createdAt: response.created_at,
+    }))
 
-    if (quotesError) {
-      logger.error(`Quote search error`, { route, userId, error: quotesError })
-    }
-
-    // Combine and format results
-    const results: Array<{
-      id: string
-      type: 'story' | 'quote'
-      title: string
-      content: string
-      author?: string
-      role?: string
-      storyId?: string
-      similarity: number
-      createdAt: string
-    }> = []
-
-    // Add stories
-    for (const story of stories || []) {
-      results.push({
-        id: story.id,
-        type: 'story',
-        title: story.title || 'Untitled Story',
-        content: story.summary_text || '',
-        similarity: story.similarity || 0,
-        createdAt: story.created_at,
-      })
-    }
-
-    // Add quotes
-    for (const quote of quotes || []) {
-      results.push({
-        id: quote.id,
-        type: 'quote',
-        title: quote.quote_text?.substring(0, 100) + '...' || '',
-        content: quote.quote_text || '',
-        author: quote.author_name,
-        role: quote.author_role,
-        storyId: quote.story_id,
-        similarity: quote.similarity || 0,
-        createdAt: quote.created_at,
-      })
-    }
-
-    // Sort by similarity and limit
-    results.sort((a, b) => b.similarity - a.similarity)
-    const finalResults = results.slice(0, limit)
-
-     logger.info(`Semantic search completed (pgvector)`, { 
-       route, 
-       userId, 
-       query, 
-       resultCount: finalResults.length,
-       storyCount: (stories as any[])?.length || 0,
-       quoteCount: (quotes as any[])?.length || 0,
-     })
+    logger.info(`Semantic search completed (pgvector)`, {
+      route,
+      userId,
+      query,
+      resultCount: results.length,
+    })
 
     return c.json({
       query,
-      results: finalResults,
-      count: finalResults.length,
+      results,
+      count: results.length,
     })
   } catch (error) {
     logger.error(`Semantic search failed`, error, { route, userId, query })

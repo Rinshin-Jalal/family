@@ -14,10 +14,9 @@
 -- STORY 1: Love and Marriage Advice
 -- =========================================================================
 -- Query: "advice about love", "relationship wisdom", "marriage tips"
-INSERT INTO stories (id, prompt_id, family_id, title, summary_text, voice_count, is_completed, created_at)
+INSERT INTO stories (id, family_id, title, summary_text, voice_count, is_completed, created_at)
 VALUES (
     '11111111-1111-1111-1111-111111111111',
-    NULL,
     (SELECT id FROM families LIMIT 1),
     'Grandma and Grandpa''s 50th Anniversary',
     'Grandma always says that marriage is not about finding someone who never makes you angry, but finding someone who can handle your bad days. She learned that love is a choice you make every single morning when you wake up next to the same person. Grandpa adds that communication is key - they never go to bed angry, even if it means staying up until 3am talking through an argument. The secret? Both learned to listen to understand, not just to respond.',
@@ -26,10 +25,9 @@ VALUES (
     NOW() - INTERVAL '10 days'
 );
 
-INSERT INTO responses (id, prompt_id, story_id, user_id, source, transcription_text, processing_status, created_at)
+INSERT INTO responses (id, story_id, user_id, source, transcription_text, processing_status, created_at)
 VALUES (
     '22222222-2222-2222-2222-222222222222',
-    NULL,
     '11111111-1111-1111-1111-111111111111',
     (SELECT id FROM profiles LIMIT 1),
     'app_audio',
@@ -42,10 +40,9 @@ VALUES (
 -- STORY 2: Job Loss and Resilience
 -- =========================================================================
 -- Query: "job loss advice", "career hardship", "how to handle being fired"
-INSERT INTO stories (id, prompt_id, family_id, title, summary_text, voice_count, is_completed, created_at)
+INSERT INTO stories (id, family_id, title, summary_text, voice_count, is_completed, created_at)
 VALUES (
     '33333333-3333-3333-3333-333333333333',
-    NULL,
     (SELECT id FROM families LIMIT 1),
     'When Dad Lost His Job',
     'Dad was laid off from his engineering job of 20 years during the recession. The whole family was scared - we didn''t know how we would pay the mortgage. But Dad turned it into a learning experience. He told us that setbacks are just setups for comebacks. He started his own consulting business and eventually made more money than before. His advice to us: never let your job define your worth, and always have a backup plan.',
@@ -54,10 +51,9 @@ VALUES (
     NOW() - INTERVAL '20 days'
 );
 
-INSERT INTO responses (id, prompt_id, story_id, user_id, source, transcription_text, processing_status, created_at)
+INSERT INTO responses (id, story_id, user_id, source, transcription_text, processing_status, created_at)
 VALUES (
     '44444444-4444-4444-4444-444444444444',
-    NULL,
     '33333333-3333-3333-3333-333333333333',
     (SELECT id FROM profiles LIMIT 1),
     'app_audio',
@@ -70,10 +66,9 @@ VALUES (
 -- STORY 3: Family Traditions
 -- =========================================================================
 -- Query: "family traditions", "holiday memories", "family gatherings"
-INSERT INTO stories (id, prompt_id, family_id, title, summary_text, voice_count, is_completed, created_at)
+INSERT INTO stories (id, family_id, title, summary_text, voice_count, is_completed, created_at)
 VALUES (
     '55555555-5555-5555-5555-555555555555',
-    NULL,
     (SELECT id FROM families LIMIT 1),
     'Sunday Dinners at Grandma''s House',
     'Every Sunday without fail, our entire extended family gathered at Grandma''s house for dinner. The smell of her pot roast would fill the house by noon, and the whole neighborhood knew it was Sunday. These weekly gatherings taught us the importance of making time for family, no matter how busy life gets. Even now, decades later, we still try to have Sunday dinners, though some of us have to join via video call.',
@@ -82,10 +77,9 @@ VALUES (
     NOW() - INTERVAL '30 days'
 );
 
-INSERT INTO responses (id, prompt_id, story_id, user_id, source, transcription_text, processing_status, created_at)
+INSERT INTO responses (id, story_id, user_id, source, transcription_text, processing_status, created_at)
 VALUES (
     '66666666-6666-6666-6666-666666666666',
-    NULL,
     '55555555-5555-5555-5555-555555555555',
     (SELECT id FROM profiles LIMIT 1),
     'app_audio',
@@ -98,10 +92,9 @@ VALUES (
 -- STORY 4: Overcoming Hardship
 -- =========================================================================
 -- Query: "overcoming hardship", "hard times", "resilience", "staying positive"
-INSERT INTO stories (id, prompt_id, family_id, title, summary_text, voice_count, is_completed, created_at)
+INSERT INTO stories (id, family_id, title, summary_text, voice_count, is_completed, created_at)
 VALUES (
     '77777777-7777-7777-7777-777777777777',
-    NULL,
     (SELECT id FROM families LIMIT 1),
     'The Year We Lost Everything',
     'When the bank foreclosed on our house, we had to move in with relatives. It was humbling and devastating. But that year taught our family what truly matters. We learned that possessions can be replaced, but family cannot. My parents worked two jobs each to get back on their feet, and they never complained. Their resilience taught me that hard times don''t last forever, but family does.',
@@ -110,10 +103,9 @@ VALUES (
     NOW() - INTERVAL '40 days'
 );
 
-INSERT INTO responses (id, prompt_id, story_id, user_id, source, transcription_text, processing_status, created_at)
+INSERT INTO responses (id, story_id, user_id, source, transcription_text, processing_status, created_at)
 VALUES (
     '88888888-8888-8888-8888-888888888888',
-    NULL,
     '77777777-7777-7777-7777-777777777777',
     (SELECT id FROM profiles LIMIT 1),
     'app_audio',
@@ -126,10 +118,9 @@ VALUES (
 -- STORY 5: Childhood Memories
 -- =========================================================================
 -- Query: "childhood memories", "growing up", "what was it like"
-INSERT INTO stories (id, prompt_id, family_id, title, summary_text, voice_count, is_completed, created_at)
+INSERT INTO stories (id, family_id, title, summary_text, voice_count, is_completed, created_at)
 VALUES (
     '99999999-9999-9999-9999-999999999999',
-    NULL,
     (SELECT id FROM families LIMIT 1),
     'Summers at the Lake House',
     'Every summer, my family would pack up the station wagon and drive four hours to a tiny lake house that had been in my family for three generations. There was no TV, no internet, no air conditioning - just the lake, the woods, and each other. We fished, we swam, we told stories. Those simple summers shaped who I am today. I learned to find joy in simplicity and to put away the distractions of modern life.',
@@ -138,10 +129,9 @@ VALUES (
     NOW() - INTERVAL '50 days'
 );
 
-INSERT INTO responses (id, prompt_id, story_id, user_id, source, transcription_text, processing_status, created_at)
+INSERT INTO responses (id, story_id, user_id, source, transcription_text, processing_status, created_at)
 VALUES (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-    NULL,
     '99999999-9999-9999-9999-999999999999',
     (SELECT id FROM profiles LIMIT 1),
     'app_audio',
@@ -154,10 +144,9 @@ VALUES (
 -- STORY 6: Advice for Children
 -- =========================================================================
 -- Query: "advice for my kids", "what to tell my children", "wisdom for the young"
-INSERT INTO stories (id, prompt_id, family_id, title, summary_text, voice_count, is_completed, created_at)
+INSERT INTO stories (id, family_id, title, summary_text, voice_count, is_completed, created_at)
 VALUES (
     'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-    NULL,
     (SELECT id FROM families LIMIT 1),
     'What I Want My Grandchildren to Know',
     'If I could give my grandchildren one piece of advice, it would be this: be kind, work hard, and don''t take yourself too seriously. Life will knock you down - that''s guaranteed. But getting back up is optional, and you always have a choice. I''ve seen war, I''ve lost loved ones, I''ve struggled financially - but the one thing that got me through everything was my family and my faith. Money comes and goes, jobs come and go, but family is forever.',
@@ -166,10 +155,9 @@ VALUES (
     NOW() - INTERVAL '60 days'
 );
 
-INSERT INTO responses (id, prompt_id, story_id, user_id, source, transcription_text, processing_status, created_at)
+INSERT INTO responses (id, story_id, user_id, source, transcription_text, processing_status, created_at)
 VALUES (
     'cccccccc-cccc-cccc-cccc-cccccccccccc',
-    NULL,
     'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
     (SELECT id FROM profiles LIMIT 1),
     'app_audio',
@@ -182,22 +170,20 @@ VALUES (
 -- STORY 7: Immigration Story
 -- =========================================================================
 -- Query: "immigration story", "coming to america", "starting over"
-INSERT INTO stories (id, prompt_id, family_id, title, summary_text, voice_count, is_completed, created_at)
+INSERT INTO stories (id, family_id, title, summary_text, voice_count, is_completed, created_at)
 VALUES (
     'dddddddd-dddd-dddd-dddd-dddddddddddd',
-    NULL,
     (SELECT id FROM families LIMIT 1),
     'Coming to America with $200',
-    'My parents left everything they knew - their home, their language, their family - to come to America for a better life. They arrived with two suitcases and $200. They didn't speak English, they had no connections, and they had to start from absolute zero. But they worked harder than anyone I''ve ever known. Within 10 years, they had a small business and a house. Their sacrifice taught me that with determination and hard work, anything is possible.',
+    'My parents left everything they knew - their home, their language, their family - to come to America for a better life. They arrived with two suitcases and $200. They didn''t speak English, they had no connections, and they had to start from absolute zero. But they worked harder than anyone I''ve ever known. Within 10 years, they had a small business and a house. Their sacrifice taught me that with determination and hard work, anything is possible.',
     2,
     true,
     NOW() - INTERVAL '70 days'
 );
 
-INSERT INTO responses (id, prompt_id, story_id, user_id, source, transcription_text, processing_status, created_at)
+INSERT INTO responses (id, story_id, user_id, source, transcription_text, processing_status, created_at)
 VALUES (
     'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
-    NULL,
     'dddddddd-dddd-dddd-dddd-dddddddddddd',
     (SELECT id FROM profiles LIMIT 1),
     'app_audio',
@@ -215,13 +201,7 @@ VALUES (
 -- =========================================================================
 -- Add some quote cards
 -- =========================================================================
-INSERT INTO quote_cards (id, quote_text, author_name, author_role, story_id, family_id, theme, background_color, text_color, created_by)
-VALUES
-    ('qqqq1111-1111-1111-1111-111111111111', 'Marriage is not about finding a perfect person, but learning to love an imperfect person perfectly.', 'Grandma', 'elder', '11111111-1111-1111-1111-111111111111', (SELECT id FROM families LIMIT 1), 'classic', '#FFFFFF', '#000000', (SELECT id FROM profiles LIMIT 1)),
-    ('qqqq2222-2222-2222-2222-222222222222', 'Setbacks are just setups for comebacks. Embrace the uncertainty - something better is coming.', 'Dad', 'organizer', '33333333-3333-3333-3333-333333333333', (SELECT id FROM families LIMIT 1), 'classic', '#FFFFFF', '#000000', (SELECT id FROM profiles LIMIT 1)),
-    ('qqqq3333-3333-3333-3333-333333333333', 'Family isn''t just blood - it''s showing up, week after week, year after year.', 'Grandma', 'elder', '55555555-5555-5555-5555-555555555555', (SELECT id FROM families LIMIT 1), 'classic', '#FFFFFF', '#000000', (SELECT id FROM profiles LIMIT 1)),
-    ('qqqq4444-4444-4444-4444-444444444444', 'Hard times don''t last forever, but family does.', 'Anonymous', 'member', '77777777-7777-7777-7777-777777777777', (SELECT id FROM families LIMIT 1), 'classic', '#FFFFFF', '#000000', (SELECT id FROM profiles LIMIT 1)),
-    ('qqqq5555-5555-5555-5555-555555555555', 'Kindness is a muscle. Use it or lose it.', 'Grandpa', 'elder', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', (SELECT id FROM families LIMIT 1), 'classic', '#FFFFFF', '#000000', (SELECT id FROM profiles LIMIT 1));
+-- Quote cards depend on families - skipped for now
 
 -- =========================================================================
 -- HOW TO USE THESE TEST STORIES

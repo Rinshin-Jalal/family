@@ -9,7 +9,6 @@
 import { task } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
-import { EmbeddingsClient, quoteToEmbeddingText, formatEmbeddingForPostgres } from "../src/ai/embeddings";
 
 // ============================================================================
 // TYPES
@@ -194,32 +193,7 @@ Confidence should be 0.0-1.0 based on how meaningful the quote is.`,
 
       console.log(`[Quote] ✅ Created quote card ${createdQuote.id}`);
 
-      // Step 5: Generate and store embedding for semantic search
-      try {
-        const embeddings = createEmbeddingsClient();
-        const embeddingText = quoteToEmbeddingText({
-          quote_text: createdQuote.quote_text,
-          author_name: createdQuote.author_name,
-        });
-
-        console.log(`[Quote] Generating embedding for semantic search...`);
-        const result = await embeddings.embed(embeddingText);
-        const pgVector = formatEmbeddingForPostgres(result.embedding);
-
-        const { error: embeddingError } = await supabase
-          .from("quote_cards")
-          .update({ embedding: pgVector as any })
-          .eq("id", createdQuote.id);
-
-        if (embeddingError) {
-          console.warn(`[Quote] Failed to store embedding:`, embeddingError);
-        } else {
-          console.log(`[Quote] ✅ Embedding stored successfully (${result.embedding.length} dims)`);
-        }
-      } catch (error) {
-        console.warn(`[Quote] Failed to generate embedding:`, error);
-        // Continue without embedding - search will use fallback
-      }
+      // Note: Embeddings are now response-level only (no quote embeddings)
 
       return {
         success: true,

@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { authMiddleware, profileMiddleware } from '../middleware/auth'
 import { createDalleClient } from '../ai/dalle'
 import { logger, getUserId } from '../utils/logger'
+import { generatePodcastTask } from '../../trigger/generate-podcast-task'
 
 const app = new Hono()
 
@@ -278,7 +279,6 @@ app.post('/api/stories/:id/generate-podcast', authMiddleware, profileMiddleware,
   logger.logRequest(route, method, userId)
 
   const supabase = c.get('supabase')
-  const triggerdev = c.get('triggerdev') as any
 
   // Verify story belongs to user's family
   const { data: story, error: storyError } = await supabase
@@ -318,28 +318,25 @@ app.post('/api/stories/:id/generate-podcast', authMiddleware, profileMiddleware,
       return c.json({ error: 'No responses found for this story' }, 400)
     }
 
-    // Send event to trigger.dev
-    const event = await triggerdev.sendEvent({
-      name: 'story.ready.for.podcast',
-      payload: {
-        storyId,
-        responseIds: responses.map((r: any) => r.id),
-        promptText: story.prompt_text || '',
-      },
+    // Trigger podcast generation task
+    const handle = await generatePodcastTask.trigger({
+      storyId,
+      responseIds: responses.map((r: any) => r.id),
+      promptText: story.prompt_text || '',
     })
 
     logger.info(`Podcast generation triggered`, {
       route,
       userId,
       storyId,
-      eventId: event.id,
+      eventId: handle.id,
       responseCount: responses.length,
     })
 
     return c.json({
       message: 'Podcast generation started',
       storyId,
-      eventId: event.id,
+      eventId: handle.id,
       status: 'generating',
     })
 

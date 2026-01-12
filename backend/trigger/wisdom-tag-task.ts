@@ -204,34 +204,8 @@ Confidence (0.0-1.0) should reflect how confident you are that these tags accura
         };
       }
 
-      // Step 5: Save tags to database
-      const { data: savedTags, error: upsertError } = await supabase
-        .from("story_tags")
-        .upsert(
-          {
-            story_id: payload.storyId,
-            emotion_tags: tags.emotion_tags || [],
-            situation_tags: tags.situation_tags || [],
-            lesson_tags: tags.lesson_tags || [],
-            guidance_tags: tags.guidance_tags || [],
-            question_keywords: tags.question_keywords || [],
-            confidence: tags.confidence,
-            source: "ai",
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "story_id",
-            ignoreDuplicates: false,
-          }
-        )
-        .select()
-        .single();
-
-      if (upsertError) {
-        throw new Error(`Failed to save tags: ${upsertError.message}`);
-      }
-
-      console.log(`[Wisdom] ✅ Saved tags for story ${payload.storyId}`);
+      // Step 5: story_tags table removed - tags no longer saved
+      console.log(`[Wisdom] ✅ Tags generated for story ${payload.storyId} (not saved - story_tags table removed)`);
 
       return {
         success: true,
@@ -242,6 +216,7 @@ Confidence (0.0-1.0) should reflect how confident you are that these tags accura
         guidanceCount: tags.guidance_tags?.length || 0,
         totalTags,
         confidence: tags.confidence,
+        tags: tags, // Return tags but don't save them
       };
     } catch (error) {
       console.error(`[Wisdom] ❌ AI tagging failed:`, error);

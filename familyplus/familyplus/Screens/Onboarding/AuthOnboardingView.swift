@@ -468,20 +468,44 @@ class AuthOnboardingViewModel: ObservableObject {
       }
 
      private func createFamily(userId: String, name: String) async throws {
-        // TODO: Implement family creation via backend API
-        // For now, just store the family name
-        UserDefaults.standard.set(name, forKey: "family_name")
-        print("Creating family '\(name)' for user \(userId)")
-    }
+         let request = NSMutableURLRequest(url: URL(string: "https://api.example.com/api/families")!)
+         request.httpMethod = "POST"
+         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+         
+         if let authHeader = authService.getAuthHeader() {
+             request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+         }
+         
+         let body = ["name": name]
+         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+         
+         let (data, response) = try await URLSession.shared.data(for: request as URLRequest)
+         
+         guard let httpResponse = response as? HTTPURLResponse else {
+             throw AuthError.networkError
+         }
+         
+         if httpResponse.statusCode != 201 {
+             throw AuthError.familyCreationFailed
+         }
+         
+         if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let family = json["family"] as? [String: Any],
+            let familyId = family["id"] as? String {
+             UserDefaults.standard.set(familyId, forKey: "family_id")
+         }
+     }
 
     func completeOnboarding() {
         UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
         UserDefaults.standard.set(true, forKey: "hasCreatedFamily")
     }
 
-    enum AuthError: Error {
-        case noIdentityToken
-    }
+     enum AuthError: Error {
+         case noIdentityToken
+         case networkError
+         case familyCreationFailed
+     }
 }
 
 #Preview {

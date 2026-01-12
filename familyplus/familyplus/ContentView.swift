@@ -82,8 +82,16 @@ struct MainNavigationFlow: View {
         }
         .themed(theme)
         .onAppear {
-            // Show onboarding if: not completed OR not authenticated
-            let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+            updateOnboardingState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .init("AuthStateDidChange"))) { _ in
+            updateOnboardingState()
+        }
+    }
+
+    private func updateOnboardingState() {
+        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        withAnimation {
             showOnboarding = !hasCompletedOnboarding || !authService.isAuthenticated
         }
     }

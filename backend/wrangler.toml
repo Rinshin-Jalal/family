@@ -19,16 +19,3 @@ bucket_name = "family-plus-audio"
 
 [observability]
 enabled = true
-
-# ----------------------------------------------------------------------------
-# REQUIRED SECRETS (set via `wrangler secret put`)
-# ----------------------------------------------------------------------------
-# Run these commands to set production secrets:
-#
-# wrangler secret put SUPABASE_URL
-# wrangler secret put SUPABASE_KEY
-# wrangler secret put OPENAI_API_KEY      # Required for story synthesis
-# wrangler secret put CARTESIA_API_KEY    # Required for transcription
-# wrangler secret put twilio_account_sid  # For Elder phone integration
-# wrangler secret put twilio_auth_token
-# ----------------------------------------------------------------------------

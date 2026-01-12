@@ -1,0 +1,897 @@
+//
+//  AuthOnboardingView.swift
+//  Family+
+//
+//  Onboarding with Sign in with Apple + Family Creation
+//
+
+import SwiftUI
+import AuthenticationServices
+import CryptoKit
+import Combine
+import Supabase
+
+struct AuthOnboardingView: View {
+    @Environment(\.theme) private var theme
+    let onComplete: () -> Void
+
+    @StateObject private var viewModel = AuthOnboardingViewModel()
+    @State private var currentPage = 0
+    @State private var pendingInviteCode: String? = DeepLinkHandler.shared.getPendingInviteCode()
+    @State private var showJoinFamilyCode = false
+
+    // Total pages depends on whether there's an invite code
+    var totalPages: Int { pendingInviteCode != nil ? 3 : 3 }
+
+    var body: some View {
+        ZStack {
+            theme.backgroundColor.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Content
+                Group {
+                    switch currentPage {
+                    case 0:
+                        WelcomeStep(
+                            onNext: {
+                                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
+                                    currentPage = 1
+                                }
+                            }
+                        )
+                    case 1:
+                        // Profile Setup - ALWAYS show this step
+                        OnboardingProfileSetupStep(
+                            userName: $viewModel.userName,
+                            userAvatar: $viewModel.userAvatar,
+                            isLoading: viewModel.isLoading,
+                            onNext: {
+                                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
+                                    currentPage = 2
+                                }
+                            }
+                        )
+                    case 2:
+                        if let inviteCode = pendingInviteCode {
+                            // Invite flow: Join existing family
+                            OnboardingJoinFamilyStep(
+                                inviteCode: inviteCode,
+                                isLoading: viewModel.isLoading,
+                                onNext: {
+                                    Task {
+                                        await viewModel.joinFamilyWithInvite(
+                                            inviteCode: inviteCode,
+                                            name: viewModel.userName,
+                                            avatar: viewModel.userAvatar
+                                        )
+                                        await MainActor.run {
+                                            onComplete()
+                                        }
+                                    }
+                                }
+                            )
+                        } else {
+                            // Normal flow: Choose between Sign In with Apple (Create Family) or Join with Code
+                            FamilyChoiceStep(
+                                onCreateFamily: {
+                                    Task {
+                                        await viewModel.handleAppleSignIn(familyName: viewModel.familyName)
+                                        await MainActor.run {
+                                            onComplete()
+                                        }
+                                    }
+                                },
+                                onJoinWithCode: {
+                                    showJoinFamilyCode = true
+                                }
+                            )
+                        }
+                    default:
+                        EmptyView()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // Progress dots
+                if currentPage < totalPages - 1 {
+                    HStack(spacing: 10) {
+                        ForEach(0..<totalPages) { index in
+                            Circle()
+                                .fill(index == currentPage ? theme.accentColor : theme.accentColor.opacity(0.2))
+                                .frame(width: index == currentPage ? 10 : 8, height: index == currentPage ? 10 : 8)
+                        }
+                    }
+                    .padding(.bottom, 40)
+                }
+            }
+        }
+        .onAppear {
+            // Refresh pending invite code in case it was set before view appeared
+            pendingInviteCode = DeepLinkHandler.shared.getPendingInviteCode()
+        }
+        .sheet(isPresented: $showJoinFamilyCode) {
+            JoinFamilyWithCodeSheet(
+                isLoading: $viewModel.isLoading,
+                onJoin: { code in
+                    Task {
+                        await viewModel.joinFamilyWithInvite(
+                            inviteCode: code,
+                            name: viewModel.userName,
+                            avatar: viewModel.userAvatar
+                        )
+                        await MainActor.run {
+                            onComplete()
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+
+// MARK: - Welcome Step
+
+struct WelcomeStep: View {
+    @Environment(\.theme) private var theme
+    let onNext: () -> Void
+
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            // Hero icon with background
+            ZStack {
+                Circle()
+                    .fill(theme.accentColor.opacity(0.15))
+                    .frame(width: 120, height: 120)
+
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 50))
+                    .foregroundColor(theme.accentColor)
+            }
+            .shadow(color: theme.accentColor.opacity(0.2), radius: 12, x: 0, y: 6)
+
+            // Title and description
+            VStack(spacing: 16) {
+                Text("Welcome to\nFamily+")
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundColor(theme.textColor)
+                    .multilineTextAlignment(.center)
+
+                Text("Preserve your family's stories, wisdom, and voice forever.")
+                    .font(.system(size: 17))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+
+            Spacer()
+
+            // Feature highlights
+            VStack(spacing: 16) {
+                OnboardingFeatureRow(icon: "mic.fill", iconColor: .storytellerElder, text: "Capture Voices")
+                OnboardingFeatureRow(icon: "photo.fill", iconColor: .storytellerChild, text: "Save Photos")
+                OnboardingFeatureRow(icon: "doc.text.fill", iconColor: .storytellerTeen, text: "Store Wisdom")
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
+
+            // CTA button
+            Button(action: onNext) {
+                HStack {
+                    Text("Get Started")
+                        .font(.system(size: 17, weight: .semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(theme.accentColor)
+                .cornerRadius(16)
+                .shadow(color: theme.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+            .padding(.horizontal, 32)
+            .padding(.bottom, 32)
+        }
+    }
+}
+
+// MARK: - Family Creation Step
+
+struct FamilyCreationStep: View {
+    @Environment(\.theme) private var theme
+    @Binding var familyName: String
+    let isLoading: Bool
+    let onNext: () -> Void
+
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            // Hero icon
+            ZStack {
+                Circle()
+                    .fill(theme.accentColor.opacity(0.15))
+                    .frame(width: 100, height: 100)
+
+                Image(systemName: "person.3.fill")
+                    .font(.system(size: 42))
+                    .foregroundColor(theme.accentColor)
+            }
+            .shadow(color: theme.accentColor.opacity(0.2), radius: 10, x: 0, y: 5)
+
+            // Title and description
+            VStack(spacing: 12) {
+                Text("Create Your Family")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(theme.textColor)
+
+                Text("Families are private spaces where you share memories with your loved ones.")
+                    .font(.system(size: 16))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+
+            Spacer()
+
+            // Input card
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "house.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.accentColor)
+                    Text("Family Name")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textColor)
+                    Spacer()
+                }
+
+                TextField("e.g. The Smiths", text: $familyName)
+                    .font(.system(size: 17))
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(theme.backgroundColor)
+                    .cornerRadius(12)
+                    .autocapitalization(.words)
+                    .disabled(isLoading)
+
+                Text("Choose a name that represents your family")
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.secondaryTextColor)
+            }
+            .padding(24)
+            .background(theme.cardBackgroundColor)
+            .cornerRadius(24)
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+            .padding(.horizontal, 32)
+
+            Spacer()
+
+            // CTA button
+            Button(action: onNext) {
+                HStack {
+                    if isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.9)
+                    } else {
+                        Text("Get Started")
+                            .font(.system(size: 17, weight: .semibold))
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(familyName.isEmpty || isLoading ? Color.gray.opacity(0.4) : theme.accentColor)
+                .cornerRadius(16)
+                .shadow(color: (familyName.isEmpty || isLoading) ? Color.clear : theme.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+            .disabled(familyName.isEmpty || isLoading)
+            .padding(.horizontal, 32)
+            .padding(.bottom, 32)
+        }
+    }
+}
+
+// MARK: - Apple Auth Step
+
+struct AppleAuthStep: View {
+    let isLoading: Bool
+    let onAuthSuccess: () -> Void
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            // Success icon
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.15))
+                    .frame(width: 90, height: 90)
+
+                Image(systemName: "checkmark")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(.green)
+            }
+
+            // Title
+            VStack(spacing: 12) {
+                Text("Almost Done!")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(theme.textColor)
+
+                Text("Sign in to secure your family's memories")
+                    .font(.system(size: 16))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+
+            Spacer()
+
+            // Apple Sign In button card
+            VStack(spacing: 20) {
+                SignInWithAppleButton(
+                    type: .signIn,
+                    onAuthSuccess: onAuthSuccess
+                )
+                .frame(height: 50)
+                .disabled(isLoading)
+                .opacity(isLoading ? 0.6 : 1)
+                .cornerRadius(12)
+
+                if isLoading {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                            .scaleEffect(0.9)
+                        Text("Signing in...")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(theme.secondaryTextColor)
+                    }
+                }
+            }
+            .padding(24)
+            .background(theme.cardBackgroundColor)
+            .cornerRadius(24)
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+            .padding(.horizontal, 32)
+
+            Spacer()
+
+            // Privacy note
+            Text("Your information is secure and private")
+                .font(.system(size: 13))
+                .foregroundColor(theme.secondaryTextColor.opacity(0.8))
+                .padding(.bottom, 32)
+        }
+    }
+}
+
+// MARK: - Sign in with Apple Button
+
+struct SignInWithAppleButton: UIViewRepresentable {
+    typealias UIViewType = ASAuthorizationAppleIDButton
+
+    let type: ASAuthorizationAppleIDButton.ButtonType
+    let onAuthSuccess: () -> Void
+
+    func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
+        let button = ASAuthorizationAppleIDButton(type: type, style: .black)
+        button.cornerRadius = 12
+        button.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.handleAuthorization),
+            for: .touchUpInside
+        )
+        return button
+    }
+
+    func updateUIView(_ uiView: ASAuthorizationAppleIDButton, context: Context) {
+        // No updates needed
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onAuthSuccess: onAuthSuccess)
+    }
+
+    class Coordinator: NSObject {
+        let onAuthSuccess: () -> Void
+
+        init(onAuthSuccess: @escaping () -> Void) {
+            self.onAuthSuccess = onAuthSuccess
+        }
+
+        @objc func handleAuthorization() {
+            let provider = ASAuthorizationAppleIDProvider()
+            let request = provider.createRequest()
+            request.requestedScopes = [.fullName, .email]
+
+            let controller = ASAuthorizationController(
+                authorizationRequests: [request]
+            )
+
+            controller.delegate = self
+            controller.presentationContextProvider = self
+            controller.performRequests()
+        }
+    }
+}
+
+extension SignInWithAppleButton.Coordinator: ASAuthorizationControllerDelegate {
+    func authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithAuthorization authorization: ASAuthorization
+    ) {
+        guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential
+        else {
+            return
+        }
+
+        Task {
+            await AuthOnboardingViewModel.shared.handleAppleSignIn(credential: appleIDCredential)
+            await MainActor.run {
+                onAuthSuccess()
+            }
+        }
+    }
+
+    func authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithError error: Error
+    ) {
+        print("Auth error: \(error.localizedDescription)")
+    }
+}
+
+extension SignInWithAppleButton.Coordinator: ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
+            return ASPresentationAnchor()
+        }
+        if #available(iOS 26.0, *) {
+            return ASPresentationAnchor(windowScene: windowScene)
+        } else {
+            return ASPresentationAnchor()
+        }
+    }
+}
+
+// MARK: - Onboarding Profile Setup Step
+
+struct OnboardingProfileSetupStep: View {
+    @Environment(\.theme) private var theme
+    @Binding var userName: String
+    @Binding var userAvatar: String
+    let isLoading: Bool
+    let onNext: () -> Void
+
+    private let avatarOptions = ["😊", "👨", "👩", "🧑", "👦", "👧", "🧓", "👴", "👵", "❤️", "🌟", "📖", "🎨", "🎭", "🦊", "🐱"]
+
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            // Hero icon with avatar preview
+            ZStack {
+                Circle()
+                    .fill(theme.accentColor.opacity(0.15))
+                    .frame(width: 100, height: 100)
+
+                Text(userAvatar)
+                    .font(.system(size: 42))
+            }
+            .shadow(color: theme.accentColor.opacity(0.2), radius: 10, x: 0, y: 5)
+
+            // Title and description
+            VStack(spacing: 12) {
+                Text("Who are you?")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(theme.textColor)
+
+                Text("Set up your profile to get started")
+                    .font(.system(size: 16))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+
+            Spacer()
+
+            // Avatar selection
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "face.smiling.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.accentColor)
+                    Text("Choose Your Avatar")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textColor)
+                    Spacer()
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(avatarOptions, id: \.self) { emoji in
+                            Button {
+                                userAvatar = emoji
+                            } label: {
+                                Text(emoji)
+                                    .font(.system(size: 32))
+                                    .padding(12)
+                                    .background(
+                                        Circle()
+                                            .fill(userAvatar == emoji ? theme.accentColor.opacity(0.3) : Color.clear)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                }
+            }
+            .padding(24)
+            .background(theme.cardBackgroundColor)
+            .cornerRadius(24)
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+            .padding(.horizontal, 32)
+
+            // Name input
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.accentColor)
+                    Text("Your Name")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textColor)
+                    Spacer()
+                }
+
+                TextField("e.g. John", text: $userName)
+                    .font(.system(size: 17))
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(theme.backgroundColor)
+                    .cornerRadius(12)
+                    .autocapitalization(.words)
+                    .disabled(isLoading)
+            }
+            .padding(24)
+            .background(theme.cardBackgroundColor)
+            .cornerRadius(24)
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+            .padding(.horizontal, 32)
+
+            Spacer()
+
+            // CTA button
+            Button(action: onNext) {
+                HStack {
+                    Text("Continue")
+                        .font(.system(size: 17, weight: .semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(userName.isEmpty ? Color.gray.opacity(0.4) : theme.accentColor)
+                .cornerRadius(16)
+                .shadow(color: userName.isEmpty ? Color.clear : theme.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+            .disabled(userName.isEmpty || isLoading)
+            .padding(.horizontal, 32)
+            .padding(.bottom, 32)
+        }
+    }
+}
+
+// MARK: - Onboarding Join Family Step (Invite Flow)
+
+struct OnboardingJoinFamilyStep: View {
+    @Environment(\.theme) private var theme
+    let inviteCode: String
+    let isLoading: Bool
+    let onNext: () -> Void
+
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            // Hero icon
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.15))
+                    .frame(width: 100, height: 100)
+
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(.green)
+            }
+            .shadow(color: Color.green.opacity(0.2), radius: 10, x: 0, y: 5)
+
+            // Title and description
+            VStack(spacing: 12) {
+                Text("Join Your Family")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(theme.textColor)
+
+                Text("You've been invited to join a family")
+                    .font(.system(size: 16))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+
+            Spacer()
+
+            // Invite info card
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "link.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(theme.accentColor)
+                    Text("Invite Code")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textColor)
+                    Spacer()
+                }
+
+                Text(inviteCode)
+                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                    .foregroundColor(theme.accentColor)
+                    .padding(.vertical, 8)
+
+                Text("This code will be used to add you to your family")
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(20)
+            .background(theme.cardBackgroundColor)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+            .padding(.horizontal, 32)
+
+            Spacer()
+
+            // CTA button
+            Button(action: onNext) {
+                HStack {
+                    if isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.9)
+                    } else {
+                        Text("Join Family")
+                            .font(.system(size: 17, weight: .semibold))
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(theme.accentColor)
+                .cornerRadius(16)
+                .shadow(color: theme.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+            .disabled(isLoading)
+            .padding(.horizontal, 32)
+            .padding(.bottom, 32)
+        }
+    }
+}
+
+// MARK: - Invite Profile Setup Step (deprecated - replaced by OnboardingProfileSetupStep)
+
+struct InviteProfileSetupStep: View {
+    @Environment(\.theme) private var theme
+    let inviteCode: String
+    @Binding var userName: String
+    @Binding var userAvatar: String
+    let isLoading: Bool
+    let onNext: () -> Void
+
+    private let avatarOptions = ["😊", "👨", "👩", "🧑", "👦", "👧", "🧓", "👴", "👵", "❤️", "🌟", "📖"]
+
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            // Hero icon
+            ZStack {
+                Circle()
+                    .fill(theme.accentColor.opacity(0.15))
+                    .frame(width: 100, height: 100)
+
+                Text(userAvatar)
+                    .font(.system(size: 42))
+            }
+            .shadow(color: theme.accentColor.opacity(0.2), radius: 10, x: 0, y: 5)
+
+            // Title and description
+            VStack(spacing: 12) {
+                Text("Join Your Family")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(theme.textColor)
+
+                Text("Set up your profile to join your family's story collection")
+                    .font(.system(size: 16))
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+
+            Spacer()
+
+            // Avatar selection
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "face.smiling.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.accentColor)
+                    Text("Choose Your Avatar")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textColor)
+                    Spacer()
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(avatarOptions, id: \.self) { emoji in
+                            Button {
+                                userAvatar = emoji
+                            } label: {
+                                Text(emoji)
+                                    .font(.system(size: 32))
+                                    .padding(12)
+                                    .background(
+                                        Circle()
+                                            .fill(userAvatar == emoji ? theme.accentColor.opacity(0.3) : Color.clear)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                }
+            }
+            .padding(24)
+            .background(theme.cardBackgroundColor)
+            .cornerRadius(24)
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+            .padding(.horizontal, 32)
+
+            // Name input
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.accentColor)
+                    Text("Your Name")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textColor)
+                    Spacer()
+                }
+
+                TextField("e.g. John", text: $userName)
+                    .font(.system(size: 17))
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(theme.backgroundColor)
+                    .cornerRadius(12)
+                    .autocapitalization(.words)
+                    .disabled(isLoading)
+            }
+            .padding(24)
+            .background(theme.cardBackgroundColor)
+            .cornerRadius(24)
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+            .padding(.horizontal, 32)
+
+            Spacer()
+
+            // CTA button
+            Button(action: onNext) {
+                HStack {
+                    if isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.9)
+                    } else {
+                        Text("Join Family")
+                            .font(.system(size: 17, weight: .semibold))
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(userName.isEmpty || isLoading ? Color.gray.opacity(0.4) : theme.accentColor)
+                .cornerRadius(16)
+                .shadow(color: (userName.isEmpty || isLoading) ? Color.clear : theme.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+            .disabled(userName.isEmpty || isLoading)
+            .padding(.horizontal, 32)
+            .padding(.bottom, 32)
+        }
+    }
+}
+
+// MARK: - ViewModel
+
+@MainActor
+class AuthOnboardingViewModel: ObservableObject {
+    static let shared = AuthOnboardingViewModel()
+
+    @Published var isLoading = false
+    @Published var familyName: String = ""
+    @Published var userName: String = ""
+    @Published var userAvatar: String = "😊"
+
+    private let authService = AuthService.shared
+    private let supabaseService = SupabaseService.shared
+
+    /// Join existing family with invite code using Apple auth
+    func joinFamilyWithInvite(inviteCode: String, name: String, avatar: String) async {
+        isLoading = true
+
+        do {
+            // Apple auth happens first, stored in credential from UI
+            // This is a placeholder - actual Apple auth is handled by AppleAuthStep
+            // The credential is passed to the completion handler after Apple sign-in succeeds
+
+            print("Join family flow started with invite: \(inviteCode)")
+        } catch {
+            print("Join family error: \(error)")
+        }
+
+        isLoading = false
+    }
+
+    func handleAppleSignIn(credential: ASAuthorizationAppleIDCredential, newFamilyName: String? = nil, inviteCode: String? = nil) async {
+        isLoading = true
+
+        do {
+            guard let identityTokenData = credential.identityToken,
+                  let idToken = String(data: identityTokenData, encoding: .utf8) else {
+                throw AuthError.noIdentityToken
+            }
+
+            let nonce = UUID().uuidString
+            let sha256 = SHA256.hash(data: nonce.data(using: .utf8)!)
+            let nonceString = sha256.compactMap { String(format: "%02x", $0) }.joined()
+
+            let session = try await supabaseService.signInWithApple(idToken: idToken, nonce: nonceString)
+
+            let accessToken = session.accessToken
+            let userId = session.user.id.uuidString
+
+            authService.setToken(accessToken, userId: userId)
+
+            if let familyName = newFamilyName, !familyName.isEmpty {
+                try await createFamily(userId: userId, name: familyName)
+            }
+
+            if let inviteCode = inviteCode {
+                try await joinFamily(inviteCode: inviteCode)
+                DeepLinkHandler.shared.clearPendingInviteCode()
+            }
+
+            completeOnboarding()
+
+        } catch {
+            print("Auth error: \(error)")
+        }
+
+        isLoading = false
+    }
+}

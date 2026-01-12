@@ -31,7 +31,10 @@ SET
 FROM prompts p
 WHERE s.prompt_id = p.id;
 
--- STEP 3: Remove prompt_id foreign key from stories
+-- STEP 3: Drop view that depends on prompt_id
+DROP VIEW IF EXISTS home_feed;
+
+-- STEP 4: Remove prompt_id foreign key from stories
 ALTER TABLE stories DROP CONSTRAINT IF EXISTS stories_prompt_id_fkey;
 ALTER TABLE stories DROP COLUMN IF EXISTS prompt_id;
 

@@ -921,15 +921,14 @@ struct CaptureMemorySheet: View {
                 // For now, upload as text response
                 let textData = text.data(using: .utf8)!
                 let filename = "extracted_\(UUID().uuidString).txt"
-                let promptId = getPromptId()
-                
+
                 _ = try await APIService.shared.uploadResponse(
                     storyId: storyId,
                     audioData: textData,
                     filename: filename,
                     source: "app_text"
                 )
-                
+
                 uploadProgress = 1.0
                 uploadSuccess = true
             } catch {
@@ -954,13 +953,9 @@ struct CaptureMemorySheet: View {
                 guard let imageData = image.jpegData(compressionQuality: 0.8) else {
                     throw NSError(domain: "ImageConversion", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
                 }
-                
+
                 let filename = "photo_\(UUID().uuidString).jpg"
-                let promptId = getPromptId()
-                
-                // Using uploadResponse but with image data
-                // Backend currently expects 'audio' but we'll send it as generic response for now
-                // or ideally we would use a dedicated image endpoint
+
                 _ = try await APIService.shared.uploadResponse(
                     storyId: storyId,
                     audioData: imageData,
@@ -991,8 +986,7 @@ struct CaptureMemorySheet: View {
             do {
                 let textData = memoryText.data(using: .utf8)!
                 let filename = "text_\(UUID().uuidString).txt"
-                let promptId = getPromptId()
-                
+
                 _ = try await APIService.shared.uploadResponse(
                     storyId: storyId,
                     audioData: textData,

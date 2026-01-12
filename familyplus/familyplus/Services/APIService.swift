@@ -27,11 +27,7 @@ final class APIService {
         // Local development
         self.baseURL = "http://localhost:8787"
         #else
-        // Production - REPLACE with your deployed Worker URL
-        // Get from: wrangler deploy output or Cloudflare Dashboard
-        // Example: https://family-plus-backend.your-subdomain.workers.dev
-        self.baseURL = ProcessInfo.processInfo.environment["API_BASE_URL"]
-            ?? "https://family-plus-backend.your-subdomain.workers.dev"
+        self.baseURL = "https://family-plus-backend.rinzhinjalal.workers.dev"
         #endif
         
         let config = URLSessionConfiguration.default
@@ -300,7 +296,16 @@ final class APIService {
         let (data, _) = try await session.data(for: request)
         return try JSONDecoder().decode(FamilyMemberData.self, from: data)
     }
-    
+
+    /// Add family member (organizer only)
+    func addFamilyMember(name: String, avatar: String, role: String) async throws -> FamilyMemberData {
+        let body = AddFamilyMemberRequest(name: name, avatar_url: avatar, role: role)
+        var request = await createRequest(endpoint: "/api/profiles/member", method: "POST")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(FamilyMemberData.self, from: data)
+    }
+
     // MARK: - Reactions API
     
     /// Add reaction
@@ -401,13 +406,31 @@ final class APIService {
     func deleteAccount() async throws {
         var request = await createRequest(endpoint: "/api/settings/account", method: "DELETE")
         let (_, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             throw APIError.deleteFailed
         }
     }
-    
+
+    // MARK: - User Settings API
+
+    /// Get user settings from backend
+    func getUserSettings() async throws -> UserSettingsResponse {
+        let request = await createRequest(endpoint: "/api/settings", method: "GET")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(UserSettingsResponse.self, from: data)
+    }
+
+    /// Update user settings
+    func updateUserSettings(settings: UserSettingsUpdateRequest) async throws -> UserSettingsResponse {
+        var request = await createRequest(endpoint: "/api/settings", method: "PUT")
+        request.httpBody = try JSONEncoder().encode(settings)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (data, _) = try await session.data(for: request)
+        return try JSONDecoder().decode(UserSettingsResponse.self, from: data)
+    }
+
     // MARK: - Wisdom API
     
     /// Tag a story with wisdom categories using AI
@@ -902,6 +925,12 @@ struct CompleteStoryRequest: Codable {
 struct AddElderRequest: Codable {
     let name: String
     let phone_number: String
+}
+
+struct AddFamilyMemberRequest: Codable {
+    let name: String
+    let avatar_url: String
+    let role: String
 }
 
 struct AddReactionRequest: Codable {
@@ -1528,4 +1557,26 @@ struct SemanticSearchResponse: Codable {
     let query: String
     let results: [SemanticSearchResult]
     let count: Int
+}
+
+// MARK: - User Settings Models
+
+struct UserSettingsResponse: Codable {
+    let id: String
+    let user_id: String
+    let push_enabled: Bool
+    let email_enabled: Bool
+    let share_with_family: Bool
+    let allow_suggestions: Bool
+    let data_retention: String
+    let created_at: String
+    let updated_at: String
+}
+
+struct UserSettingsUpdateRequest: Codable {
+    let push_enabled: Bool?
+    let email_enabled: Bool?
+    let share_with_family: Bool?
+    let allow_suggestions: Bool?
+    let data_retention: String?
 }

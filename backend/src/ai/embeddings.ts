@@ -26,7 +26,7 @@ export interface EmbeddingResult {
 
 // Embedding dimensions for AWS Bedrock Titan models
 export const EMBEDDING_MODELS = {
-  'amazon.titan-embed-text-v2': 1024,  // Titan v2 (default)
+  'amazon.titan-embed-text-v2:0': 1024,  // Titan v2 (default)
   'amazon.titan-embed-text-v1': 1536,  // Titan v1
   'cohere.embed-english-v3': 1024,      // Cohere English
   'cohere.embed-multilingual-v3': 1024, // Cohere Multilingual
@@ -41,7 +41,7 @@ export class EmbeddingsClient {
 
   constructor(config: EmbeddingsConfig) {
     // Use AWS Titan Embeddings v2 by default
-    this.modelId = config.modelId || 'amazon.titan-embed-text-v2';
+    this.modelId = config.modelId || 'amazon.titan-embed-text-v2:0';
     this.dimensions = EMBEDDING_MODELS[this.modelId as EmbeddingModel] || 1024;
 
     // Create AWS credentials from environment or config

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Auth
 
 // MARK: - Settings View
 
@@ -141,21 +142,45 @@ struct SettingsView: View {
     
     private func signOut() {
         Task {
+            // Sign out from Supabase
             try? await SupabaseService.shared.signOut()
+
+            // Clear auth token
             AuthService.shared.clearToken()
-            dismiss()
+
+            // Clear onboarding flag to return to onboarding flow
+            UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+            UserDefaults.standard.removeObject(forKey: "hasCreatedFamily")
+            UserDefaults.standard.removeObject(forKey: "auth_user_id")
+            UserDefaults.standard.removeObject(forKey: "auth_token")
+            UserDefaults.standard.removeObject(forKey: "family_name")
+
+            // Clear any pending invite codes
+            UserDefaults.standard.removeObject(forKey: "pending_invite_code")
+
+            await MainActor.run {
+                // Dismiss settings
+                dismiss()
+
+                // Force app to refresh by triggering app state change
+                // This will cause ContentView to check auth state and show onboarding
+                NotificationCenter.default.post(name: .init("AuthStateDidChange"), object: nil)
+            }
         }
     }
-    
+
     // MARK: - Data Loading
 
     private func loadUserProfile() async throws -> UserProfile {
-        // TODO: Add dedicated profile endpoint to API
-        // For now, construct from family member data
-        let members = try await APIService.shared.getFamilyMembers()
-
         // Get userId from UserDefaults (set by SupabaseService during auth)
         let storedUserId = UserDefaults.standard.string(forKey: "auth_user_id")
+
+        // Get email from Supabase auth session
+        let session = try await SupabaseService.shared.getCurrentSession()
+        let email = session?.user.email ?? ""
+
+        // Get family members to find current user's name/avatar
+        let members = try await APIService.shared.getFamilyMembers()
 
         // Try to find current user by auth_user_id, fall back to organizer, then first member
         let currentUser = members.first(where: { $0.authUserId == storedUserId })
@@ -169,8 +194,8 @@ struct SettingsView: View {
         return UserProfile(
             id: user.id,
             name: user.fullName ?? "Family Member",
-            email: "", // TODO: Get from auth
-            avatarEmoji: "👤",
+            email: email,
+            avatarEmoji: user.avatarUrl ?? "👤",
             theme: .dark,
             joinedAt: Date() // TODO: Get from API
         )
@@ -204,22 +229,24 @@ struct SettingsView: View {
     }
 
     private func loadUserSettings() async throws -> UserSettings {
-        // TODO: Add settings endpoints to API
-        // For now, return defaults
+        // Fetch from backend API
+        let apiSettings = try await APIService.shared.getUserSettings()
+
+        // Map backend response to local model
         return UserSettings(
             notifications: NotificationSettings(
-                pushEnabled: true,
-                emailEnabled: true
+                pushEnabled: apiSettings.push_enabled,
+                emailEnabled: apiSettings.email_enabled
             ),
             privacy: PrivacySettings(
-                shareWithFamily: true,
-                allowSuggestions: true,
-                dataRetention: .forever
+                shareWithFamily: apiSettings.share_with_family,
+                allowSuggestions: apiSettings.allow_suggestions,
+                dataRetention: DataRetention(rawValue: apiSettings.data_retention.replacingOccurrences(of: "_", with: " ")) ?? .forever
             ),
             preferences: PreferenceSettings(
-                autoPlayAudio: true,
-                defaultPromptCategory: "story",
-                hapticsEnabled: true
+                autoPlayAudio: UserDefaults.standard.bool(forKey: "autoPlayAudio"),
+                defaultPromptCategory: UserDefaults.standard.string(forKey: "defaultPromptCategory") ?? "story",
+                hapticsEnabled: UserDefaults.standard.bool(forKey: "hapticsEnabled")
             )
         )
     }
@@ -498,7 +525,7 @@ struct SettingsContent: View {
             Section {
                 ProfileHeaderCard(user: data.user, stats: data.stats)
             }
-            
+
             // Profile Section
             Section {
                 SettingsRow(
@@ -508,7 +535,7 @@ struct SettingsContent: View {
                 ) {
                     onEditProfile()
                 }
-                
+
                 SettingsRow(
                     icon: "person.3",
                     title: "Family Settings",
@@ -516,7 +543,7 @@ struct SettingsContent: View {
                 ) {
                     onFamilySettings()
                 }
-                
+
                 SettingsRow(
                     icon: "envelope",
                     title: "Email",
@@ -528,7 +555,7 @@ struct SettingsContent: View {
                     .font(.subheadline)
                     .foregroundColor(theme.secondaryTextColor)
             }
-            
+
             // Account Section
             Section {
                 SettingsRow(
@@ -536,7 +563,7 @@ struct SettingsContent: View {
                     title: "Account",
                     subtitle: "Manage your account settings"
                 ) {}
-                
+
                 SettingsRow(
                     icon: "calendar",
                     title: "Member Since",
@@ -692,6 +719,7 @@ struct NotificationSection: View {
     @Environment(\.theme) var theme
     @State private var pushEnabled: Bool
     @State private var emailEnabled: Bool
+    @State private var isSaving = false
 
     init(settings: NotificationSettings) {
         self.settings = settings
@@ -704,14 +732,38 @@ struct NotificationSection: View {
             icon: "bell.fill",
             title: "Push Notifications",
             subtitle: "Wisdom requests and important updates",
-            isOn: $pushEnabled
+            isOn: Binding(
+                get: { pushEnabled },
+                set: { newValue in
+                    pushEnabled = newValue
+                    saveSettings()
+                }
+            )
         )
 
         SettingsToggleRow(
             icon: "envelope",
             title: "Email Notifications",
-            isOn: $emailEnabled
+            isOn: Binding(
+                get: { emailEnabled },
+                set: { newValue in
+                    emailEnabled = newValue
+                    saveSettings()
+                }
+            )
         )
+    }
+
+    private func saveSettings() {
+        Task {
+            try? await APIService.shared.updateUserSettings(settings: UserSettingsUpdateRequest(
+                push_enabled: pushEnabled,
+                email_enabled: emailEnabled,
+                share_with_family: nil,
+                allow_suggestions: nil,
+                data_retention: nil
+            ))
+        }
     }
 }
 
@@ -725,7 +777,7 @@ struct PrivacySection: View {
     @State private var shareWithFamily: Bool
     @State private var allowSuggestions: Bool
     @State private var selectedRetention: DataRetention
-    
+
     init(settings: PrivacySettings, onExportData: @escaping () -> Void, onDeleteAccount: @escaping () -> Void) {
         self.settings = settings
         self.onExportData = onExportData
@@ -734,22 +786,34 @@ struct PrivacySection: View {
         _allowSuggestions = State(initialValue: settings.allowSuggestions)
         _selectedRetention = State(initialValue: settings.dataRetention)
     }
-    
+
     var body: some View {
         SettingsToggleRow(
             icon: "person.3",
             title: "Share with Family",
             subtitle: "Allow family members to see your stories",
-            isOn: $shareWithFamily
+            isOn: Binding(
+                get: { shareWithFamily },
+                set: { newValue in
+                    shareWithFamily = newValue
+                    saveSettings()
+                }
+            )
         )
-        
+
         SettingsToggleRow(
             icon: "lightbulb",
             title: "AI Suggestions",
             subtitle: "Get personalized story suggestions",
-            isOn: $allowSuggestions
+            isOn: Binding(
+                get: { allowSuggestions },
+                set: { newValue in
+                    allowSuggestions = newValue
+                    saveSettings()
+                }
+            )
         )
-        
+
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
@@ -758,12 +822,18 @@ struct PrivacySection: View {
                     .font(.headline)
                     .foregroundColor(theme.textColor)
             }
-            
+
             Text("How long we keep your stories")
                 .font(.caption)
                 .foregroundColor(theme.secondaryTextColor)
-            
-            Picker("Retention", selection: $selectedRetention) {
+
+            Picker("Retention", selection: Binding(
+                get: { selectedRetention },
+                set: { newValue in
+                    selectedRetention = newValue
+                    saveSettings()
+                }
+            )) {
                 ForEach(DataRetention.allCases, id: \.self) { retention in
                     Text(retention.description).tag(retention)
                 }
@@ -771,7 +841,7 @@ struct PrivacySection: View {
             .pickerStyle(.segmented)
         }
         .padding(.vertical, 8)
-        
+
         SettingsRow(
             icon: "square.and.arrow.down",
             title: "Export My Data",
@@ -779,7 +849,7 @@ struct PrivacySection: View {
         ) {
             onExportData()
         }
-        
+
         SettingsRow(
             icon: "trash",
             title: "Delete Account",
@@ -789,6 +859,21 @@ struct PrivacySection: View {
             onDeleteAccount()
         }
     }
+
+    private func saveSettings() {
+        Task {
+            // Convert data retention format (spaces to underscores)
+            let retentionValue = selectedRetention.rawValue.replacingOccurrences(of: " ", with: "_")
+
+            try? await APIService.shared.updateUserSettings(settings: UserSettingsUpdateRequest(
+                push_enabled: nil,
+                email_enabled: nil,
+                share_with_family: shareWithFamily,
+                allow_suggestions: allowSuggestions,
+                data_retention: retentionValue
+            ))
+        }
+    }
 }
 
 // MARK: - Preferences Section
@@ -796,17 +881,25 @@ struct PrivacySection: View {
 struct PreferencesSection: View {
     let settings: PreferenceSettings
     @Environment(\.theme) var theme
-    @State private var autoPlayAudio: Bool
-    @State private var hapticsEnabled: Bool
-    @State private var selectedCategory: String
-    
+    @AppStorage("autoPlayAudio") private var autoPlayAudio: Bool = false
+    @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
+    @AppStorage("defaultPromptCategory") private var selectedCategory: String = "story"
+
     init(settings: PreferenceSettings) {
         self.settings = settings
-        _autoPlayAudio = State(initialValue: settings.autoPlayAudio)
-        _hapticsEnabled = State(initialValue: settings.hapticsEnabled)
-        _selectedCategory = State(initialValue: settings.defaultPromptCategory)
+        // Set UserDefaults defaults for @AppStorage properties
+        let defaults = UserDefaults.standard
+        if !defaults.bool(forKey: "autoPlayAudio") {
+            defaults.set(settings.autoPlayAudio, forKey: "autoPlayAudio")
+        }
+        if !defaults.bool(forKey: "hapticsEnabled") {
+            defaults.set(settings.hapticsEnabled, forKey: "hapticsEnabled")
+        }
+        if defaults.string(forKey: "defaultPromptCategory") == nil {
+            defaults.set(settings.defaultPromptCategory, forKey: "defaultPromptCategory")
+        }
     }
-    
+
     var body: some View {
         SettingsToggleRow(
             icon: "play.circle",
@@ -814,14 +907,14 @@ struct PreferencesSection: View {
             subtitle: "Automatically play stories when opened",
             isOn: $autoPlayAudio
         )
-        
+
         SettingsToggleRow(
             icon: "hand.tap",
             title: "Haptic Feedback",
             subtitle: "Vibrate on interactions",
             isOn: $hapticsEnabled
         )
-        
+
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "text.bubble")
@@ -830,7 +923,7 @@ struct PreferencesSection: View {
                     .font(.headline)
                     .foregroundColor(theme.textColor)
             }
-            
+
             Picker("Category", selection: $selectedCategory) {
                 Text("Story").tag("story")
                 Text("Reflection").tag("reflection")
@@ -859,10 +952,10 @@ struct AboutSection: View {
                 .foregroundColor(theme.accentColor)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("StoryRide")
+                Text("Family+")
                     .font(.headline)
                     .foregroundColor(theme.textColor)
-                Text("Version 1.0.0 (Build 123)")
+                Text("Version 1.0.0")
                     .font(.caption)
                     .foregroundColor(theme.secondaryTextColor)
             }
@@ -874,8 +967,13 @@ struct AboutSection: View {
         SettingsRow(
             icon: "bubble.left.and.bubble.right",
             title: "Send Feedback",
-            subtitle: "Help us improve StoryRide"
-        ) {}
+            subtitle: "Help us improve Family+"
+        ) {
+            // TODO: Open feedback form or email
+            if let url = URL(string: "mailto:support@storyrd.app") {
+                UIApplication.shared.open(url)
+            }
+        }
 
         SettingsRow(
             icon: "doc.text",

@@ -2,7 +2,7 @@
 // CLOUDFLARE WORKER ENTRY POINT
 // ============================================================================
 //
-// This file exports both:
+// This file exports:
 // 1. HTTP API server (Hono app)
 // 2. Queue consumer (Background event processor)
 //
@@ -27,11 +27,9 @@ import wisdom from './routes/wisdom'
 import diary from './routes/diary'
 import share from './routes/share'
 import exportRoutes from './routes/export'
+import settings from './routes/settings'
 import { createQwenTurboClient } from './ai/llm'
 import { createCartesiaClient } from './ai/cartesia'
-import { createWisdomTaggerClient } from './ai/wisdom-tagger'
-import { createWisdomSummarizerClient } from './ai/wisdom-summarizer'
-import { handleQueueBatch, type HandlerContext } from './events/handlers'
 import { getSupabaseFromContext, getSupabaseFromEnv } from './utils/supabase'
 
 // ----------------------------------------------------------------------------
@@ -69,14 +67,10 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization'],
 }))
 
-// Middleware: Initialize services and attach to context
 app.use('*', async (c, next) => {
   // Initialize Supabase client
   const supabase = getSupabaseFromContext(c)
-  c.set('supabase', supabase)
-
-  // Make queue available to routes
-  c.set('queue', c.env.QUEUE)
+  c.set('supabase', supabase as unknown as any)
 
   await next()
 })
@@ -98,6 +92,7 @@ app.route('/', wisdom)
 app.route('/', diary)
 app.route('/', share)
 app.route('/', exportRoutes)
+app.route('/', settings)
 
 // Health check
 app.get('/health', (c) => {
@@ -112,11 +107,6 @@ app.get('/health', (c) => {
 // QUEUE CONSUMER - Event handler
 // ----------------------------------------------------------------------------
 
-/**
- * This function is called by Cloudflare when messages are available in the queue.
- *
- * It processes batches of events in parallel, routing each to the appropriate handler.
- */
 export default {
   // HTTP fetch handler
   fetch: app.fetch,
@@ -134,27 +124,15 @@ export default {
       apiKey: env.CARTESIA_API_KEY,
     })
 
-    const wisdomTagger = createWisdomTaggerClient({
-      openaiApiKey: env.AWS_BEARER_TOKEN_BEDROCK || env.OPENAI_API_KEY,
-      bedrockRegion: env.BEDROCK_REGION,
-    })
-
-    const wisdomSummarizer = createWisdomSummarizerClient({
-      openaiApiKey: env.AWS_BEARER_TOKEN_BEDROCK || env.OPENAI_API_KEY,
-      bedrockRegion: env.BEDROCK_REGION,
-    })
-
-    // Build handler context
-    const handlerContext: HandlerContext = {
+    // Get handler context
+    const handlerContext = {
       supabase,
       llm,
       cartesia,
-      wisdomTagger,
-      wisdomSummarizer,
       env,
     }
 
-    // Process the batch
+    // Process batch
     await handleQueueBatch(batch, handlerContext)
   },
 }

@@ -38,11 +38,11 @@ export class QwenTurboClient {
     if (!config.openaiApiKey || config.openaiApiKey.includes('placeholder')) {
       throw new AIServiceError(
         'AWS_BEARER_TOKEN_BEDROCK is required. Set in .dev.vars for local dev or via `wrangler secret put` for production.',
-        'qwen-turbo'
+        'qwen.qwen3-next-80b-a3b'
       );
     }
 
-    this.modelId = config.modelId || 'openai.gpt-oss-20b-1:0';
+    this.modelId = config.modelId || 'qwen.qwen3-next-80b-a3b';
 
     // Construct Bedrock endpoint URL
     const region = config.bedrockRegion || 'us-west-2';

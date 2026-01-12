@@ -12,43 +12,99 @@ enum DeepLinkDestination: Equatable {
 @MainActor
 final class DeepLinkHandler: ObservableObject {
     static let shared = DeepLinkHandler()
-    
+
     @Published var pendingDestination: DeepLinkDestination?
     @Published var handledLink: DeepLinkDestination?
-    
-    private init() {}
-    
+    @Published var pendingInviteCode: String?
+
+    private let pendingInviteKey = "pending_invite_code"
+
+    private init() {
+        // Restore pending invite code from persistence
+        pendingInviteCode = UserDefaults.standard.string(forKey: pendingInviteKey)
+    }
+
     func handle(url: URL) -> Bool {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
-              let host = components.host else {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
             return false
         }
-        
+
+        // Handle both custom scheme (storyrd://) and universal links (https://storyrd.app)
+        let host = components.host ?? ""
+        let pathComponents = components.path.split(separator: "/").map(String.init)
+
         let destination: DeepLinkDestination
-        
-        switch host {
-        case "invite":
-            let code = components.path.replacingOccurrences(of: "/", with: "")
-            destination = .invite(code: code)
-            
-        case "story":
-            let storyId = components.path.replacingOccurrences(of: "/", with: "")
-            destination = .story(id: storyId)
-            
-        case "quote":
-            let quoteId = components.path.replacingOccurrences(of: "/", with: "")
-            destination = .quote(id: quoteId)
-            
-        case "request":
-            let requestId = components.path.replacingOccurrences(of: "/", with: "")
-            destination = .wisdomRequest(id: requestId)
-            
-        default:
-            destination = .unknown(path: url.absoluteString)
+
+        // Universal link handling: https://storyrd.app/join/{code}
+        if host == "storyrd.app" || host == "www.storyrd.app" {
+            if pathComponents.first == "join", let code = pathComponents.dropFirst().first {
+                destination = .invite(code: code)
+                savePendingInviteCode(code)
+            } else if pathComponents.first == "story", let id = pathComponents.dropFirst().first {
+                destination = .story(id: id)
+            } else if pathComponents.first == "quote", let id = pathComponents.dropFirst().first {
+                destination = .quote(id: id)
+            } else {
+                destination = .unknown(path: url.absoluteString)
+            }
+        } else {
+            // Custom scheme handling: storyrd://invite/{code}
+            switch host {
+            case "invite":
+                let code = components.path.replacingOccurrences(of: "/", with: "")
+                destination = .invite(code: code)
+                savePendingInviteCode(code)
+
+            case "join":
+                let code = components.path.replacingOccurrences(of: "/", with: "")
+                destination = .invite(code: code)
+                savePendingInviteCode(code)
+
+            case "story":
+                let storyId = components.path.replacingOccurrences(of: "/", with: "")
+                destination = .story(id: storyId)
+
+            case "quote":
+                let quoteId = components.path.replacingOccurrences(of: "/", with: "")
+                destination = .quote(id: quoteId)
+
+            case "request":
+                let requestId = components.path.replacingOccurrences(of: "/", with: "")
+                destination = .wisdomRequest(id: requestId)
+
+            default:
+                destination = .unknown(path: url.absoluteString)
+            }
         }
-        
+
         pendingDestination = destination
         return true
+    }
+
+    // MARK: - Invite Code Persistence
+
+    /// Save invite code for use after signup/login
+    func savePendingInviteCode(_ code: String) {
+        pendingInviteCode = code
+        UserDefaults.standard.set(code, forKey: pendingInviteKey)
+        print("[DeepLink] 📨 Saved pending invite code: \(code)")
+    }
+
+    /// Get the pending invite code if one exists
+    func getPendingInviteCode() -> String? {
+        return pendingInviteCode ?? UserDefaults.standard.string(forKey: pendingInviteKey)
+    }
+
+    /// Clear the pending invite code after successful join
+    func clearPendingInviteCode() {
+        pendingInviteCode = nil
+        UserDefaults.standard.removeObject(forKey: pendingInviteKey)
+        print("[DeepLink] 🧹 Cleared pending invite code")
+    }
+
+    /// Check if there's a pending invite to process
+    var hasPendingInvite: Bool {
+        return getPendingInviteCode() != nil
     }
     
     func handleUniversalLink(_ userActivity: NSUserActivity) -> Bool {

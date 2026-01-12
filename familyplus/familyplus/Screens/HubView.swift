@@ -125,6 +125,7 @@ struct HubView: View {
     @State private var showSearchView = false
     @State private var selectedInputMode: InputMode? = nil
     @State private var selectedStory: EvolvingStory? = nil
+    @State private var discussionTopicPrompt: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -148,6 +149,10 @@ struct HubView: View {
                             print("🔥 STORY TAPPED: \(story.title) - ID: \(story.id)")
                             selectedStory = story
                             print("🔥 selectedStory set to: \(String(describing: selectedStory))")
+                        }, onDiscussionTopicSelected: { topic in
+                            discussionTopicPrompt = topic
+                            selectedInputMode = .recording
+                            showCaptureSheet = true
                         })
                         .transition(.opacity)
                     case .empty:
@@ -182,7 +187,7 @@ struct HubView: View {
                     }
                 }
                 .padding(.trailing, 24)
-                .padding(.bottom, 120)
+                .padding(.bottom, 32)
             }
             .navigationTitle("Family Library")
             .navigationBarTitleDisplayMode(.large)
@@ -217,7 +222,10 @@ struct HubView: View {
             }
         }
         .sheet(isPresented: $showCaptureSheet) {
-            CaptureMemorySheet(initialMode: selectedInputMode ?? .recording)
+            CaptureMemorySheet(
+                initialPromptText: discussionTopicPrompt,
+                initialMode: selectedInputMode ?? .recording
+            )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -231,6 +239,7 @@ struct HubView: View {
             // Reload dashboard when capture sheet is dismissed
             if !isShowing {
                 loadDashboard()
+                discussionTopicPrompt = nil
             }
         }
     }
@@ -596,6 +605,7 @@ struct DashboardView: View {
     @Environment(\.theme) var theme
     var onCaptureAction: () -> Void = {}
     var onStorySelected: (EvolvingStory) -> Void = { _ in }
+    var onDiscussionTopicSelected: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 32) {
@@ -731,8 +741,8 @@ struct DashboardView: View {
                             .padding(20)
 
                             Button(action: {
-                                // TODO: Navigate to capture with this topic
-                                print("Discuss topic: \(firstTopic.question)")
+                                // Open capture sheet with this topic as the prompt
+                                onDiscussionTopicSelected(firstTopic.question)
                             }) {
                                 HStack {
                                     Text("Add Your Voice")

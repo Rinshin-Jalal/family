@@ -212,6 +212,7 @@ struct TeenProfile: View {
     @State private var showAchievements = false
     @State private var showInvite = false
     @State private var showAddElder = false
+    @State private var showAddFamilyMember = false
     @State private var showManageMembers = false
     @State private var showGovernance = false
 
@@ -239,6 +240,7 @@ struct TeenProfile: View {
                         data: data,
                         showAchievements: $showAchievements,
                         showInvite: $showInvite,
+                        showAddFamilyMember: $showAddFamilyMember,
                         showGovernance: $showGovernance,
                         familyData: $familyData
                     )
@@ -260,8 +262,9 @@ struct TeenProfile: View {
                 MilestonesModal(milestones: data.achievements)
             }
         }
-        .sheet(isPresented: $showInvite) { ShareCollectionsModal() }
+        .sheet(isPresented: $showInvite) { InviteFamilyModal() }
         .sheet(isPresented: $showAddElder) { AddElderModal() }
+        .sheet(isPresented: $showAddFamilyMember) { AddFamilyMemberModal() }
         .sheet(isPresented: $showManageMembers) { ManageMembersModal() }
         .sheet(isPresented: $showGovernance) { FamilyGovernanceModal(familyData: familyData) }
         .onChange(of: navigationCoordinator.pendingFamilyAction) { _, action in
@@ -298,6 +301,7 @@ struct TeenProfileContent: View {
     let data: ProfileData
     @Binding var showAchievements: Bool
     @Binding var showInvite: Bool
+    @Binding var showAddFamilyMember: Bool
     @Binding var showGovernance: Bool
     @Binding var familyData: FamilyData
     @Environment(\.theme) var theme
@@ -395,11 +399,11 @@ struct TeenProfileContent: View {
                 .cornerRadius(20)
                 .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
 
-                // Share Button (TRANSFORMED from "Invite Family Member")
+                // Invite Family Button - share invite code/link
                 Button(action: { showInvite = true }) {
                     HStack(spacing: 12) {
-                        Image(systemName: "square.and.arrow.up").font(.system(size: 18, weight: .semibold))
-                        Text("Share Stories").font(.system(size: 17, weight: .semibold))
+                        Image(systemName: "link").font(.system(size: 18, weight: .semibold))
+                        Text("Invite Family").font(.system(size: 17, weight: .semibold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -408,6 +412,21 @@ struct TeenProfileContent: View {
                     .cornerRadius(16)
                 }
                 .padding(.top, 8)
+
+                // Add Family Member Button (organizer only)
+                if isOwner {
+                    Button(action: { showAddFamilyMember = true }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "person.badge.plus").font(.system(size: 18, weight: .semibold))
+                            Text("Add Member").font(.system(size: 17, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: theme.buttonHeight)
+                        .background(theme.accentColor.opacity(0.8))
+                        .cornerRadius(16)
+                    }
+                }
 
                 // Achievements section REMOVED - gamification de-emphasized in favor of value extraction
                 // Milestones are still accessible through the milestones modal

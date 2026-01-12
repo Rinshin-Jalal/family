@@ -3,6 +3,9 @@
 -- Shifts wisdom tagging and embeddings from story-level to response-level
 -- =========================================================================
 
+-- Enable pgvector extension for embeddings
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
+
 -- 1. ADD EMBEDDING COLUMN TO RESPONSES TABLE
 -- =========================================================================
 ALTER TABLE responses ADD COLUMN embedding vector(1024);
