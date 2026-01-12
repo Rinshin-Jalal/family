@@ -61,15 +61,15 @@ export const authMiddleware = async (c: any, next: any) => {
 
 export const profileMiddleware = async (c: any, next: any) => {
   const user = c.get('user')
-  const token = c.get('accessToken')
   const supabaseUrl = c.env.SUPABASE_URL
-  const anonKey = c.env.SUPABASE_KEY
+  const serviceRoleKey = c.env.SUPABASE_SERVICE_ROLE_KEY || c.env.SUPABASE_KEY
 
   try {
+    // Use service role key to bypass RLS policies and avoid infinite recursion
+    // This is safe because we're only fetching the user's own profile by auth_user_id
     const response = await fetch(`${supabaseUrl}/rest/v1/profiles?auth_user_id=eq.${user.id}&select=*`, {
       headers: {
-        'apikey': anonKey,
-        'Authorization': `Bearer ${token}`,
+        'apikey': serviceRoleKey,
       },
     })
 

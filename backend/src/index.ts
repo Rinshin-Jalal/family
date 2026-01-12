@@ -11,6 +11,7 @@
 
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import auth from './routes/auth'
 import stories from './routes/stories'
 import responses from './routes/responses'
 import profiles from './routes/profiles'
@@ -76,6 +77,7 @@ app.use('*', async (c, next) => {
 })
 
 // Mount routes
+app.route('/', auth)
 app.route('/', stories)
 app.route('/', responses)
 app.route('/', profiles)
