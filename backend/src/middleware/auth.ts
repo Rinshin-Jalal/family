@@ -14,12 +14,38 @@ type Variables = {
   profile: any
 }
 
-const verifyAuth = async (authHeader: string, supabase: any) => {
-  const token = authHeader.replace('Bearer ', '')
-  const { data: { user }, error } = await supabase.auth.getUser(token)
-  if (error) {
+const decodeJWT = (token: string) => {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+
+    const decoded = JSON.parse(
+      Buffer.from(parts[1], 'base64').toString('utf8')
+    )
+
+    if (!decoded.sub || !decoded.aud) return null
+
+    return {
+      id: decoded.sub,
+      email: decoded.email,
+      user_metadata: decoded.user_metadata || {},
+      app_metadata: decoded.app_metadata || {},
+      role: decoded.role,
+      aud: decoded.aud,
+    }
+  } catch {
     return null
   }
+}
+
+const verifyAuth = async (authHeader: string, supabase: any) => {
+  const token = authHeader.replace('Bearer ', '')
+  const user = decodeJWT(token)
+
+  if (!user) {
+    return null
+  }
+
   return user
 }
 
@@ -31,7 +57,9 @@ export const authMiddleware = async (c: any, next: any) => {
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
-  const user = await verifyAuth(authHeader, supabase)
+  const token = authHeader.replace('Bearer ', '')
+  const user = decodeJWT(token)
+
   if (!user) {
     return c.json({ error: 'Invalid token' }, 401)
   }

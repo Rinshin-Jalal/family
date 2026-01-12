@@ -62,6 +62,21 @@ export function getSupabaseFromContext(c: HonoContext) {
     }
   )
 }
+  )
+
+  if (authToken) {
+    client.auth.setSession({
+      access_token: authToken,
+      refresh_token: '',
+      expires_in: 3600,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      token_type: 'bearer',
+      user: null as any,
+    })
+  }
+
+  return client
+}
 
 /**
  * Create Supabase client from environment variables (for background jobs)
