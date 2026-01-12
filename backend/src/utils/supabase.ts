@@ -62,20 +62,50 @@ export function getSupabaseFromContext(c: HonoContext) {
     }
   )
 }
+
+export function getSupabaseFromContextWithAuth(c: HonoContext, accessToken: string) {
+  const client = createClient(
+    c.env.SUPABASE_URL,
+    c.env.SUPABASE_KEY,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    }
   )
 
-  if (authToken) {
-    client.auth.setSession({
-      access_token: authToken,
-      refresh_token: '',
-      expires_in: 3600,
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
-      token_type: 'bearer',
-      user: null as any,
-    })
-  }
+  client.auth.setSession({
+    access_token: accessToken,
+    refresh_token: '',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    token_type: 'bearer',
+    user: null as any,
+  })
 
   return client
+}
+
+export function getSupabaseFromContextWithServiceRole(c: HonoContext) {
+  const serviceRoleKey = (c.env as any).SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!serviceRoleKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set in environment')
+  }
+
+  return createClient(
+    c.env.SUPABASE_URL,
+    serviceRoleKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    }
+  )
 }
 
 /**

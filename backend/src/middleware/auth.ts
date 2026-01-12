@@ -1,15 +1,17 @@
 import { Hono } from 'hono'
-import { getSupabaseFromContext } from '../utils/supabase'
+import { getSupabaseFromContextWithAuth } from '../utils/supabase'
 
 type Bindings = {
   SUPABASE_URL: string
   SUPABASE_KEY: string
+  SUPABASE_SERVICE_ROLE_KEY: string
   AUDIO_BUCKET: R2Bucket
   OPENAI_API_KEY: string
 }
 
 type Variables = {
   user: any
+  accessToken: string
   supabase: any
   profile: any
 }
@@ -38,19 +40,7 @@ const decodeJWT = (token: string) => {
   }
 }
 
-const verifyAuth = async (authHeader: string, supabase: any) => {
-  const token = authHeader.replace('Bearer ', '')
-  const user = decodeJWT(token)
-
-  if (!user) {
-    return null
-  }
-
-  return user
-}
-
 export const authMiddleware = async (c: any, next: any) => {
-  const supabase = getSupabaseFromContext(c)
   const authHeader = c.req.header('Authorization')
 
   if (!authHeader) {
@@ -65,67 +55,34 @@ export const authMiddleware = async (c: any, next: any) => {
   }
 
   c.set('user' as const, user)
-  c.set('supabase' as const, supabase)
+  c.set('accessToken' as const, token)
   await next()
 }
 
 export const profileMiddleware = async (c: any, next: any) => {
   const user = c.get('user')
-  const supabase = c.get('supabase')
+  const token = c.get('accessToken')
+  const supabaseUrl = c.env.SUPABASE_URL
+  const anonKey = c.env.SUPABASE_KEY
 
-  let { data: profile, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('auth_user_id', user.id)
-    .single()
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/profiles?auth_user_id=eq.${user.id}&select=*`, {
+      headers: {
+        'apikey': anonKey,
+        'Authorization': `Bearer ${token}`,
+      },
+    })
 
-  // Auto-create profile if it doesn't exist
-  if (error || !profile) {
-    try {
-      // Generate invite slug for new family
-      const inviteSlug = Buffer.from(crypto.randomUUID()).toString('hex').substring(0, 8)
+    const data = await response.json()
+    const profile = Array.isArray(data) && data.length > 0 ? data[0] : null
 
-      // Create family first
-      const { data: family, error: familyError } = await supabase
-        .from('families')
-        .insert({
-          name: 'My Family',
-          invite_slug: inviteSlug,
-        })
-        .select()
-        .single()
-
-      if (familyError || !family) {
-        console.error('[ProfileMiddleware] Failed to create family:', familyError)
-        return c.json({ error: 'Failed to create family', details: familyError?.message }, 500)
-      }
-
-      // Create profile
-      const { data: newProfile, error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          auth_user_id: user.id,
-          family_id: family.id,
-          full_name: user.user_metadata?.full_name || user.user_metadata?.name || 'Anonymous User',
-          role: 'organizer',
-        })
-        .select()
-        .single()
-
-      if (profileError || !newProfile) {
-        console.error('[ProfileMiddleware] Failed to create profile:', profileError)
-        return c.json({ error: 'Failed to create profile', details: profileError?.message }, 500)
-      }
-
-      profile = newProfile
-      console.log('[ProfileMiddleware] Auto-created profile and family for user:', user.id)
-    } catch (err) {
-      console.error('[ProfileMiddleware] Exception during profile creation:', err)
-      return c.json({ error: 'Failed to initialize user profile', details: err instanceof Error ? err.message : 'Unknown error' }, 500)
-    }
+    c.set('profile' as const, profile || null)
+  } catch (err) {
+    console.warn('[ProfileMiddleware] Could not fetch profile:', err)
+    c.set('profile' as const, null)
   }
 
-  c.set('profile' as const, profile)
   await next()
 }
+
 
