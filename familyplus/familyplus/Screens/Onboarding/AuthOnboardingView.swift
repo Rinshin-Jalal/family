@@ -17,6 +17,11 @@ struct AuthOnboardingView: View {
 
     @StateObject private var viewModel = AuthOnboardingViewModel()
     @State private var currentPage = 0
+    @State private var pendingInviteCode: String? = DeepLinkHandler.shared.getPendingInviteCode()
+    @State private var showJoinFamilyCode = false
+
+    // Total pages: Welcome (0) -> Family Name (1) -> Apple Sign-In (2)
+    var totalPages: Int { 3 }
 
     var body: some View {
         ZStack {
@@ -39,12 +44,16 @@ struct AuthOnboardingView: View {
                             familyName: $viewModel.familyName,
                             isLoading: viewModel.isLoading,
                             onNext: {
-                                Task {
-                                    await viewModel.signInAsGuest(familyName: viewModel.familyName)
-                                    await MainActor.run {
-                                        onComplete()
-                                    }
+                                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
+                                    currentPage = 2
                                 }
+                            }
+                        )
+                    case 2:
+                        AppleAuthStep(
+                            isLoading: viewModel.isLoading,
+                            onAuthSuccess: {
+                                onComplete()
                             }
                         )
                     default:
@@ -374,7 +383,11 @@ extension SignInWithAppleButton.Coordinator: ASAuthorizationControllerDelegate {
         }
 
         Task {
-            await AuthOnboardingViewModel.shared.handleAppleSignIn(credential: appleIDCredential)
+            await AuthOnboardingViewModel.shared.handleAppleSignInWithCredential(
+                credential: appleIDCredential,
+                familyName: AuthOnboardingViewModel.shared.familyName,
+                inviteCode: nil
+            )
             await MainActor.run {
                 onAuthSuccess()
             }
@@ -413,85 +426,48 @@ class AuthOnboardingViewModel: ObservableObject {
 
     private let authService = AuthService.shared
     private let supabaseService = SupabaseService.shared
+     
+     func handleAppleSignInWithCredential(
+         credential: ASAuthorizationAppleIDCredential,
+         familyName: String?,
+         inviteCode: String?
+     ) async {
+         isLoading = true
 
-    /// Sign in as guest using Supabase anonymous auth
-    func signInAsGuest(familyName: String) async {
-        isLoading = true
+         do {
+             guard let identityTokenData = credential.identityToken,
+                   let idToken = String(data: identityTokenData, encoding: .utf8) else {
+                 throw AuthError.noIdentityToken
+             }
 
-        do {
-            // Sign in anonymously with Supabase
-            let session = try await supabaseService.signInAnonymously()
+             let nonce = UUID().uuidString
+             let sha256 = SHA256.hash(data: nonce.data(using: .utf8)!)
+             let nonceString = sha256.compactMap { String(format: "%02x", $0) }.joined()
 
-            // Update auth state
-            let accessToken = session.accessToken
-            let userId = session.user.id.uuidString
+             let session = try await supabaseService.signInWithApple(
+                 idToken: idToken,
+                 nonce: nonceString
+             )
 
-            authService.setToken(accessToken, userId: userId)
+             let accessToken = session.accessToken
+             let userId = session.user.id.uuidString
 
-            // Store family name
-            self.familyName = familyName
-            UserDefaults.standard.set(familyName, forKey: "family_name")
+             authService.setToken(accessToken, userId: userId)
 
-            // Create family if name provided
-            if !familyName.isEmpty {
-                try await createFamily(userId: userId, name: familyName)
-            }
+             if let familyName = familyName, !familyName.isEmpty {
+                 try await createFamily(userId: userId, name: familyName)
+             }
 
-            // Mark onboarding complete
-            completeOnboarding()
+             completeOnboarding()
 
-            print("Guest auth successful - User ID: \(userId), Family: \(familyName)")
+         } catch {
+             print("Auth error: \(error)")
+         }
 
-        } catch {
-            print("Guest auth error: \(error)")
-        }
+         isLoading = false
+      }
 
-        isLoading = false
-    }
-
-    // Apple Sign In (for later when you set it up)
-    func handleAppleSignIn(credential: ASAuthorizationAppleIDCredential) async {
-        isLoading = true
-
-        do {
-            // Get Apple ID token
-            guard let identityTokenData = credential.identityToken,
-                  let idToken = String(data: identityTokenData, encoding: .utf8) else {
-                throw AuthError.noIdentityToken
-            }
-
-            // Generate a nonce for Apple Sign In
-            let nonce = UUID().uuidString
-            let sha256 = SHA256.hash(data: nonce.data(using: .utf8)!)
-            let nonceString = sha256.compactMap { String(format: "%02x", $0) }.joined()
-
-            // Sign in with Apple via Supabase
-            let session = try await supabaseService.signInWithApple(
-                idToken: idToken,
-                nonce: nonceString
-            )
-
-            // Update auth state
-            let accessToken = session.accessToken
-            let userId = session.user.id.uuidString
-
-            authService.setToken(accessToken, userId: userId)
-
-            // Create family if name provided
-            if !familyName.isEmpty {
-                try await createFamily(userId: userId, name: familyName)
-            }
-
-            completeOnboarding()
-
-        } catch {
-            print("Auth error: \(error)")
-        }
-
-        isLoading = false
-    }
-
-    private func createFamily(userId: String, name: String) async throws {
+     private func createFamily(userId: String, name: String) async throws {
         // TODO: Implement family creation via backend API
         // For now, just store the family name
         UserDefaults.standard.set(name, forKey: "family_name")
